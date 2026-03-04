@@ -1,0 +1,116 @@
+name: Sport Sync
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Run without uploading
+        required: false
+        default: "false"
+      sources:
+        description: Comma-separated sources, e.g. igpsport,onelap
+        required: false
+        default: "igpsport,onelap"
+      targets:
+        description: Comma-separated targets, e.g. garmin,strava
+        required: false
+        default: "garmin,strava"
+      date_from:
+        description: Optional start date, e.g. 2026-02-01
+        required: false
+        default: ""
+      date_to:
+        description: Optional end date, e.g. 2026-03-01
+        required: false
+        default: ""
+      limit:
+        description: Optional per-source limit
+        required: false
+        default: ""
+  schedule:
+    - cron: "17 */6 * * *"
+
+concurrency:
+  group: sport-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: .
+        shell: bash
+    env:
+      SYNC_SOURCES: ${{ github.event.inputs.sources || secrets.SYNC_SOURCES || 'igpsport,onelap' }}
+      SYNC_TARGETS: ${{ github.event.inputs.targets || secrets.SYNC_TARGETS || 'garmin,strava' }}
+      SYNC_LOOKBACK_DAYS: ${{ secrets.SYNC_LOOKBACK_DAYS || '30' }}
+      SYNC_POLL_INTERVAL_SECONDS: "900"
+      SYNC_DATA_DIR: .data
+      SYNC_LOG_LEVEL: INFO
+
+      IGPSPORT_USERNAME: ${{ secrets.IGPSPORT_USERNAME }}
+      IGPSPORT_PASSWORD: ${{ secrets.IGPSPORT_PASSWORD }}
+      IGPSPORT_ACCESS_TOKEN: ${{ secrets.IGPSPORT_ACCESS_TOKEN }}
+      IGPSPORT_COORD_MODE: ${{ secrets.IGPSPORT_COORD_MODE || 'gcj02_to_wgs84' }}
+      IGPSPORT_COORD_STRICT: ${{ secrets.IGPSPORT_COORD_STRICT || 'false' }}
+
+      ONELAP_USERNAME: ${{ secrets.ONELAP_USERNAME }}
+      ONELAP_PASSWORD: ${{ secrets.ONELAP_PASSWORD }}
+      ONELAP_COOKIE: ${{ secrets.ONELAP_COOKIE }}
+      ONELAP_COORD_MODE: ${{ secrets.ONELAP_COORD_MODE || 'gcj02_to_wgs84' }}
+      ONELAP_COORD_STRICT: ${{ secrets.ONELAP_COORD_STRICT || 'false' }}
+
+      GARMIN_EMAIL: ${{ secrets.GARMIN_EMAIL }}
+      GARMIN_PASSWORD: ${{ secrets.GARMIN_PASSWORD }}
+      GARMIN_SESSION_B64: ${{ secrets.GARMIN_SESSION_B64 }}
+
+      STRAVA_CLIENT_ID: ${{ secrets.STRAVA_CLIENT_ID }}
+      STRAVA_CLIENT_SECRET: ${{ secrets.STRAVA_CLIENT_SECRET }}
+      STRAVA_REDIRECT_URI: ${{ secrets.STRAVA_REDIRECT_URI || 'http://localhost/exchange_token' }}
+      STRAVA_REFRESH_TOKEN: ${{ secrets.STRAVA_REFRESH_TOKEN }}
+      STRAVA_ACCESS_TOKEN: ${{ secrets.STRAVA_ACCESS_TOKEN }}
+      STRAVA_EXPIRES_AT: ${{ secrets.STRAVA_EXPIRES_AT }}
+      STRAVA_SCOPE: ${{ secrets.STRAVA_SCOPE }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Preflight login check
+        run: python sync.py check
+
+      - name: Run sync
+        run: |
+          args=(sync)
+          if [[ "${{ github.event.inputs.dry_run }}" == "true" ]]; then
+            args+=(--dry-run)
+          fi
+          if [[ -n "${{ github.event.inputs.date_from }}" ]]; then
+            args+=(--from "${{ github.event.inputs.date_from }}")
+          fi
+          if [[ -n "${{ github.event.inputs.date_to }}" ]]; then
+            args+=(--to "${{ github.event.inputs.date_to }}")
+          fi
+          if [[ -n "${{ github.event.inputs.limit }}" ]]; then
+            args+=(--limit "${{ github.event.inputs.limit }}")
+          fi
+          python sync.py "${args[@]}"
+
+      - name: Upload sync log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sync-log
+          path: .data/sync.log
+          if-no-files-found: ignore
