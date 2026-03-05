@@ -158,63 +158,31 @@ failed=3
 - `Strava` 的 `refresh_token` 会轮换，项目会把新 token 持久化到 SQLite。
 - `iGPSPORT` / `OneLap` 的坐标修正会尝试保留原始 FIT 消息结构，但没有在你的真实数据上做过回归测试。
 - 如果修正失败，而对应源平台的 `*_COORD_STRICT=false`，程序会退回上传原始 FIT。
-- GitHub Actions 上 `Garmin` 最容易出问题的是 MFA / 风控。对于云端 runner，优先使用 `GARMIN_SESSION_B64` 恢复本地已登录会话。
 
-## GitHub Actions
+## Docker 部署
 
-项目已经带了工作流文件 [sync.yml](C:/Users/Hayas/Github/sport_sync_bridge/.github/workflows/sync.yml)，可以直接放到仓库里跑。
+项目包含 `Dockerfile` 和 `docker-compose.yml` 可以快速在本地或服务器上通过 Docker 部署。
 
-### 需要配置的 Secrets
-
-- `IGPSPORT_USERNAME`
-- `IGPSPORT_PASSWORD`
-- `ONELAP_USERNAME`
-- `ONELAP_PASSWORD`
-- `GARMIN_EMAIL`
-- `GARMIN_PASSWORD`
-- `STRAVA_CLIENT_ID`
-- `STRAVA_CLIENT_SECRET`
-- `STRAVA_REFRESH_TOKEN`
-
-可选:
-
-- `ONELAP_COOKIE`
-- `IGPSPORT_ACCESS_TOKEN`
-- `GARMIN_SESSION_B64`
-
-### Garmin 会话导出
-
-如果你想让 GitHub-hosted runner 更稳定地登录 Garmin，先在本地成功登录一次：
+1. 确保在 `.env` 文件中配置了必要的环境变量。
+2. 运行以下命令启动服务：
 
 ```powershell
-.\.venv\Scripts\python.exe sync.py check --target garmin
+docker-compose up -d
 ```
 
-然后导出会话：
+这将会在后台启动一个容器，并按照 `.env` 文件中 `SYNC_INTERVAL` 指定的时间间隔自动进行循环同步。
+
+## 推送代码到多个 Git 远程仓库
+
+项目包含了 `push_all.bat`，你可以双击运行或者在命令行执行它，实现一键推送到默认的 `origin` (GitHub) 仓库和名为 `git` 的备用远程仓库。
+
+如果你需要配置备用的 Git 节点（例如 Gitee 等），可以使用以下命令添加：
 
 ```powershell
-.\.venv\Scripts\python.exe sync.py garmin-session-export --output garmin_session.b64
+git remote add git <你的另一个git仓库地址>
 ```
 
-把生成文件里的整段 base64 文本存到 GitHub Secret:
 
-- `GARMIN_SESSION_B64`
-
-### 工作流说明
-
-- 支持 `workflow_dispatch`
-- 支持定时执行，每 6 小时一次
-- 每次执行前会先跑 `python sync.py check`
-- 默认跑正式同步；手动触发时可以把 `dry_run` 设为 `true`
-
-### 实际建议
-
-如果你的 Garmin 账号经常触发 MFA 或异地风控，GitHub-hosted runner 依然可能不稳定。  
-这种场景更推荐：
-
-1. GitHub Actions + `GARMIN_SESSION_B64`
-2. GitHub self-hosted runner
-3. 直接在你自己的 Windows 机器上用计划任务跑 `sync.py`
 
 ## 参考来源
 

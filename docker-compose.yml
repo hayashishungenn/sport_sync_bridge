@@ -1,0 +1,14 @@
+version: '3.8'
+
+services:
+  sport-sync:
+    build: .
+    container_name: sport-sync-bridge
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      - ./.data:/app/.data
+    environment:
+      # Optional explicit env vars if not purely relying on .env
+      - TZ=Asia/Shanghai
