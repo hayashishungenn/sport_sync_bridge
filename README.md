@@ -172,16 +172,6 @@ docker-compose up -d
 
 这将会在后台启动一个容器，并按照 `.env` 文件中 `SYNC_INTERVAL` 指定的时间间隔自动进行循环同步。
 
-## 推送代码到多个 Git 远程仓库
-
-项目包含了 `push_all.bat`，你可以双击运行或者在命令行执行它，实现一键推送到默认的 `origin` (GitHub) 仓库和名为 `git` 的备用远程仓库。
-
-如果你需要配置备用的 Git 节点（例如 Gitee 等），可以使用以下命令添加：
-
-```powershell
-git remote add git <你的另一个git仓库地址>
-```
-
 
 
 ## 参考来源
