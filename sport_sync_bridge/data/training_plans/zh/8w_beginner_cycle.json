@@ -1,0 +1,102 @@
+{
+  "type": "structuredPlan",
+  "id": "tmpl_8w_beginner_cycle",
+  "sourceId": "app_assets",
+  "name": "8周入门骑行计划",
+  "phases": [
+    {
+      "id": "ph_adaptation",
+      "sourceId": "app_assets",
+      "trainingPlanId": "tmpl_8w_beginner_cycle",
+      "name": "适应期",
+      "phaseType": "base",
+      "orderIndex": 0,
+      "startWeek": 1,
+      "endWeek": 2,
+      "description": "短距离轻松骑行，熟悉车辆操控",
+      "focus": "操控技术和坐垫适应",
+      "coachNote": "RPE 2-3：非常轻松的踩踏。专注平稳的踩踏节奏，适应坐垫时间。室内室外均可。",
+      "createdAt": "2026-01-01T00:00:00Z",
+      "updatedAt": "2026-01-01T00:00:00Z"
+    },
+    {
+      "id": "ph_building",
+      "sourceId": "app_assets",
+      "trainingPlanId": "tmpl_8w_beginner_cycle",
+      "name": "提升期",
+      "phaseType": "base",
+      "orderIndex": 1,
+      "startWeek": 3,
+      "endWeek": 5,
+      "description": "延长骑行时长，加入轻微强度变化",
+      "focus": "有氧基础建设",
+      "coachNote": "RPE 3-4：呼吸加深但仍可交谈。尝试轻微强度变化——一段缓坡或几组快速踩踏。",
+      "createdAt": "2026-01-01T00:00:00Z",
+      "updatedAt": "2026-01-01T00:00:00Z"
+    },
+    {
+      "id": "ph_consolidation",
+      "sourceId": "app_assets",
+      "trainingPlanId": "tmpl_8w_beginner_cycle",
+      "name": "巩固期",
+      "phaseType": "build",
+      "orderIndex": 2,
+      "startWeek": 6,
+      "endWeek": 8,
+      "description": "更长更强，充满信心",
+      "focus": "耐力和享受",
+      "coachNote": "到第8周，目标45-60分钟持续骑行。你已经可以周末探索新路线了！",
+      "createdAt": "2026-01-01T00:00:00Z",
+      "updatedAt": "2026-01-01T00:00:00Z"
+    }
+  ],
+  "weekTemplates": [
+    {
+      "name": "适应期",
+      "applyToWeeks": [1, 2],
+      "days": {
+        "Mon": {"name": "休息日", "sportType": "cycling", "isRestDay": true},
+        "Tue": {"name": "轻松骑行20分钟 RPE 2-3", "sportType": "cycling", "intensity": "easy", "coachNote": "平路。专注平稳踩踏。"},
+        "Wed": {"name": "休息日", "sportType": "cycling", "isRestDay": true},
+        "Thu": {"name": "轻松骑行25分钟 RPE 2-3", "sportType": "cycling", "intensity": "easy", "coachNote": "保持轻松踩踏，不要重踩。"},
+        "Fri": {"name": "休息日", "sportType": "cycling", "isRestDay": true},
+        "Sat": {"name": "轻松骑行30分钟 RPE 2-3", "sportType": "cycling", "intensity": "easy", "coachNote": "享受周末骑行。探索一条新路！"},
+        "Sun": {"name": "休息日", "sportType": "cycling", "isRestDay": true}
+      }
+    },
+    {
+      "name": "提升期",
+      "applyToWeeks": [3, 4, 5],
+      "days": {
+        "Mon": {"name": "休息日", "sportType": "cycling", "isRestDay": true},
+        "Tue": {"name": "耐力骑行30分钟 RPE 3-4", "sportType": "cycling", "intensity": "endurance", "coachNote": "加入一段缓坡或逆风。控制在可承受范围。"},
+        "Wed": {"name": "休息日", "sportType": "cycling", "isRestDay": true},
+        "Thu": {"name": "恢复骑行25分钟 RPE 2-3", "sportType": "cycling", "intensity": "easy", "coachNote": "恢复日。非常轻的踩踏。"},
+        "Fri": {"name": "休息日", "sportType": "cycling", "isRestDay": true},
+        "Sat": {"name": "耐力骑行40分钟 RPE 3-4", "sportType": "cycling", "intensity": "endurance", "coachNote": "周末长骑。带瓶水，享受！"},
+        "Sun": {"name": "休息日", "sportType": "cycling", "isRestDay": true}
+      }
+    },
+    {
+      "name": "巩固期",
+      "applyToWeeks": [6, 7, 8],
+      "days": {
+        "Mon": {"name": "休息日", "sportType": "cycling", "isRestDay": true},
+        "Tue": {"name": "耐力骑行35分钟 RPE 4", "sportType": "cycling", "intensity": "endurance", "coachNote": "全程保持稳定输出。找到你的节奏。"},
+        "Wed": {"name": "休息日", "sportType": "cycling", "isRestDay": true},
+        "Thu": {"name": "恢复骑行30分钟 RPE 2-3", "sportType": "cycling", "intensity": "easy", "coachNote": "主动恢复。保持轻松踩踏。"},
+        "Fri": {"name": "休息日", "sportType": "cycling", "isRestDay": true},
+        "Sat": {"name": "长骑50分钟 RPE 3-4", "sportType": "cycling", "intensity": "endurance", "coachNote": "你已经是骑行者了！享受骑行之旅。"},
+        "Sun": {"name": "休息日", "sportType": "cycling", "isRestDay": true}
+      }
+    }
+  ],
+  "overrides": [],
+  "workouts": {},
+  "trainingPlan": {
+    "name": "8周入门骑行",
+    "sportType": "cycling",
+    "description": "温和入门骑行，从20分钟逐步过渡到50分钟持续骑行。",
+    "goal": "建立骑行耐力，能够舒适骑行45-60分钟"
+  }
+}

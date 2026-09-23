@@ -1,0 +1,166 @@
+{
+  "type": "structuredPlan",
+  "id": "tmpl_12w_first_half_marathon",
+  "sourceId": "app_assets",
+  "name": "Mezza Maratona in 12 Settimane",
+  "phases": [
+    {
+      "id": "ph_base",
+      "sourceId": "app_assets",
+      "trainingPlanId": "tmpl_12w_first_half_marathon",
+      "name": "Base",
+      "phaseType": "base",
+      "orderIndex": 0,
+      "startWeek": 1,
+      "endWeek": 4,
+      "description": "Costruisci la base aerobica con corse facili e lunghi progressivi",
+      "focus": "Resistenza aerobica e costanza",
+      "coachNote": "Tutte le corse facili a ritmo colloquiale. La corsa lunga è la sessione più importante ogni settimana — non saltarla.",
+      "createdAt": "2026-01-01T00:00:00Z",
+      "updatedAt": "2026-01-01T00:00:00Z"
+    },
+    {
+      "id": "ph_build",
+      "sourceId": "app_assets",
+      "trainingPlanId": "tmpl_12w_first_half_marathon",
+      "name": "Costruzione",
+      "phaseType": "build",
+      "orderIndex": 1,
+      "startWeek": 5,
+      "endWeek": 8,
+      "description": "Introduci intervalli e lavori a soglia, estendi la distanza della corsa lunga",
+      "focus": "Resistenza alla velocità e sviluppo della soglia",
+      "coachNote": "Gli intervalli devono essere impegnativi ma controllati. Le corse a soglia a un ritmo comodamente duro — puoi dire poche parole ma non una frase completa.",
+      "createdAt": "2026-01-01T00:00:00Z",
+      "updatedAt": "2026-01-01T00:00:00Z"
+    },
+    {
+      "id": "ph_peak",
+      "sourceId": "app_assets",
+      "trainingPlanId": "tmpl_12w_first_half_marathon",
+      "name": "Picco",
+      "phaseType": "peak",
+      "orderIndex": 2,
+      "startWeek": 9,
+      "endWeek": 10,
+      "description": "Allenamento specifico gara con lavori al ritmo mezza maratona e corse più lunghe",
+      "focus": "Adattamento al ritmo gara e fiducia sulla distanza della mezza maratona",
+      "coachNote": "Intervalli più lunghi e segmenti al ritmo gara. Fidati del tuo allenamento — ci sei quasi.",
+      "createdAt": "2026-01-01T00:00:00Z",
+      "updatedAt": "2026-01-01T00:00:00Z"
+    },
+    {
+      "id": "ph_taper",
+      "sourceId": "app_assets",
+      "trainingPlanId": "tmpl_12w_first_half_marathon",
+      "name": "Riduzione",
+      "phaseType": "taper",
+      "orderIndex": 3,
+      "startWeek": 11,
+      "endWeek": 12,
+      "description": "Riduci il volume mantenendo intensità e freschezza",
+      "focus": "Recupero e prontezza alla gara",
+      "coachNote": "Il volume cala ma l'intensità rimane. Non stai costruendo forma fisica ora, la stai rivelando. Stai a riposo il giorno prima della gara.",
+      "createdAt": "2026-01-01T00:00:00Z",
+      "updatedAt": "2026-01-01T00:00:00Z"
+    }
+  ],
+  "weekTemplates": [
+    {
+      "name": "Base",
+      "applyToWeeks": [1, 2, 3, 4],
+      "days": {
+        "Mon": {"name": "Riposo", "sportType": "running", "isRestDay": true},
+        "Tue": {"name": "Corsa Facile", "sportType": "running", "intensity": "easy", "targetDuration": "30min", "targetHR": "zone2", "targetTSS": 25, "description": "Corsa facile a ritmo colloquiale su terreno pianeggiante", "coachNote": "Mantieni la FC in zona2. Questo è recupero attivo."},
+        "Wed": {"name": "Riposo", "sportType": "running", "isRestDay": true},
+        "Thu": {"name": "Corsa Facile", "sportType": "running", "intensity": "easy", "targetDuration": "35min", "targetHR": "zone2", "targetTSS": 30, "description": "Corsa facile con allunghi negli ultimi 5 minuti", "coachNote": "Aggiungi 4-5 allunghi delicati (20-30 sec ciascuno) alla fine. Concentrati su una tecnica fluida."},
+        "Fri": {"name": "Riposo", "sportType": "running", "isRestDay": true},
+        "Sat": {"name": "Corsa Lunga (LSD)", "sportType": "running", "intensity": "endurance", "targetDistance": "8km", "targetDuration": "55min", "targetHR": "zone2", "targetTSS": 55, "description": "Corsa lunga e lenta a ritmo facile", "coachNote": "Inizia facile e resta facile per tutto il percorso. Cammina brevemente se necessario — nessuna vergogna nelle pause camminate nelle prime corse lunghe."},
+        "Sun": {"name": "Riposo", "sportType": "running", "isRestDay": true}
+      }
+    },
+    {
+      "name": "Costruzione",
+      "applyToWeeks": [5, 6, 7, 8],
+      "days": {
+        "Mon": {"name": "Riposo", "sportType": "running", "isRestDay": true},
+        "Tue": {"name": "Intervalli 400m", "sportType": "running", "intensity": "interval", "targetDuration": "50min", "targetDistance": "8km", "targetPace": "5:00/km", "targetHR": "zone4", "targetTSS": 65, "description": "Riscaldamento 2 km facile + 6×400 m @5:00/km (recupero 200 m corsa leggera) + Defaticamento 2 km facile", "coachNote": "I parziali costanti sono più importanti di quelli veloci. Recupera correndo piano — non camminare."},
+        "Wed": {"name": "Riposo", "sportType": "running", "isRestDay": true},
+        "Thu": {"name": "Corsa a Soglia", "sportType": "running", "intensity": "threshold", "targetDuration": "45min", "targetDistance": "7km", "targetPace": "5:30/km", "targetHR": "zone3", "targetTSS": 55, "description": "Riscaldamento 1,5 km facile + 20 min a soglia @5:30/km + Defaticamento 1,5 km facile", "coachNote": "Ritmo soglia = comodamente duro. Puoi dire poche parole ma non sostenere una conversazione."},
+        "Fri": {"name": "Riposo", "sportType": "running", "isRestDay": true},
+        "Sat": {"name": "Corsa Lunga (LSD)", "sportType": "running", "intensity": "endurance", "targetDistance": "12km", "targetDuration": "1h20min", "targetHR": "zone2", "targetTSS": 85, "description": "Corsa lunga e lenta con ultimi 2 km al ritmo mezza maratona", "coachNote": "Esercita l'alimentazione da gara durante la corsa. Prova un gel o una bevanda sportiva per vedere come reagisce il tuo stomaco."},
+        "Sun": {"name": "Riposo", "sportType": "running", "isRestDay": true}
+      }
+    },
+    {
+      "name": "Picco",
+      "applyToWeeks": [9, 10],
+      "days": {
+        "Mon": {"name": "Riposo", "sportType": "running", "isRestDay": true},
+        "Tue": {"name": "Intervalli 800m", "sportType": "running", "intensity": "interval", "targetDuration": "55min", "targetDistance": "9km", "targetPace": "5:10/km", "targetHR": "zone4", "targetTSS": 70, "description": "Riscaldamento 2 km facile + 5×800 m @5:10/km (recupero 400 m corsa leggera) + Defaticamento 2 km facile", "coachNote": "Questi simulano l'affaticamento che sentirai nella fase avanzata della gara. Mantieni la tecnica quando sei stanco."},
+        "Wed": {"name": "Riposo", "sportType": "running", "isRestDay": true},
+        "Thu": {"name": "Corsa al Ritmo Mezza Maratona", "sportType": "running", "intensity": "threshold", "targetDuration": "55min", "targetDistance": "9km", "targetPace": "6:00/km", "targetHR": "zone3", "targetTSS": 65, "description": "Riscaldamento 1,5 km facile + 6 km al ritmo MM (6:00/km) + Defaticamento 1,5 km facile", "coachNote": "Fissa il tuo ritmo gara obiettivo. Rendilo automatico — questo è il tuo ritmo per il giorno della gara."},
+        "Fri": {"name": "Riposo", "sportType": "running", "isRestDay": true},
+        "Sat": {"name": "Corsa Lunga (LSD)", "sportType": "running", "intensity": "endurance", "targetDistance": "17km", "targetDuration": "1h55min", "targetHR": "zone2", "targetTSS": 125, "description": "Corsa lunga con ultimi 3 km al ritmo mezza maratona", "coachNote": "Esercita tutto: pasto pre-corsa, equipaggiamento, idratazione, ritmo. Questa è la prova generale."},
+        "Sun": {"name": "Riposo", "sportType": "running", "isRestDay": true}
+      }
+    },
+    {
+      "name": "Riduzione",
+      "applyToWeeks": [11, 12],
+      "days": {
+        "Mon": {"name": "Riposo", "sportType": "running", "isRestDay": true},
+        "Tue": {"name": "Corsa Facile + Allunghi", "sportType": "running", "intensity": "easy", "targetDuration": "35min", "targetDistance": "5km", "targetHR": "zone2", "targetTSS": 25, "description": "Corsa facile con 4×20 sec allunghi al ritmo gara", "coachNote": "Mantienila leggera. Gli allunghi mantengono la prontezza neuromuscolare senza affaticamento."},
+        "Wed": {"name": "Riposo", "sportType": "running", "isRestDay": true},
+        "Thu": {"name": "Soglia Breve", "sportType": "running", "intensity": "threshold", "targetDuration": "40min", "targetDistance": "6km", "targetPace": "5:30/km", "targetHR": "zone3", "targetTSS": 40, "description": "Riscaldamento 1,5 km facile + 15 min a soglia + Defaticamento 1,5 km facile", "coachNote": "Soglia più breve per mantenere il motore acceso senza svuotare il serbatoio."},
+        "Fri": {"name": "Riposo", "sportType": "running", "isRestDay": true},
+        "Sat": {"name": "Corsa Lunga (Ridotta) o Gara", "sportType": "running", "intensity": "endurance", "targetDistance": "12km", "targetDuration": "1h20min", "targetHR": "zone2", "targetTSS": 75, "description": "Settimana 11: corsa lunga facile 12 km. Settimana 12: GIORNO DI GARA — 21,1 km. Fidati del tuo allenamento!", "coachNote": "Settimana 11: un'ultima corsa lunga moderata. Settimana 12: ci siamo! Inizia in modo conservativo, negative split se puoi."},
+        "Sun": {"name": "Riposo", "sportType": "running", "isRestDay": true}
+      }
+    }
+  ],
+  "overrides": [
+    {"weekId": 1, "day": "Sat", "field": "targetDistance", "value": "8km"},
+    {"weekId": 2, "day": "Sat", "field": "targetDistance", "value": "10km"},
+    {"weekId": 3, "day": "Sat", "field": "targetDistance", "value": "11km"},
+    {"weekId": 4, "day": "Sat", "field": "targetDistance", "value": "12km"},
+    {"weekId": 5, "day": "Sat", "field": "targetDistance", "value": "12km"},
+    {"weekId": 6, "day": "Sat", "field": "targetDistance", "value": "14km"},
+    {"weekId": 7, "day": "Sat", "field": "targetDistance", "value": "15km"},
+    {"weekId": 8, "day": "Sat", "field": "targetDistance", "value": "16km"},
+    {"weekId": 5, "day": "Sat", "field": "targetDuration", "value": "1h20min"},
+    {"weekId": 6, "day": "Sat", "field": "targetDuration", "value": "1h30min"},
+    {"weekId": 7, "day": "Sat", "field": "targetDuration", "value": "1h40min"},
+    {"weekId": 8, "day": "Sat", "field": "targetDuration", "value": "1h45min"},
+    {"weekId": 5, "day": "Tue", "field": "targetDistance", "value": "8km"},
+    {"weekId": 6, "day": "Tue", "field": "targetDistance", "value": "9km"},
+    {"weekId": 7, "day": "Tue", "field": "targetDistance", "value": "9km"},
+    {"weekId": 8, "day": "Tue", "field": "targetDistance", "value": "10km"},
+    {"weekId": 5, "day": "Thu", "field": "targetDistance", "value": "7km"},
+    {"weekId": 6, "day": "Thu", "field": "targetDistance", "value": "8km"},
+    {"weekId": 7, "day": "Thu", "field": "targetDistance", "value": "8km"},
+    {"weekId": 8, "day": "Thu", "field": "targetDistance", "value": "9km"},
+    {"weekId": 9, "day": "Sat", "field": "targetDistance", "value": "17km"},
+    {"weekId": 10, "day": "Sat", "field": "targetDistance", "value": "18km"},
+    {"weekId": 9, "day": "Sat", "field": "targetDuration", "value": "1h55min"},
+    {"weekId": 10, "day": "Sat", "field": "targetDuration", "value": "2h00min"},
+    {"weekId": 11, "day": "Sat", "field": "targetDistance", "value": "12km"},
+    {"weekId": 12, "day": "Sat", "field": "targetDistance", "value": "21.1km"},
+    {"weekId": 12, "day": "Sat", "field": "name", "value": "GIORNO DI GARA — Mezza Maratona"},
+    {"weekId": 12, "day": "Sat", "field": "targetDuration", "value": "2h06min"}
+  ],
+  "workouts": {},
+  "trainingPlan": {
+    "name": "Mezza Maratona in 12 Settimane",
+    "sportType": "running",
+    "description": "Un programma di 12 settimane per corridori che sanno correre comodamente 5-10 km e vogliono completare la loro prima mezza maratona (21,1 km). Progredisce da 8 km a 18 km di corsa lunga con lavori di intervalli, soglia e ritmo gara.",
+    "goal": "Completare una mezza maratona (21,1 km) con forza e senza infortuni",
+    "targetMetrics": {
+      "MP": "6:00",
+      "easyPace": "6:30",
+      "thresholdPace": "5:30",
+      "5K_Pace": "5:00",
+      "10K_Pace": "5:20"
+    }
+  }
+}

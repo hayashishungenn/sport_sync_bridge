@@ -1,0 +1,166 @@
+{
+  "type": "structuredPlan",
+  "id": "tmpl_12w_first_half_marathon",
+  "sourceId": "app_assets",
+  "name": "12 周首次半马计划",
+  "phases": [
+    {
+      "id": "ph_base",
+      "sourceId": "app_assets",
+      "trainingPlanId": "tmpl_12w_first_half_marathon",
+      "name": "基础期",
+      "phaseType": "base",
+      "orderIndex": 0,
+      "startWeek": 1,
+      "endWeek": 4,
+      "description": "通过轻松跑和逐渐延长的长距离跑建立有氧基础",
+      "focus": "有氧耐力和规律性训练",
+      "coachNote": "所有轻松跑保持对话节奏。每周的长距离跑是最重要的课表——不要跳过。",
+      "createdAt": "2026-01-01T00:00:00Z",
+      "updatedAt": "2026-01-01T00:00:00Z"
+    },
+    {
+      "id": "ph_build",
+      "sourceId": "app_assets",
+      "trainingPlanId": "tmpl_12w_first_half_marathon",
+      "name": "建基期",
+      "phaseType": "build",
+      "orderIndex": 1,
+      "startWeek": 5,
+      "endWeek": 8,
+      "description": "引入间歇和节奏跑，延长长距离跑距离",
+      "focus": "速度耐力和门槛提升",
+      "coachNote": "间歇训练应感到具有挑战性但可控。节奏跑保持「舒适地困难」——能说几个词但无法说完整句子。",
+      "createdAt": "2026-01-01T00:00:00Z",
+      "updatedAt": "2026-01-01T00:00:00Z"
+    },
+    {
+      "id": "ph_peak",
+      "sourceId": "app_assets",
+      "trainingPlanId": "tmpl_12w_first_half_marathon",
+      "name": "巅峰期",
+      "phaseType": "peak",
+      "orderIndex": 2,
+      "startWeek": 9,
+      "endWeek": 10,
+      "description": "比赛专项训练，含半马配速训练和最长距离跑",
+      "focus": "比赛配速适应和半马距离信心",
+      "coachNote": "更长的间歇和比赛配速段落。相信你的训练——快要比赛了。",
+      "createdAt": "2026-01-01T00:00:00Z",
+      "updatedAt": "2026-01-01T00:00:00Z"
+    },
+    {
+      "id": "ph_taper",
+      "sourceId": "app_assets",
+      "trainingPlanId": "tmpl_12w_first_half_marathon",
+      "name": "赛前减量期",
+      "phaseType": "taper",
+      "orderIndex": 3,
+      "startWeek": 11,
+      "endWeek": 12,
+      "description": "减少训练量，保持强度，储备体能迎接比赛",
+      "focus": "恢复和比赛状态调整",
+      "coachNote": "跑量大幅下降，但强度保留。现在不是提升体能的时候，而是展现体能的时候。比赛前一天多休息。",
+      "createdAt": "2026-01-01T00:00:00Z",
+      "updatedAt": "2026-01-01T00:00:00Z"
+    }
+  ],
+  "weekTemplates": [
+    {
+      "name": "基础期",
+      "applyToWeeks": [1, 2, 3, 4],
+      "days": {
+        "Mon": {"name": "休息日", "sportType": "running", "isRestDay": true},
+        "Tue": {"name": "轻松跑", "sportType": "running", "intensity": "easy", "targetDuration": "30min", "targetHR": "zone2", "targetTSS": 25, "description": "平坦路线上轻松对话跑", "coachNote": "将心率保持在zone2。这是主动恢复。"},
+        "Wed": {"name": "休息日", "sportType": "running", "isRestDay": true},
+        "Thu": {"name": "轻松跑", "sportType": "running", "intensity": "easy", "targetDuration": "35min", "targetHR": "zone2", "targetTSS": 30, "description": "轻松跑，最后5分钟加入短距加速", "coachNote": "最后做4-5组20-30秒的轻松加速，注意保持流畅的跑姿。"},
+        "Fri": {"name": "休息日", "sportType": "running", "isRestDay": true},
+        "Sat": {"name": "长距离LSD跑", "sportType": "running", "intensity": "endurance", "targetDistance": "8km", "targetDuration": "55min", "targetHR": "zone2", "targetTSS": 55, "description": "轻松的长时间慢速跑", "coachNote": "开始时慢一些，全程保持轻松。需要的话可以短暂步行——初次长距离跑中间走几步不丢人。"},
+        "Sun": {"name": "休息日", "sportType": "running", "isRestDay": true}
+      }
+    },
+    {
+      "name": "建基期",
+      "applyToWeeks": [5, 6, 7, 8],
+      "days": {
+        "Mon": {"name": "休息日", "sportType": "running", "isRestDay": true},
+        "Tue": {"name": "400m 间歇跑", "sportType": "running", "intensity": "interval", "targetDuration": "50min", "targetDistance": "8km", "targetPace": "5:00/km", "targetHR": "zone4", "targetTSS": 65, "description": "热身2km轻松跑 + 6×400m @5:00/km（200m慢跑恢复）+ 放松2km轻松跑", "coachNote": "保持每圈配速一致比跑得快更重要。恢复段慢跑——不要停下来走。"},
+        "Wed": {"name": "休息日", "sportType": "running", "isRestDay": true},
+        "Thu": {"name": "节奏跑", "sportType": "running", "intensity": "threshold", "targetDuration": "45min", "targetDistance": "7km", "targetPace": "5:30/km", "targetHR": "zone3", "targetTSS": 55, "description": "热身1.5km轻松跑 + 20min节奏跑 @5:30/km + 放松1.5km轻松跑", "coachNote": "节奏跑配速 = 舒适地困难。能说几个词但无法正常对话。"},
+        "Fri": {"name": "休息日", "sportType": "running", "isRestDay": true},
+        "Sat": {"name": "长距离LSD跑", "sportType": "running", "intensity": "endurance", "targetDistance": "12km", "targetDuration": "1h20min", "targetHR": "zone2", "targetTSS": 85, "description": "长时间慢速跑，最后2km用半马配速", "coachNote": "跑步中实践比赛日补给策略。试试能量胶或运动饮料，看看胃能不能适应。"},
+        "Sun": {"name": "休息日", "sportType": "running", "isRestDay": true}
+      }
+    },
+    {
+      "name": "巅峰期",
+      "applyToWeeks": [9, 10],
+      "days": {
+        "Mon": {"name": "休息日", "sportType": "running", "isRestDay": true},
+        "Tue": {"name": "800m 间歇跑", "sportType": "running", "intensity": "interval", "targetDuration": "55min", "targetDistance": "9km", "targetPace": "5:10/km", "targetHR": "zone4", "targetTSS": 70, "description": "热身2km轻松跑 + 5×800m @5:10/km（400m慢跑恢复）+ 放松2km轻松跑", "coachNote": "这些模拟了比赛后半程的疲劳感。在疲劳时保持好跑姿。"},
+        "Wed": {"name": "休息日", "sportType": "running", "isRestDay": true},
+        "Thu": {"name": "半马配速跑", "sportType": "running", "intensity": "threshold", "targetDuration": "55min", "targetDistance": "9km", "targetPace": "6:00/km", "targetHR": "zone3", "targetTSS": 65, "description": "热身1.5km轻松跑 + 6km @半马配速（6:00/km）+ 放松1.5km轻松跑", "coachNote": "锁定你的目标比赛配速，让它变得自然——这就是你比赛日的节奏。"},
+        "Fri": {"name": "休息日", "sportType": "running", "isRestDay": true},
+        "Sat": {"name": "长距离LSD跑", "sportType": "running", "intensity": "endurance", "targetDistance": "17km", "targetDuration": "1h55min", "targetHR": "zone2", "targetTSS": 125, "description": "长距离跑，最后3km用半马配速", "coachNote": "演练一切：赛前饮食、装备、饮水、配速策略。这是你的赛前彩排。"},
+        "Sun": {"name": "休息日", "sportType": "running", "isRestDay": true}
+      }
+    },
+    {
+      "name": "赛前减量期",
+      "applyToWeeks": [11, 12],
+      "days": {
+        "Mon": {"name": "休息日", "sportType": "running", "isRestDay": true},
+        "Tue": {"name": "轻松跑 + 短加速", "sportType": "running", "intensity": "easy", "targetDuration": "35min", "targetDistance": "5km", "targetHR": "zone2", "targetTSS": 25, "description": "轻松跑 + 4×20sec 比赛配速短加速", "coachNote": "轻松为主。短加速保持神经肌肉敏锐度而不累积疲劳。"},
+        "Wed": {"name": "休息日", "sportType": "running", "isRestDay": true},
+        "Thu": {"name": "短节奏跑", "sportType": "running", "intensity": "threshold", "targetDuration": "40min", "targetDistance": "6km", "targetPace": "5:30/km", "targetHR": "zone3", "targetTSS": 40, "description": "热身1.5km轻松跑 + 15min节奏跑 + 放松1.5km轻松跑", "coachNote": "缩短的节奏跑让引擎保持状态，但不消耗体能。"},
+        "Fri": {"name": "休息日", "sportType": "running", "isRestDay": true},
+        "Sat": {"name": "长距离跑（减量）或比赛日", "sportType": "running", "intensity": "endurance", "targetDistance": "12km", "targetDuration": "1h20min", "targetHR": "zone2", "targetTSS": 75, "description": "第11周：轻松长距离跑12km。第12周：比赛日——21.1km。相信你的训练！", "coachNote": "第11周：最后一次中等长距离跑。第12周：比赛日！起步保守，尽量后半程比前半程快。"},
+        "Sun": {"name": "休息日", "sportType": "running", "isRestDay": true}
+      }
+    }
+  ],
+  "overrides": [
+    {"weekId": 1, "day": "Sat", "field": "targetDistance", "value": "8km"},
+    {"weekId": 2, "day": "Sat", "field": "targetDistance", "value": "10km"},
+    {"weekId": 3, "day": "Sat", "field": "targetDistance", "value": "11km"},
+    {"weekId": 4, "day": "Sat", "field": "targetDistance", "value": "12km"},
+    {"weekId": 5, "day": "Sat", "field": "targetDistance", "value": "12km"},
+    {"weekId": 6, "day": "Sat", "field": "targetDistance", "value": "14km"},
+    {"weekId": 7, "day": "Sat", "field": "targetDistance", "value": "15km"},
+    {"weekId": 8, "day": "Sat", "field": "targetDistance", "value": "16km"},
+    {"weekId": 5, "day": "Sat", "field": "targetDuration", "value": "1h20min"},
+    {"weekId": 6, "day": "Sat", "field": "targetDuration", "value": "1h30min"},
+    {"weekId": 7, "day": "Sat", "field": "targetDuration", "value": "1h40min"},
+    {"weekId": 8, "day": "Sat", "field": "targetDuration", "value": "1h45min"},
+    {"weekId": 5, "day": "Tue", "field": "targetDistance", "value": "8km"},
+    {"weekId": 6, "day": "Tue", "field": "targetDistance", "value": "9km"},
+    {"weekId": 7, "day": "Tue", "field": "targetDistance", "value": "9km"},
+    {"weekId": 8, "day": "Tue", "field": "targetDistance", "value": "10km"},
+    {"weekId": 5, "day": "Thu", "field": "targetDistance", "value": "7km"},
+    {"weekId": 6, "day": "Thu", "field": "targetDistance", "value": "8km"},
+    {"weekId": 7, "day": "Thu", "field": "targetDistance", "value": "8km"},
+    {"weekId": 8, "day": "Thu", "field": "targetDistance", "value": "9km"},
+    {"weekId": 9, "day": "Sat", "field": "targetDistance", "value": "17km"},
+    {"weekId": 10, "day": "Sat", "field": "targetDistance", "value": "18km"},
+    {"weekId": 9, "day": "Sat", "field": "targetDuration", "value": "1h55min"},
+    {"weekId": 10, "day": "Sat", "field": "targetDuration", "value": "2h00min"},
+    {"weekId": 11, "day": "Sat", "field": "targetDistance", "value": "12km"},
+    {"weekId": 12, "day": "Sat", "field": "targetDistance", "value": "21.1km"},
+    {"weekId": 12, "day": "Sat", "field": "name", "value": "比赛日——半程马拉松"},
+    {"weekId": 12, "day": "Sat", "field": "targetDuration", "value": "2h06min"}
+  ],
+  "workouts": {},
+  "trainingPlan": {
+    "name": "12 周首次半马计划",
+    "sportType": "running",
+    "description": "为能舒适跑5-10km的跑者设计的12周计划，目标是首次完成半马（21.1km）。长距离跑从8km逐步增加至18km，配合间歇、节奏跑和比赛配速训练。",
+    "goal": "顺利完赛半程马拉松（21.1km），不受伤",
+    "targetMetrics": {
+      "MP": "6:00",
+      "easyPace": "6:30",
+      "thresholdPace": "5:30",
+      "5K_Pace": "5:00",
+      "10K_Pace": "5:20"
+    }
+  }
+}

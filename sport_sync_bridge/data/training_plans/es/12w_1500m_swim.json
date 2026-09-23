@@ -1,0 +1,185 @@
+{
+  "type": "structuredPlan",
+  "id": "tmpl_12w_1500m_swim",
+  "sourceId": "app_assets",
+  "name": "Plan de 12 Semanas: Natación 1500m",
+  "phases": [
+    {
+      "id": "ph_base",
+      "sourceId": "app_assets",
+      "trainingPlanId": "tmpl_12w_1500m_swim",
+      "name": "Base",
+      "phaseType": "base",
+      "orderIndex": 0,
+      "startWeek": 1,
+      "endWeek": 4,
+      "description": "Desarrolla condición física en natación con enfoque en técnica y aumento gradual del volumen de sesión",
+      "focus": "Eficiencia de brazada, ritmo de respiración y resistencia base",
+      "coachNote": "Técnica sobre velocidad. Cada brazada debe ser larga y suave. Cuenta las brazadas por largo e intenta reducirlas mientras mantienes el ritmo.",
+      "createdAt": "2026-01-01T00:00:00Z",
+      "updatedAt": "2026-01-01T00:00:00Z"
+    },
+    {
+      "id": "ph_build",
+      "sourceId": "app_assets",
+      "trainingPlanId": "tmpl_12w_1500m_swim",
+      "name": "Construcción",
+      "phaseType": "build",
+      "orderIndex": 1,
+      "startWeek": 5,
+      "endWeek": 8,
+      "description": "Introduce intervalos de velocidad y extiende la distancia de natación continua",
+      "focus": "Desarrollo de ritmo CSS y resistencia de umbral",
+      "coachNote": "Trabajo de velocidad a ritmo CSS o ligeramente más rápido. Concéntrate en mantener splits consistentes en todas las repeticiones. El descanso debe ser activo: flota o patalea suavemente.",
+      "createdAt": "2026-01-01T00:00:00Z",
+      "updatedAt": "2026-01-01T00:00:00Z"
+    },
+    {
+      "id": "ph_peak",
+      "sourceId": "app_assets",
+      "trainingPlanId": "tmpl_12w_1500m_swim",
+      "name": "Pico",
+      "phaseType": "peak",
+      "orderIndex": 2,
+      "startWeek": 9,
+      "endWeek": 10,
+      "description": "Entrenamiento específico de carrera a ritmo de 1500m con las nataciones continuas más largas",
+      "focus": "Resistencia a ritmo de carrera y estrategia de ritmo para 1500m",
+      "coachNote": "Intervalos más largos a ritmo CSS simulan la fatiga del 1500m completo. Practica la respiración bilateral para la visión en aguas abiertas.",
+      "createdAt": "2026-01-01T00:00:00Z",
+      "updatedAt": "2026-01-01T00:00:00Z"
+    },
+    {
+      "id": "ph_taper",
+      "sourceId": "app_assets",
+      "trainingPlanId": "tmpl_12w_1500m_swim",
+      "name": "Reducción",
+      "phaseType": "taper",
+      "orderIndex": 3,
+      "startWeek": 11,
+      "endWeek": 12,
+      "description": "Reduce el volumen, afina con esfuerzos cortos y rápidos",
+      "focus": "Frescura, afinado de velocidad y preparación para la carrera",
+      "coachNote": "El volumen se reduce ~40%. Esfuerzos cortos y rápidos mantienen la sensación del agua. Descansa más de lo que crees necesario.",
+      "createdAt": "2026-01-01T00:00:00Z",
+      "updatedAt": "2026-01-01T00:00:00Z"
+    }
+  ],
+  "weekTemplates": [
+    {
+      "name": "Base",
+      "applyToWeeks": [1, 2, 3, 4],
+      "days": {
+        "Mon": {"name": "Descanso", "sportType": "swimming", "isRestDay": true},
+        "Tue": {"name": "Técnica y Ejercicios", "sportType": "swimming", "intensity": "easy", "targetDuration": "40min", "targetDistance": "1200m", "targetPace": "2:15/100m", "targetTSS": 30, "description": "200m calentamiento + 600m ejercicios (caza, arrastre de puntas, ejercicio de puño) + 200m nado suave + 200m enfriamiento", "coachNote": "Concéntrate en un ejercicio por sesión. Calidad sobre cantidad. Brazadas suaves y largas."},
+        "Wed": {"name": "Descanso", "sportType": "swimming", "isRestDay": true},
+        "Thu": {"name": "Natación de Resistencia", "sportType": "swimming", "intensity": "endurance", "targetDuration": "40min", "targetDistance": "1400m", "targetPace": "2:15/100m", "targetTSS": 35, "description": "200m calentamiento + 4×200m ritmo constante (30seg descanso) + 200m patada + 200m enfriamiento", "coachNote": "Ritmo constante en todas las series de 200m. Usa el descanso para concentrarte en la recuperación de la respiración."},
+        "Fri": {"name": "Descanso", "sportType": "swimming", "isRestDay": true},
+        "Sat": {"name": "Natación Larga", "sportType": "swimming", "intensity": "endurance", "targetDuration": "45min", "targetDistance": "1600m", "targetPace": "2:10/100m", "targetTSS": 45, "description": "200m calentamiento + 400m nado continuo (suave) + 200m patada + 400m nado continuo + 200m ejercicios + 200m enfriamiento", "coachNote": "Avanza hacia el nado continuo. Los bloques de 400m son tu base. Respira cada 3 brazadas."},
+        "Sun": {"name": "Descanso", "sportType": "swimming", "isRestDay": true}
+      }
+    },
+    {
+      "name": "Construcción",
+      "applyToWeeks": [5, 6, 7, 8],
+      "days": {
+        "Mon": {"name": "Descanso", "sportType": "swimming", "isRestDay": true},
+        "Tue": {"name": "Intervalos de Velocidad", "sportType": "swimming", "intensity": "interval", "targetDuration": "50min", "targetDistance": "1800m", "targetPace": "1:55/100m", "targetTSS": 55, "description": "300m calentamiento + 10×100m @CSS (2:00/100m) con 20seg descanso + 200m suave + 100m patada + 200m enfriamiento", "coachNote": "Construcción temprana: 8×100m. Construcción tardía: 12×100m. Mantén un ritmo constante en cada 100m. Si la técnica se deteriora, reduce repeticiones."},
+        "Wed": {"name": "Descanso", "sportType": "swimming", "isRestDay": true},
+        "Thu": {"name": "Natación de Umbral", "sportType": "swimming", "intensity": "threshold", "targetDuration": "50min", "targetDistance": "1800m", "targetPace": "2:00/100m", "targetTSS": 55, "description": "200m calentamiento + 4×200m @CSS (2:00/100m) con 30seg descanso + 200m suave + 200m ejercicios + 200m enfriamiento", "coachNote": "El ritmo CSS debe sentirse duro pero sostenible. Estas repeticiones de 200m son tu sesión más importante, desarrollan resistencia específica de carrera."},
+        "Fri": {"name": "Descanso", "sportType": "swimming", "isRestDay": true},
+        "Sat": {"name": "Natación Larga + Trabajo de Ritmo", "sportType": "swimming", "intensity": "endurance", "targetDuration": "55min", "targetDistance": "2200m", "targetPace": "2:05/100m", "targetTSS": 65, "description": "300m calentamiento + 800m nado continuo (suave-mod) + 4×50m rápido (1:50/100m) con 30seg descanso + 200m patada + 200m suave + 300m enfriamiento", "coachNote": "El bloque de 800m construye tu base de nado continuo. Los 50m rápidos al final simulan la velocidad de llegada cuando estás cansado."},
+        "Sun": {"name": "Descanso", "sportType": "swimming", "isRestDay": true}
+      }
+    },
+    {
+      "name": "Pico",
+      "applyToWeeks": [9, 10],
+      "days": {
+        "Mon": {"name": "Descanso", "sportType": "swimming", "isRestDay": true},
+        "Tue": {"name": "Intervalos CSS", "sportType": "swimming", "intensity": "interval", "targetDuration": "55min", "targetDistance": "2200m", "targetPace": "1:55/100m", "targetTSS": 70, "description": "300m calentamiento + 5×200m @CSS (2:00/100m) con 30seg descanso + 200m suave + 100m patada + 300m enfriamiento", "coachNote": "Intervalos más largos a ritmo CSS. Mantén la forma en la última repetición, ahí es donde se gana la carrera."},
+        "Wed": {"name": "Descanso", "sportType": "swimming", "isRestDay": true},
+        "Thu": {"name": "Pirámide de Ritmo", "sportType": "swimming", "intensity": "threshold", "targetDuration": "55min", "targetDistance": "2400m", "targetPace": "2:00/100m", "targetTSS": 75, "description": "200m calentamiento + 100m rápido + 200m @CSS + 300m @CSS + 200m @CSS + 100m rápido (30seg descanso entre) + 200m suave + 200m patada + 300m enfriamiento", "coachNote": "La pirámide aumenta y luego disminuye la intensidad. Los 100m rápidos en cada extremo simulan la salida y llegada de la carrera."},
+        "Fri": {"name": "Descanso", "sportType": "swimming", "isRestDay": true},
+        "Sat": {"name": "Natación Continua Larga", "sportType": "swimming", "intensity": "endurance", "targetDuration": "60min", "targetDistance": "2800m", "targetPace": "2:05/100m", "targetTSS": 85, "description": "300m calentamiento + 1200m nado continuo + 200m patada + 8×50m ritmo descendente (2:05→1:50/100m) con 20seg descanso + 300m enfriamiento", "coachNote": "Semana 9: 1200m continuo. Semana 10: 1500m continuo — distancia completa de carrera! Practica tu estrategia de ritmo: comienza suave, acelera en la segunda mitad."},
+        "Sun": {"name": "Descanso", "sportType": "swimming", "isRestDay": true}
+      }
+    },
+    {
+      "name": "Reducción",
+      "applyToWeeks": [11, 12],
+      "days": {
+        "Mon": {"name": "Descanso", "sportType": "swimming", "isRestDay": true},
+        "Tue": {"name": "Afinado de Velocidad", "sportType": "swimming", "intensity": "interval", "targetDuration": "40min", "targetDistance": "1400m", "targetPace": "1:50/100m", "targetTSS": 40, "description": "300m calentamiento + 8×50m rápido (1:50/100m) con 45seg descanso + 200m suave + 100m patada + 300m enfriamiento", "coachNote": "Cortos y rápidos. Estos afinan tu sensación de velocidad sin fatiga. Concéntrate en giros limpios y streamline."},
+        "Wed": {"name": "Descanso", "sportType": "swimming", "isRestDay": true},
+        "Thu": {"name": "Técnica Suave", "sportType": "swimming", "intensity": "easy", "targetDuration": "35min", "targetDistance": "1200m", "targetPace": "2:15/100m", "targetTSS": 25, "description": "200m calentamiento + 600m ejercicios suaves y técnica + 200m patada + 200m enfriamiento", "coachNote": "Sesión ligera. Concéntrate en brazadas largas y suaves. Semana 12: salta o solo 800m muy suave."},
+        "Fri": {"name": "Descanso", "sportType": "swimming", "isRestDay": true},
+        "Sat": {"name": "Pre-Carrera o Día de Carrera", "sportType": "swimming", "intensity": "active", "targetDuration": "40min", "targetDistance": "1500m", "targetPace": "2:05/100m", "targetTSS": 35, "description": "Semana 11: 400m calentamiento + 600m suave + 200m patada + 300m enfriamiento. Semana 12: DÍA DE CARRERA — 1500m.", "coachNote": "Semana 11: sesión ligera pre-carrera. Semana 12: DÍA DE CARRERA. Comienza suave, haz negativo split. Cuenta tus brazadas, respira bilateralmente. Confía en tu entrenamiento, has hecho la distancia!"},
+        "Sun": {"name": "Descanso", "sportType": "swimming", "isRestDay": true}
+      }
+    }
+  ],
+  "overrides": [
+    {"weekId": 1, "day": "Thu", "field": "targetDistance", "value": "1400m"},
+    {"weekId": 1, "day": "Sat", "field": "targetDistance", "value": "1600m"},
+    {"weekId": 2, "day": "Thu", "field": "targetDistance", "value": "1500m"},
+    {"weekId": 2, "day": "Sat", "field": "targetDistance", "value": "1700m"},
+    {"weekId": 3, "day": "Thu", "field": "targetDistance", "value": "1600m"},
+    {"weekId": 3, "day": "Sat", "field": "targetDistance", "value": "1800m"},
+    {"weekId": 4, "day": "Thu", "field": "targetDistance", "value": "1700m"},
+    {"weekId": 4, "day": "Sat", "field": "targetDistance", "value": "1900m"},
+    {"weekId": 5, "day": "Tue", "field": "targetDistance", "value": "1800m"},
+    {"weekId": 5, "day": "Thu", "field": "targetDistance", "value": "1800m"},
+    {"weekId": 5, "day": "Sat", "field": "targetDistance", "value": "2200m"},
+    {"weekId": 6, "day": "Tue", "field": "targetDistance", "value": "1900m"},
+    {"weekId": 6, "day": "Thu", "field": "targetDistance", "value": "1900m"},
+    {"weekId": 6, "day": "Sat", "field": "targetDistance", "value": "2300m"},
+    {"weekId": 7, "day": "Tue", "field": "targetDistance", "value": "2000m"},
+    {"weekId": 7, "day": "Thu", "field": "targetDistance", "value": "2000m"},
+    {"weekId": 7, "day": "Sat", "field": "targetDistance", "value": "2400m"},
+    {"weekId": 8, "day": "Tue", "field": "targetDistance", "value": "2100m"},
+    {"weekId": 8, "day": "Thu", "field": "targetDistance", "value": "2100m"},
+    {"weekId": 8, "day": "Sat", "field": "targetDistance", "value": "2500m"},
+    {"weekId": 5, "day": "Sat", "field": "targetTSS", "value": "65"},
+    {"weekId": 6, "day": "Sat", "field": "targetTSS", "value": "70"},
+    {"weekId": 7, "day": "Sat", "field": "targetTSS", "value": "75"},
+    {"weekId": 8, "day": "Sat", "field": "targetTSS", "value": "80"},
+    {"weekId": 9, "day": "Tue", "field": "targetDistance", "value": "2200m"},
+    {"weekId": 9, "day": "Thu", "field": "targetDistance", "value": "2400m"},
+    {"weekId": 9, "day": "Sat", "field": "targetDistance", "value": "2800m"},
+    {"weekId": 10, "day": "Tue", "field": "targetDistance", "value": "2400m"},
+    {"weekId": 10, "day": "Thu", "field": "targetDistance", "value": "2600m"},
+    {"weekId": 10, "day": "Sat", "field": "targetDistance", "value": "3000m"},
+    {"weekId": 10, "day": "Sat", "field": "targetTSS", "value": "90"},
+    {"weekId": 10, "day": "Sat", "field": "description", "value": "300m calentamiento + 1500m nado continuo (distancia de carrera!) + 200m patada + 8×50m descendente + 300m enfriamiento"},
+    {"weekId": 11, "day": "Tue", "field": "targetDistance", "value": "1400m"},
+    {"weekId": 11, "day": "Thu", "field": "targetDistance", "value": "1200m"},
+    {"weekId": 11, "day": "Sat", "field": "targetDistance", "value": "1500m"},
+    {"weekId": 11, "day": "Sat", "field": "targetTSS", "value": "35"},
+    {"weekId": 11, "day": "Sat", "field": "name", "value": "Natación Suave Pre-Carrera"},
+    {"weekId": 12, "day": "Sat", "field": "name", "value": "DÍA DE CARRERA — 1500m"},
+    {"weekId": 12, "day": "Sat", "field": "targetDistance", "value": "1500m"},
+    {"weekId": 12, "day": "Sat", "field": "targetTSS", "value": "60"},
+    {"weekId": 12, "day": "Sat", "field": "description", "value": "DÍA DE CARRERA — 1500m. Comienza a ritmo CSS, acelera en la segunda mitad. Confía en tu ritmo."},
+    {"weekId": 12, "day": "Tue", "field": "name", "value": "Técnica Ligera (Semana de Carrera)"},
+    {"weekId": 12, "day": "Tue", "field": "targetDuration", "value": "30min"},
+    {"weekId": 12, "day": "Tue", "field": "targetDistance", "value": "1000m"},
+    {"weekId": 12, "day": "Tue", "field": "targetTSS", "value": "20"},
+    {"weekId": 12, "day": "Thu", "field": "name", "value": "Soltura Suave (Semana de Carrera)"},
+    {"weekId": 12, "day": "Thu", "field": "targetDuration", "value": "25min"},
+    {"weekId": 12, "day": "Thu", "field": "targetDistance", "value": "800m"}
+  ],
+  "workouts": {},
+  "trainingPlan": {
+    "name": "Plan de 12 Semanas: Natación 1500m",
+    "sportType": "swimming",
+    "description": "Un plan de 12 semanas para nadadores que pueden nadar cómodamente 400-800m de forma continua y quieren completar una natación de 1500m en aguas abiertas o piscina. Aumenta el volumen de sesión de 1200m a 3000m con intervalos a ritmo CSS y resistencia específica de carrera.",
+    "goal": "Completar una natación de 1500m con fuerza y ritmo constante",
+    "targetMetrics": {
+      "CSS": "2:00",
+      "easyPace": "2:15",
+      "thresholdPace": "2:00",
+      "fastPace": "1:50"
+    }
+  }
+}

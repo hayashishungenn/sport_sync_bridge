@@ -1,0 +1,105 @@
+{
+  "type": "structuredPlan",
+  "id": "tmpl_8w_beginner_run",
+  "sourceId": "app_assets",
+  "name": "8周入门跑步5公里计划",
+  "phases": [
+    {
+      "id": "ph_adaptation",
+      "sourceId": "app_assets",
+      "trainingPlanId": "tmpl_8w_beginner_run",
+      "name": "适应期",
+      "phaseType": "base",
+      "orderIndex": 0,
+      "startWeek": 1,
+      "endWeek": 2,
+      "description": "建立规律跑步习惯，走跑结合起步",
+      "focus": "规律性和愉悦感优先于距离和配速",
+      "coachNote": "只使用 RPE（自觉努力度）。轻松 = 能边跑边聊天。不要追求速度——只需坚持出现。",
+      "createdAt": "2026-01-01T00:00:00Z",
+      "updatedAt": "2026-01-01T00:00:00Z"
+    },
+    {
+      "id": "ph_building",
+      "sourceId": "app_assets",
+      "trainingPlanId": "tmpl_8w_beginner_run",
+      "name": "提升期",
+      "phaseType": "base",
+      "orderIndex": 1,
+      "startWeek": 3,
+      "endWeek": 5,
+      "description": "增加跑步间歇，减少走路休息",
+      "focus": "延长连续跑步段落",
+      "coachNote": "你应该开始感觉变强了。走路休息变短，跑步段落变长。",
+      "createdAt": "2026-01-01T00:00:00Z",
+      "updatedAt": "2026-01-01T00:00:00Z"
+    },
+    {
+      "id": "ph_consolidation",
+      "sourceId": "app_assets",
+      "trainingPlanId": "tmpl_8w_beginner_run",
+      "name": "巩固期",
+      "phaseType": "build",
+      "orderIndex": 2,
+      "startWeek": 6,
+      "endWeek": 8,
+      "description": "连续跑步 25 → 30 → 35 分钟，冲刺5公里",
+      "focus": "无需走路休息的持续跑步，完成5公里毕业跑",
+      "coachNote": "渐进：第6周 25 分钟，第7周 30 分钟，第8周 35 分钟连续跑步（约5公里）。庆祝每一个里程碑，第8周周末就是你的5公里毕业跑！",
+      "createdAt": "2026-01-01T00:00:00Z",
+      "updatedAt": "2026-01-01T00:00:00Z"
+    }
+  ],
+  "weekTemplates": [
+    {
+      "name": "适应期",
+      "applyToWeeks": [1, 2],
+      "days": {
+        "Mon": {"name": "休息日", "sportType": "running", "isRestDay": true},
+        "Tue": {"name": "快走5分钟 + 慢跑3分钟 × 4组", "sportType": "running", "intensity": "easy", "coachNote": "跑步时 RPE 3-4/10。组间快走恢复。"},
+        "Wed": {"name": "休息日", "sportType": "running", "isRestDay": true},
+        "Thu": {"name": "快走5分钟 + 慢跑3分钟 × 4组", "sportType": "running", "intensity": "easy", "coachNote": "同周二。规律性就是目标。"},
+        "Fri": {"name": "休息日", "sportType": "running", "isRestDay": true},
+        "Sat": {"name": "快走5分钟 + 慢跑5分钟 × 3组", "sportType": "running", "intensity": "easy", "coachNote": "周末跑得更久一点！"},
+        "Sun": {"name": "休息日", "sportType": "running", "isRestDay": true}
+      }
+    },
+    {
+      "name": "提升期",
+      "applyToWeeks": [3, 4, 5],
+      "days": {
+        "Mon": {"name": "休息日", "sportType": "running", "isRestDay": true},
+        "Tue": {"name": "快走3分钟 + 慢跑5分钟 × 4组", "sportType": "running", "intensity": "easy", "coachNote": "跑步更长，走路更短。RPE 4-5。"},
+        "Wed": {"name": "休息日", "sportType": "running", "isRestDay": true},
+        "Thu": {"name": "快走3分钟 + 慢跑8分钟 × 3组", "sportType": "running", "intensity": "easy", "coachNote": "8分钟段落里专注呼吸节奏。"},
+        "Fri": {"name": "休息日", "sportType": "running", "isRestDay": true},
+        "Sat": {"name": "快走3分钟 + 慢跑10分钟 × 2组", "sportType": "running", "intensity": "easy", "coachNote": "越来越强了！连续10分钟。"},
+        "Sun": {"name": "休息日", "sportType": "running", "isRestDay": true}
+      }
+    },
+    {
+      "name": "巩固期",
+      "applyToWeeks": [6, 7, 8],
+      "days": {
+        "Mon": {"name": "休息日", "sportType": "running", "isRestDay": true},
+        "Tue": {"name": "热身快走3分钟 + 持续慢跑25分钟", "sportType": "running", "intensity": "easy", "coachNote": "W6: 20分钟 / W7: 25分钟 / W8: 25分钟。找到自己的舒适节奏。"},
+        "Wed": {"name": "休息日", "sportType": "running", "isRestDay": true},
+        "Thu": {"name": "热身快走3分钟 + 持续慢跑25分钟", "sportType": "running", "intensity": "easy", "coachNote": "W6: 20分钟 / W7: 25分钟 / W8: 30分钟。稳定放松。"},
+        "Fri": {"name": "休息日", "sportType": "running", "isRestDay": true},
+        "Sat": {"name": "快走2分钟 + 持续慢跑30分钟", "sportType": "running", "intensity": "endurance", "coachNote": "W6: 25分钟 / W7: 30分钟 / W8: 35分钟。不间断——你做到了！"},
+        "Sun": {"name": "休息日", "sportType": "running", "isRestDay": true}
+      }
+    }
+  ],
+  "overrides": [
+    {"weekId": 8, "day": "Sat", "field": "name", "value": "5公里毕业跑——连续慢跑35分钟"},
+    {"weekId": 8, "day": "Sat", "field": "targetDistance", "value": "5km"}
+  ],
+  "workouts": {},
+  "trainingPlan": {
+    "name": "8周入门跑步5公里",
+    "sportType": "running",
+    "description": "零基础友好：从走跑交替起步，8周逐步过渡到持续慢跑，毕业目标——连续跑完5公里。",
+    "goal": "建立跑步习惯，能够连续跑步5公里"
+  }
+}

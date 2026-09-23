@@ -1,0 +1,176 @@
+{
+  "type": "structuredPlan",
+  "id": "tmpl_12w_century_ride",
+  "sourceId": "app_assets",
+  "name": "Plan de 12 Semanas: Centuria",
+  "phases": [
+    {
+      "id": "ph_base",
+      "sourceId": "app_assets",
+      "trainingPlanId": "tmpl_12w_century_ride",
+      "name": "Base",
+      "phaseType": "base",
+      "orderIndex": 0,
+      "startWeek": 1,
+      "endWeek": 4,
+      "description": "Construye resistencia aeróbica con rodadas constantes en zona2 y salidas de fin de semana gradualmente más largas",
+      "focus": "Tiempo en el sillín y eficiencia aeróbica",
+      "coachNote": "Todas las rodadas en FC zona2 o 60-70% FTP. Concéntrate en un pedaleo suave y mantenerte cómodo en el sillín durante períodos más largos.",
+      "createdAt": "2026-01-01T00:00:00Z",
+      "updatedAt": "2026-01-01T00:00:00Z"
+    },
+    {
+      "id": "ph_build",
+      "sourceId": "app_assets",
+      "trainingPlanId": "tmpl_12w_century_ride",
+      "name": "Construcción",
+      "phaseType": "build",
+      "orderIndex": 1,
+      "startWeek": 5,
+      "endWeek": 8,
+      "description": "Introduce intervalos de umbral y VO2max, extiende la distancia de las rodadas largas",
+      "focus": "Potencia de umbral, capacidad aeróbica y alimentación en rodadas largas",
+      "coachNote": "Los intervalos de umbral al 95% FTP deben sentirse duros pero sostenibles. Los intervalos VO2max son muy duros, da el esfuerzo completo. Practica la nutrición en rodadas largas.",
+      "createdAt": "2026-01-01T00:00:00Z",
+      "updatedAt": "2026-01-01T00:00:00Z"
+    },
+    {
+      "id": "ph_peak",
+      "sourceId": "app_assets",
+      "trainingPlanId": "tmpl_12w_century_ride",
+      "name": "Pico",
+      "phaseType": "peak",
+      "orderIndex": 2,
+      "startWeek": 9,
+      "endWeek": 10,
+      "description": "Las rodadas más largas y simulación a ritmo de centuria",
+      "focus": "Resistencia a distancia de centuria, comodidad a ritmo de carrera y estrategia de alimentación",
+      "coachNote": "Estas son tus rodadas de entrenamiento más largas. Practica tu plan completo de nutrición del día de carrera: come y bebe según el horario, no según la sensación.",
+      "createdAt": "2026-01-01T00:00:00Z",
+      "updatedAt": "2026-01-01T00:00:00Z"
+    },
+    {
+      "id": "ph_taper",
+      "sourceId": "app_assets",
+      "trainingPlanId": "tmpl_12w_century_ride",
+      "name": "Reducción",
+      "phaseType": "taper",
+      "orderIndex": 3,
+      "startWeek": 11,
+      "endWeek": 12,
+      "description": "Reduce el volumen, mantén la intensidad, llega fresco",
+      "focus": "Recuperación y preparación para la carrera",
+      "coachNote": "El volumen disminuye significativamente. Mantén una sesión corta de intensidad para mantener la agudeza. Revisa tu bicicleta, prepara tu equipo, planifica tus estaciones de avituallamiento.",
+      "createdAt": "2026-01-01T00:00:00Z",
+      "updatedAt": "2026-01-01T00:00:00Z"
+    }
+  ],
+  "weekTemplates": [
+    {
+      "name": "Base",
+      "applyToWeeks": [1, 2, 3, 4],
+      "days": {
+        "Mon": {"name": "Descanso", "sportType": "cycling", "isRestDay": true},
+        "Tue": {"name": "Rodada de Resistencia", "sportType": "cycling", "intensity": "endurance", "targetDuration": "60min", "targetHR": "zone2", "targetTSS": 50, "description": "Rodada constante en zona2 por terreno plano a ondulado", "coachNote": "Mantén la cadencia alta (85-95 rpm). Concéntrate en pedaleos circulares suaves."},
+        "Wed": {"name": "Descanso", "sportType": "cycling", "isRestDay": true},
+        "Thu": {"name": "Rodada de Resistencia", "sportType": "cycling", "intensity": "endurance", "targetDuration": "60min", "targetHR": "zone2", "targetTSS": 50, "description": "Rodada constante de resistencia con 5min a cadencia más alta (100+ rpm) en el medio", "coachNote": "Los ejercicios de cadencia mejoran la eficiencia neuromuscular. Gira suave, sin forzar."},
+        "Fri": {"name": "Descanso", "sportType": "cycling", "isRestDay": true},
+        "Sat": {"name": "Rodada Larga de Resistencia", "sportType": "cycling", "intensity": "endurance", "targetDuration": "2h30min", "targetDistance": "60km", "targetHR": "zone2", "targetTSS": 130, "description": "Rodada larga constante a ritmo de resistencia. Lleva 1 botella de agua y un snack.", "coachNote": "Comienza suave. El objetivo es tiempo en el sillín, no velocidad. Encuentra un ritmo cómodo y disfruta la rodada."},
+        "Sun": {"name": "Descanso", "sportType": "cycling", "isRestDay": true}
+      }
+    },
+    {
+      "name": "Construcción",
+      "applyToWeeks": [5, 6, 7, 8],
+      "days": {
+        "Mon": {"name": "Descanso", "sportType": "cycling", "isRestDay": true},
+        "Tue": {"name": "Intervalos VO2max", "sportType": "cycling", "intensity": "interval", "targetDuration": "60min", "targetHR": "zone5", "targetTSS": 75, "description": "Calentamiento 15min suave + 4×5min @110% FTP (5min pedaleo suave recuperación) + Enfriamiento 10min suave", "coachNote": "Construcción temprana: 4×4min. Construcción tardía: 5×5min. Esfuerzo completo en cada intervalo, estos desarrollan potencia máxima."},
+        "Wed": {"name": "Descanso", "sportType": "cycling", "isRestDay": true},
+        "Thu": {"name": "Intervalos de Umbral", "sportType": "cycling", "intensity": "threshold", "targetDuration": "75min", "targetHR": "zone4", "targetTSS": 85, "description": "Calentamiento 15min suave + 2×20min @95% FTP (5min pedaleo suave recuperación) + Enfriamiento 10min suave", "coachNote": "Salida de potencia suave y constante. Cadencia 85-95 rpm. Estos desarrollan tu potencia sostenible para subidas largas."},
+        "Fri": {"name": "Descanso", "sportType": "cycling", "isRestDay": true},
+        "Sat": {"name": "Rodada Larga de Resistencia", "sportType": "cycling", "intensity": "endurance", "targetDuration": "3h30min", "targetDistance": "90km", "targetHR": "zone2", "targetTSS": 190, "description": "Rodada larga en zona2. Lleva 2 botellas y 2 snacks. Practica comer y beber sobre la bicicleta.", "coachNote": "Aliméntate cada 45min: come antes de tener hambre, bebe antes de tener sed. Aquí es cuando aprendes lo que tolera tu estómago."},
+        "Sun": {"name": "Descanso", "sportType": "cycling", "isRestDay": true}
+      }
+    },
+    {
+      "name": "Pico",
+      "applyToWeeks": [9, 10],
+      "days": {
+        "Mon": {"name": "Descanso", "sportType": "cycling", "isRestDay": true},
+        "Tue": {"name": "Intervalos VO2max", "sportType": "cycling", "intensity": "interval", "targetDuration": "65min", "targetHR": "zone5", "targetTSS": 80, "description": "Calentamiento 15min suave + 5×5min @110% FTP (5min pedaleo suave recuperación) + Enfriamiento 10min suave", "coachNote": "Intervalos de esfuerzo máximo. Calidad sobre cantidad — si decaes, reduce el número, no la intensidad."},
+        "Wed": {"name": "Descanso", "sportType": "cycling", "isRestDay": true},
+        "Thu": {"name": "Rodada de Umbral", "sportType": "cycling", "intensity": "threshold", "targetDuration": "75min", "targetHR": "zone4", "targetTSS": 85, "description": "Calentamiento 15min suave + 2×20min @95% FTP (5min recuperación suave) + Enfriamiento 10min suave", "coachNote": "Mantén la potencia de umbral. La consistencia en ambos bloques de 20min es el objetivo."},
+        "Fri": {"name": "Descanso", "sportType": "cycling", "isRestDay": true},
+        "Sat": {"name": "Simulación de Centuria Larga", "sportType": "cycling", "intensity": "endurance", "targetDuration": "5h00min", "targetDistance": "135km", "targetHR": "zone2", "targetTSS": 280, "description": "La rodada más larga del plan. Lleva 3 botellas y comida real. Simula el ritmo y la alimentación del día de carrera.", "coachNote": "Este es tu ensayo general. Comienza suave, ritmo conservador. Practica paradas en estaciones de avituallamiento: rápidas, eficientes, vuelve a la bicicleta. Nada nuevo el día de la carrera, pruébalo todo ahora."},
+        "Sun": {"name": "Descanso", "sportType": "cycling", "isRestDay": true}
+      }
+    },
+    {
+      "name": "Reducción",
+      "applyToWeeks": [11, 12],
+      "days": {
+        "Mon": {"name": "Descanso", "sportType": "cycling", "isRestDay": true},
+        "Tue": {"name": "Umbral Corto", "sportType": "cycling", "intensity": "threshold", "targetDuration": "55min", "targetHR": "zone4", "targetTSS": 55, "description": "Semana 11: Calentamiento 15min + 15min @95% FTP + Enfriamiento 15min. Semana 12: Pedaleo suave 40min.", "coachNote": "Corto e intenso. Mantén las piernas listas sin acumular fatiga. Semana 12: solo un pedaleo suave."},
+        "Wed": {"name": "Descanso", "sportType": "cycling", "isRestDay": true},
+        "Thu": {"name": "Pedaleo Suave", "sportType": "cycling", "intensity": "easy", "targetDuration": "45min", "targetHR": "zone1", "targetTSS": 25, "description": "Pedaleo de recuperación muy ligero. Cadencia alta, resistencia baja.", "coachNote": "Solo recuperación activa. Sin esfuerzo, solo haz que la sangre fluya. Revisa que tu bicicleta esté lista para la carrera."},
+        "Fri": {"name": "Descanso", "sportType": "cycling", "isRestDay": true},
+        "Sat": {"name": "Rodada Larga (Reducción) o Centuria", "sportType": "cycling", "intensity": "endurance", "targetDuration": "3h00min", "targetDistance": "80km", "targetHR": "zone2", "targetTSS": 140, "description": "Semana 11: rodada larga suave 80km. Semana 12: DÍA DE LA CENTURIA — 160km.", "coachNote": "Semana 11: una última rodada larga moderada. Semana 12: DÍA DE LA CARRERA. Dosifícate — los primeros 80km deben sentirse fáciles. Come y bebe según el horario. Has hecho el entrenamiento."},
+        "Sun": {"name": "Descanso", "sportType": "cycling", "isRestDay": true}
+      }
+    }
+  ],
+  "overrides": [
+    {"weekId": 1, "day": "Sat", "field": "targetDistance", "value": "60km"},
+    {"weekId": 2, "day": "Sat", "field": "targetDistance", "value": "70km"},
+    {"weekId": 3, "day": "Sat", "field": "targetDistance", "value": "75km"},
+    {"weekId": 4, "day": "Sat", "field": "targetDistance", "value": "80km"},
+    {"weekId": 1, "day": "Sat", "field": "targetDuration", "value": "2h30min"},
+    {"weekId": 2, "day": "Sat", "field": "targetDuration", "value": "2h50min"},
+    {"weekId": 3, "day": "Sat", "field": "targetDuration", "value": "3h00min"},
+    {"weekId": 4, "day": "Sat", "field": "targetDuration", "value": "3h15min"},
+    {"weekId": 5, "day": "Sat", "field": "targetDistance", "value": "90km"},
+    {"weekId": 6, "day": "Sat", "field": "targetDistance", "value": "100km"},
+    {"weekId": 7, "day": "Sat", "field": "targetDistance", "value": "110km"},
+    {"weekId": 8, "day": "Sat", "field": "targetDistance", "value": "120km"},
+    {"weekId": 5, "day": "Sat", "field": "targetDuration", "value": "3h30min"},
+    {"weekId": 6, "day": "Sat", "field": "targetDuration", "value": "4h00min"},
+    {"weekId": 7, "day": "Sat", "field": "targetDuration", "value": "4h15min"},
+    {"weekId": 8, "day": "Sat", "field": "targetDuration", "value": "4h45min"},
+    {"weekId": 5, "day": "Sat", "field": "targetTSS", "value": "190"},
+    {"weekId": 6, "day": "Sat", "field": "targetTSS", "value": "210"},
+    {"weekId": 7, "day": "Sat", "field": "targetTSS", "value": "235"},
+    {"weekId": 8, "day": "Sat", "field": "targetTSS", "value": "260"},
+    {"weekId": 9, "day": "Sat", "field": "targetDistance", "value": "135km"},
+    {"weekId": 10, "day": "Sat", "field": "targetDistance", "value": "150km"},
+    {"weekId": 9, "day": "Sat", "field": "targetDuration", "value": "5h00min"},
+    {"weekId": 10, "day": "Sat", "field": "targetDuration", "value": "5h30min"},
+    {"weekId": 9, "day": "Sat", "field": "targetTSS", "value": "280"},
+    {"weekId": 10, "day": "Sat", "field": "targetTSS", "value": "310"},
+    {"weekId": 11, "day": "Sat", "field": "targetDistance", "value": "80km"},
+    {"weekId": 11, "day": "Sat", "field": "targetDuration", "value": "3h00min"},
+    {"weekId": 11, "day": "Sat", "field": "targetTSS", "value": "140"},
+    {"weekId": 12, "day": "Sat", "field": "name", "value": "DÍA DE LA CENTURIA — 160km"},
+    {"weekId": 12, "day": "Sat", "field": "targetDistance", "value": "160km"},
+    {"weekId": 12, "day": "Sat", "field": "targetDuration", "value": "6h00min"},
+    {"weekId": 12, "day": "Sat", "field": "targetTSS", "value": "330"},
+    {"weekId": 12, "day": "Sat", "field": "description", "value": "DÍA DE LA CENTURIA — 160km. Tu objetivo. Ritmo conservador, aliméntate constantemente, disfruta el logro."},
+    {"weekId": 12, "day": "Tue", "field": "name", "value": "Pedaleo Suave (Semana de Carrera)"},
+    {"weekId": 12, "day": "Tue", "field": "intensity", "value": "easy"},
+    {"weekId": 12, "day": "Tue", "field": "targetDuration", "value": "40min"},
+    {"weekId": 12, "day": "Tue", "field": "targetHR", "value": "zone1"},
+    {"weekId": 12, "day": "Tue", "field": "targetTSS", "value": "20"}
+  ],
+  "workouts": {},
+  "trainingPlan": {
+    "name": "Plan de 12 Semanas: Centuria",
+    "sportType": "cycling",
+    "description": "Un plan de 12 semanas para ciclistas que pueden rodar cómodamente 50-80km y quieren completar una centuria (160km). Construye desde rodadas de 60km hasta 150km con intervalos de umbral, VO2max y práctica de alimentación para el día de carrera.",
+    "goal": "Completar una centuria (160km / 100 millas) con fuerza y buena alimentación",
+    "targetMetrics": {
+      "easyPower": "60",
+      "endurancePower": "70",
+      "thresholdPower": "95",
+      "intervalPower": "110"
+    }
+  }
+}

@@ -1,0 +1,166 @@
+{
+  "type": "structuredPlan",
+  "id": "tmpl_12w_first_half_marathon",
+  "sourceId": "app_assets",
+  "name": "12-Week First Half Marathon",
+  "phases": [
+    {
+      "id": "ph_base",
+      "sourceId": "app_assets",
+      "trainingPlanId": "tmpl_12w_first_half_marathon",
+      "name": "Base",
+      "phaseType": "base",
+      "orderIndex": 0,
+      "startWeek": 1,
+      "endWeek": 4,
+      "description": "Build aerobic foundation with easy runs and gradually extending long runs",
+      "focus": "Aerobic endurance and consistency",
+      "coachNote": "All easy runs at conversational pace. Long run is the most important session each week — don't skip it.",
+      "createdAt": "2026-01-01T00:00:00Z",
+      "updatedAt": "2026-01-01T00:00:00Z"
+    },
+    {
+      "id": "ph_build",
+      "sourceId": "app_assets",
+      "trainingPlanId": "tmpl_12w_first_half_marathon",
+      "name": "Build",
+      "phaseType": "build",
+      "orderIndex": 1,
+      "startWeek": 5,
+      "endWeek": 8,
+      "description": "Introduce interval and tempo work, extend long run distance",
+      "focus": "Speed endurance and threshold development",
+      "coachNote": "Intervals should feel challenging but controlled. Tempo runs at a comfortably hard pace — you could speak a few words but not a full sentence.",
+      "createdAt": "2026-01-01T00:00:00Z",
+      "updatedAt": "2026-01-01T00:00:00Z"
+    },
+    {
+      "id": "ph_peak",
+      "sourceId": "app_assets",
+      "trainingPlanId": "tmpl_12w_first_half_marathon",
+      "name": "Peak",
+      "phaseType": "peak",
+      "orderIndex": 2,
+      "startWeek": 9,
+      "endWeek": 10,
+      "description": "Race-specific training with half marathon pace work and longest runs",
+      "focus": "Race pace adaptation and confidence at half marathon distance",
+      "coachNote": "Longer intervals and race-pace segments. Trust your training — you're almost there.",
+      "createdAt": "2026-01-01T00:00:00Z",
+      "updatedAt": "2026-01-01T00:00:00Z"
+    },
+    {
+      "id": "ph_taper",
+      "sourceId": "app_assets",
+      "trainingPlanId": "tmpl_12w_first_half_marathon",
+      "name": "Taper",
+      "phaseType": "taper",
+      "orderIndex": 3,
+      "startWeek": 11,
+      "endWeek": 12,
+      "description": "Reduce volume while maintaining intensity and freshness",
+      "focus": "Recovery and race readiness",
+      "coachNote": "Volume drops but intensity stays. You're not building fitness now, you're revealing it. Stay off your feet the day before the race.",
+      "createdAt": "2026-01-01T00:00:00Z",
+      "updatedAt": "2026-01-01T00:00:00Z"
+    }
+  ],
+  "weekTemplates": [
+    {
+      "name": "Base",
+      "applyToWeeks": [1, 2, 3, 4],
+      "days": {
+        "Mon": {"name": "Rest Day", "sportType": "running", "isRestDay": true},
+        "Tue": {"name": "Easy Run", "sportType": "running", "intensity": "easy", "targetDuration": "30min", "targetHR": "zone2", "targetTSS": 25, "description": "Easy conversational run on flat terrain", "coachNote": "Keep HR in zone2. This is active recovery."},
+        "Wed": {"name": "Rest Day", "sportType": "running", "isRestDay": true},
+        "Thu": {"name": "Easy Run", "sportType": "running", "intensity": "easy", "targetDuration": "35min", "targetHR": "zone2", "targetTSS": 30, "description": "Easy run with strides in the last 5 minutes", "coachNote": "Add 4-5 gentle strides (20-30 sec each) at the end. Focus on smooth form."},
+        "Fri": {"name": "Rest Day", "sportType": "running", "isRestDay": true},
+        "Sat": {"name": "Long Run LSD", "sportType": "running", "intensity": "endurance", "targetDistance": "8km", "targetDuration": "55min", "targetHR": "zone2", "targetTSS": 55, "description": "Long slow distance run at easy pace", "coachNote": "Start easy and stay easy throughout. Walk briefly if needed — no shame in walk breaks on your first long runs."},
+        "Sun": {"name": "Rest Day", "sportType": "running", "isRestDay": true}
+      }
+    },
+    {
+      "name": "Build",
+      "applyToWeeks": [5, 6, 7, 8],
+      "days": {
+        "Mon": {"name": "Rest Day", "sportType": "running", "isRestDay": true},
+        "Tue": {"name": "400m Intervals", "sportType": "running", "intensity": "interval", "targetDuration": "50min", "targetDistance": "8km", "targetPace": "5:00/km", "targetHR": "zone4", "targetTSS": 65, "description": "Warmup 2km easy + 6×400m @5:00/km (200m jog recovery) + Cooldown 2km easy", "coachNote": "Consistent splits are more important than fast ones. Jog the recoveries — don't walk."},
+        "Wed": {"name": "Rest Day", "sportType": "running", "isRestDay": true},
+        "Thu": {"name": "Tempo Run", "sportType": "running", "intensity": "threshold", "targetDuration": "45min", "targetDistance": "7km", "targetPace": "5:30/km", "targetHR": "zone3", "targetTSS": 55, "description": "Warmup 1.5km easy + 20min tempo @5:30/km + Cooldown 1.5km easy", "coachNote": "Tempo pace = comfortably hard. You can say a few words but not hold a conversation."},
+        "Fri": {"name": "Rest Day", "sportType": "running", "isRestDay": true},
+        "Sat": {"name": "Long Run LSD", "sportType": "running", "intensity": "endurance", "targetDistance": "12km", "targetDuration": "1h20min", "targetHR": "zone2", "targetTSS": 85, "description": "Long slow distance run with last 2km at half marathon effort", "coachNote": "Practice race-day fueling during the run. Try a gel or sports drink to see how your stomach handles it."},
+        "Sun": {"name": "Rest Day", "sportType": "running", "isRestDay": true}
+      }
+    },
+    {
+      "name": "Peak",
+      "applyToWeeks": [9, 10],
+      "days": {
+        "Mon": {"name": "Rest Day", "sportType": "running", "isRestDay": true},
+        "Tue": {"name": "800m Intervals", "sportType": "running", "intensity": "interval", "targetDuration": "55min", "targetDistance": "9km", "targetPace": "5:10/km", "targetHR": "zone4", "targetTSS": 70, "description": "Warmup 2km easy + 5×800m @5:10/km (400m jog recovery) + Cooldown 2km easy", "coachNote": "These simulate the fatigue you'll feel late in the race. Hold form when tired."},
+        "Wed": {"name": "Rest Day", "sportType": "running", "isRestDay": true},
+        "Thu": {"name": "Half Marathon Pace Run", "sportType": "running", "intensity": "threshold", "targetDuration": "55min", "targetDistance": "9km", "targetPace": "6:00/km", "targetHR": "zone3", "targetTSS": 65, "description": "Warmup 1.5km easy + 6km @HM pace (6:00/km) + Cooldown 1.5km easy", "coachNote": "Lock into your goal race pace. Make it feel automatic — this is your rhythm for race day."},
+        "Fri": {"name": "Rest Day", "sportType": "running", "isRestDay": true},
+        "Sat": {"name": "Long Run LSD", "sportType": "running", "intensity": "endurance", "targetDistance": "17km", "targetDuration": "1h55min", "targetHR": "zone2", "targetTSS": 125, "description": "Long run with last 3km at half marathon pace", "coachNote": "Practice everything: pre-run meal, gear, hydration, pacing. This is your dress rehearsal."},
+        "Sun": {"name": "Rest Day", "sportType": "running", "isRestDay": true}
+      }
+    },
+    {
+      "name": "Taper",
+      "applyToWeeks": [11, 12],
+      "days": {
+        "Mon": {"name": "Rest Day", "sportType": "running", "isRestDay": true},
+        "Tue": {"name": "Easy Run + Strides", "sportType": "running", "intensity": "easy", "targetDuration": "35min", "targetDistance": "5km", "targetHR": "zone2", "targetTSS": 25, "description": "Easy run with 4×20sec strides at race pace", "coachNote": "Keep it light. Strides maintain neuromuscular sharpness without fatigue."},
+        "Wed": {"name": "Rest Day", "sportType": "running", "isRestDay": true},
+        "Thu": {"name": "Short Tempo", "sportType": "running", "intensity": "threshold", "targetDuration": "40min", "targetDistance": "6km", "targetPace": "5:30/km", "targetHR": "zone3", "targetTSS": 40, "description": "Warmup 1.5km easy + 15min tempo + Cooldown 1.5km easy", "coachNote": "Shorter tempo to keep the engine primed without draining the tank."},
+        "Fri": {"name": "Rest Day", "sportType": "running", "isRestDay": true},
+        "Sat": {"name": "Long Run (Reduced) or Race", "sportType": "running", "intensity": "endurance", "targetDistance": "12km", "targetDuration": "1h20min", "targetHR": "zone2", "targetTSS": 75, "description": "Week 11: easy long run 12km. Week 12: RACE DAY — 21.1km. Trust your training!", "coachNote": "Week 11: one last moderate long run. Week 12: this is it! Start conservatively, negative split if you can."},
+        "Sun": {"name": "Rest Day", "sportType": "running", "isRestDay": true}
+      }
+    }
+  ],
+  "overrides": [
+    {"weekId": 1, "day": "Sat", "field": "targetDistance", "value": "8km"},
+    {"weekId": 2, "day": "Sat", "field": "targetDistance", "value": "10km"},
+    {"weekId": 3, "day": "Sat", "field": "targetDistance", "value": "11km"},
+    {"weekId": 4, "day": "Sat", "field": "targetDistance", "value": "12km"},
+    {"weekId": 5, "day": "Sat", "field": "targetDistance", "value": "12km"},
+    {"weekId": 6, "day": "Sat", "field": "targetDistance", "value": "14km"},
+    {"weekId": 7, "day": "Sat", "field": "targetDistance", "value": "15km"},
+    {"weekId": 8, "day": "Sat", "field": "targetDistance", "value": "16km"},
+    {"weekId": 5, "day": "Sat", "field": "targetDuration", "value": "1h20min"},
+    {"weekId": 6, "day": "Sat", "field": "targetDuration", "value": "1h30min"},
+    {"weekId": 7, "day": "Sat", "field": "targetDuration", "value": "1h40min"},
+    {"weekId": 8, "day": "Sat", "field": "targetDuration", "value": "1h45min"},
+    {"weekId": 5, "day": "Tue", "field": "targetDistance", "value": "8km"},
+    {"weekId": 6, "day": "Tue", "field": "targetDistance", "value": "9km"},
+    {"weekId": 7, "day": "Tue", "field": "targetDistance", "value": "9km"},
+    {"weekId": 8, "day": "Tue", "field": "targetDistance", "value": "10km"},
+    {"weekId": 5, "day": "Thu", "field": "targetDistance", "value": "7km"},
+    {"weekId": 6, "day": "Thu", "field": "targetDistance", "value": "8km"},
+    {"weekId": 7, "day": "Thu", "field": "targetDistance", "value": "8km"},
+    {"weekId": 8, "day": "Thu", "field": "targetDistance", "value": "9km"},
+    {"weekId": 9, "day": "Sat", "field": "targetDistance", "value": "17km"},
+    {"weekId": 10, "day": "Sat", "field": "targetDistance", "value": "18km"},
+    {"weekId": 9, "day": "Sat", "field": "targetDuration", "value": "1h55min"},
+    {"weekId": 10, "day": "Sat", "field": "targetDuration", "value": "2h00min"},
+    {"weekId": 11, "day": "Sat", "field": "targetDistance", "value": "12km"},
+    {"weekId": 12, "day": "Sat", "field": "targetDistance", "value": "21.1km"},
+    {"weekId": 12, "day": "Sat", "field": "name", "value": "RACE DAY — Half Marathon"},
+    {"weekId": 12, "day": "Sat", "field": "targetDuration", "value": "2h06min"}
+  ],
+  "workouts": {},
+  "trainingPlan": {
+    "name": "12-Week First Half Marathon",
+    "sportType": "running",
+    "description": "A 12-week plan for runners who can comfortably run 5-10km and want to finish their first half marathon (21.1km). Builds from 8km to 18km long runs with interval, tempo, and race-pace work.",
+    "goal": "Finish a half marathon (21.1km) strong and injury-free",
+    "targetMetrics": {
+      "MP": "6:00",
+      "easyPace": "6:30",
+      "thresholdPace": "5:30",
+      "5K_Pace": "5:00",
+      "10K_Pace": "5:20"
+    }
+  }
+}

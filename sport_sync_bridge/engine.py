@@ -10,7 +10,7 @@ from .config import AppConfig
 from .fit_tools import normalize_fit_coordinates
 from .formats import SUPPORTED_FORMATS, convert_activity_file
 from .models import FileBundle, UploadResult
-from .sources import IGPSportSource, OneLapSource, SourceAdapter
+from .sources import IGPSportSource, LocalFileSource, OneLapSource, SourceAdapter
 from .state import StateDB
 from .targets import GarminTarget, StravaTarget, TargetAdapter
 from .utils import ensure_directory, safe_filename, sha1_file, utcnow
@@ -215,25 +215,26 @@ class SyncEngine:
 
         repaired_target = self.config.repaired_dir / activity.source / f"{safe_filename(original_path.stem)}-wgs84.fit"
         coordinate_mode, strict_mode = self._get_coordinate_config(activity.source)
-        try:
-            upload_path, changed_pairs = normalize_fit_coordinates(
-                input_path=original_path,
-                output_path=repaired_target,
-                coordinate_mode=coordinate_mode,
-                coordinate_rules=self.config.coordinate_rules,
-            )
-            if changed_pairs:
-                LOGGER.info(
-                    "Repaired %s coordinate pairs for %s/%s",
-                    changed_pairs,
-                    activity.source,
-                    activity.source_id,
+        upload_path = original_path
+        if original_path.suffix.lower() == ".fit":
+            try:
+                upload_path, changed_pairs = normalize_fit_coordinates(
+                    input_path=original_path,
+                    output_path=repaired_target,
+                    coordinate_mode=coordinate_mode,
+                    coordinate_rules=self.config.coordinate_rules,
                 )
-        except Exception as exc:
-            if strict_mode:
-                raise
-            LOGGER.warning("FIT coordinate repair skipped for %s/%s: %s", activity.source, activity.source_id, exc)
-            upload_path = original_path
+                if changed_pairs:
+                    LOGGER.info(
+                        "Repaired %s coordinate pairs for %s/%s",
+                        changed_pairs,
+                        activity.source,
+                        activity.source_id,
+                    )
+            except Exception as exc:
+                if strict_mode:
+                    raise
+                LOGGER.warning("FIT coordinate repair skipped for %s/%s: %s", activity.source, activity.source_id, exc)
 
         sha1 = sha1_file(upload_path)
         self.state_db.upsert_activity(
@@ -268,7 +269,12 @@ class SyncEngine:
 
     def _build_sources(self) -> dict[str, SourceAdapter]:
         sources: dict[str, SourceAdapter] = {}
-        for adapter in (IGPSportSource(self.config), OneLapSource(self.config)):
+        adapters = (
+            IGPSportSource(self.config),
+            OneLapSource(self.config),
+            LocalFileSource(self.config, self.state_db),
+        )
+        for adapter in adapters:
             if adapter.is_configured():
                 sources[adapter.name] = adapter
         return sources

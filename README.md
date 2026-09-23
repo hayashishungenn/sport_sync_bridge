@@ -6,6 +6,7 @@
 
 - `iGPSPORT` 大陆版
 - `OneLap / 顽鹿`
+- 本地活动库（`FIT` / `GPX` / `TCX` / `ZIP` / 轨迹 `JSON` / `CSV`）
 
 当前实现的目标平台:
 
@@ -146,6 +147,61 @@ python sync.py convert ride.gpx --to fit --output ride.fit
 ```
 
 `convert --source` 只影响 FIT 输入，并为未命中设备规则的文件指定 iGPSPORT 或 OneLap 的坐标模式。转换不会覆盖输入文件。输出文件会报告未能保留的字段；FIT 输出要求每个 GPS 轨迹点都带时间，TCX 输出也要求轨迹点带时间。
+
+## 本地活动库与 GarSync 离线功能
+
+从本地文件或目录导入活动。目录需要显式指定 `--recursive`；ZIP 会在内存中读取，不会按压缩包路径解压到磁盘。加密 ZIP 可通过 `ACTIVITY_ARCHIVE_PASSWORD` 提供密码。
+
+```powershell
+python sync.py library import .\activities.zip
+python sync.py library import .\activities --recursive
+python sync.py library list --from 2026-01-01 --sport cycling
+python sync.py library show <活动ID前缀>
+python sync.py library stats
+python sync.py library report --format html --output .\activities.html
+python sync.py library route <活动ID前缀> --to gpx --output .\route.gpx
+python sync.py sync --source local --target strava --format strava=tcx
+```
+
+导入文件保存在 `.data/local_imports/`，索引和汇总写入 `.data/sync_state.db`。本地源只向现有 Garmin / Strava 目标提供 `FIT`、`GPX`、`TCX`；健康摘要类 JSON 不会被当成可上传运动文件。轨迹 CSV 需要时间戳、纬度和经度列；活动 JSON 接受 `activity`、`laps` 和 `track_points` 等结构。
+
+GarSync 内置的六种语言训练计划和 33 个 FIT 课表作为本地模板随项目提供，不包含购买目录、数独或音频资源。计划开始日期必须是周一，安装后可导出到日历：
+
+```powershell
+python sync.py plans list --locale zh
+python sync.py plans show 8w_beginner_run --locale zh
+python sync.py plans install 8w_beginner_run --locale zh --start-date 2026-10-05
+python sync.py plans installed
+python sync.py plans export <计划ID前缀> --output .\training-plan.ics
+python sync.py workouts list --sport CYCLING
+python sync.py workouts show <课表ID>
+python sync.py workouts export <课表ID> --output .\workout.fit
+```
+
+健康指标可从 UTF-8 CSV 导入，支持 `date,metric,value,unit` 长表格式及带日期列的宽表。指标包括体重、身高、静息心率、HRV、血氧、睡眠、步数、压力、身体电量和血压；体重与身高齐全时会计算 BMI。
+
+```powershell
+python sync.py health import .\health.csv
+python sync.py health summary
+```
+
+AI 运动分析保留为可选功能。它把单次活动摘要、最近活动的周汇总和本地健康指标发送给 OpenAI 兼容的 Chat Completions 接口，不发送 GPS 坐标。可先检查提示词，再配置自己使用的远端或本地模型：
+
+```powershell
+python sync.py ai-analysis <活动ID前缀> --prompt-only
+```
+
+在 `.env` 中设置 `AI_API_BASE_URL`、`AI_MODEL`，远端服务需要时再设置 `AI_API_KEY`。项目不会附带 GarSync 的服务凭据或计费代码。
+
+Wi-Fi 文件导入页默认只监听本机。要让手机从同一局域网访问，显式绑定局域网接口：
+
+```powershell
+python sync.py receive --host 0.0.0.0 --port 8765
+```
+
+接收页不设访问口令，只应在可信的本地网络中临时开启。
+
+未移植到 Python CLI 的 APK 功能包括其余云平台的私有认证/同步协议、Samba、手机 BLE 与传感器实时录制、活动合并、路线地图/分享海报/PDF 报告、训练负荷/VO2Max/恢复指标、在线健康数据源、天气、AI 聊天及 AI 计划/课表生成。当前 AI 活动分析使用本地汇总和可配置模型接口。静态 AOT 索引不足以确认这些云端接口的运行期请求、服务端校验或设备交互行为；完整静态盘点见 `GARSYNC_APK_REVERSE.md`。
 
 常用参数:
 

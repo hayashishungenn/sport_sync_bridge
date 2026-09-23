@@ -1,0 +1,102 @@
+{
+  "type": "structuredPlan",
+  "id": "tmpl_8w_beginner_swim",
+  "sourceId": "app_assets",
+  "name": "8-Week Beginner Swim",
+  "phases": [
+    {
+      "id": "ph_adaptation",
+      "sourceId": "app_assets",
+      "trainingPlanId": "tmpl_8w_beginner_swim",
+      "name": "Water Comfort",
+      "phaseType": "base",
+      "orderIndex": 0,
+      "startWeek": 1,
+      "endWeek": 2,
+      "description": "Get comfortable in the water with short swim-rest intervals",
+      "focus": "Breathing control and body position",
+      "coachNote": "Focus on exhaling underwater and turning to breathe. Don't hold your breath! Rest as needed between sets.",
+      "createdAt": "2026-01-01T00:00:00Z",
+      "updatedAt": "2026-01-01T00:00:00Z"
+    },
+    {
+      "id": "ph_building",
+      "sourceId": "app_assets",
+      "trainingPlanId": "tmpl_8w_beginner_swim",
+      "name": "Building Endurance",
+      "phaseType": "base",
+      "orderIndex": 1,
+      "startWeek": 3,
+      "endWeek": 5,
+      "description": "Extend swim intervals and reduce rest",
+      "focus": "Continuous swimming development",
+      "coachNote": "Try to reduce rest between sets. Focus on long, smooth strokes rather than speed.",
+      "createdAt": "2026-01-01T00:00:00Z",
+      "updatedAt": "2026-01-01T00:00:00Z"
+    },
+    {
+      "id": "ph_consolidation",
+      "sourceId": "app_assets",
+      "trainingPlanId": "tmpl_8w_beginner_swim",
+      "name": "Swim Confidently",
+      "phaseType": "build",
+      "orderIndex": 2,
+      "startWeek": 6,
+      "endWeek": 8,
+      "description": "Swim longer distances without stopping",
+      "focus": "200m continuous swimming",
+      "coachNote": "By week 8, aim for 200m non-stop. This is a major milestone for any beginner swimmer!",
+      "createdAt": "2026-01-01T00:00:00Z",
+      "updatedAt": "2026-01-01T00:00:00Z"
+    }
+  ],
+  "weekTemplates": [
+    {
+      "name": "Water Comfort",
+      "applyToWeeks": [1, 2],
+      "days": {
+        "Mon": {"name": "Rest Day", "sportType": "swimming", "isRestDay": true},
+        "Tue": {"name": "Swim 25m + Rest 30s × 8 sets", "sportType": "swimming", "intensity": "easy", "coachNote": "Total 200m. Focus on exhaling underwater. Rest as needed."},
+        "Wed": {"name": "Rest Day", "sportType": "swimming", "isRestDay": true},
+        "Thu": {"name": "Kickboard 25m + Swim 25m × 6 sets", "sportType": "swimming", "intensity": "easy", "coachNote": "Alternate kickboard and swim. Build leg strength."},
+        "Fri": {"name": "Rest Day", "sportType": "swimming", "isRestDay": true},
+        "Sat": {"name": "Swim 25m + Rest 20s × 10 sets", "sportType": "swimming", "intensity": "easy", "coachNote": "Total 250m. Try to reduce rest between sets."},
+        "Sun": {"name": "Rest Day", "sportType": "swimming", "isRestDay": true}
+      }
+    },
+    {
+      "name": "Building Endurance",
+      "applyToWeeks": [3, 4, 5],
+      "days": {
+        "Mon": {"name": "Rest Day", "sportType": "swimming", "isRestDay": true},
+        "Tue": {"name": "Swim 50m + Rest 30s × 6 sets", "sportType": "swimming", "intensity": "easy", "coachNote": "Total 300m. Focus on stroke efficiency - long and smooth."},
+        "Wed": {"name": "Rest Day", "sportType": "swimming", "isRestDay": true},
+        "Thu": {"name": "Swim 25m + Rest 15s × 10 sets", "sportType": "swimming", "intensity": "easy", "coachNote": "Short rests now. Building fitness fast!"},
+        "Fri": {"name": "Rest Day", "sportType": "swimming", "isRestDay": true},
+        "Sat": {"name": "Swim 100m + Rest 30s × 4 sets", "sportType": "swimming", "intensity": "endurance", "coachNote": "Total 400m. 100m continuous sets - big progress!"},
+        "Sun": {"name": "Rest Day", "sportType": "swimming", "isRestDay": true}
+      }
+    },
+    {
+      "name": "Consolidation",
+      "applyToWeeks": [6, 7, 8],
+      "days": {
+        "Mon": {"name": "Rest Day", "sportType": "swimming", "isRestDay": true},
+        "Tue": {"name": "Swim 100m + Rest 20s × 5 sets", "sportType": "swimming", "intensity": "endurance", "coachNote": "Total 500m. Steady pace, smooth strokes."},
+        "Wed": {"name": "Rest Day", "sportType": "swimming", "isRestDay": true},
+        "Thu": {"name": "Swim 50m + Kick 25m × 6 sets", "sportType": "swimming", "intensity": "easy", "coachNote": "Mix swimming and kicking. Technique work."},
+        "Fri": {"name": "Rest Day", "sportType": "swimming", "isRestDay": true},
+        "Sat": {"name": "Swim 200m non-stop", "sportType": "swimming", "intensity": "endurance", "coachNote": "200m continuous! You've earned this. Breathe rhythmically."},
+        "Sun": {"name": "Rest Day", "sportType": "swimming", "isRestDay": true}
+      }
+    }
+  ],
+  "overrides": [],
+  "workouts": {},
+  "trainingPlan": {
+    "name": "8-Week Beginner Swim",
+    "sportType": "swimming",
+    "description": "A beginner-friendly swim plan using interval training to build from 25m sets to 200m continuous swimming.",
+    "goal": "Build confidence in the water and swim 200m non-stop"
+  }
+}

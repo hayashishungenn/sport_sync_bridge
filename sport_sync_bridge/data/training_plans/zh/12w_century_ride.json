@@ -1,0 +1,176 @@
+{
+  "type": "structuredPlan",
+  "id": "tmpl_12w_century_ride",
+  "sourceId": "app_assets",
+  "name": "12 周百英里骑行计划",
+  "phases": [
+    {
+      "id": "ph_base",
+      "sourceId": "app_assets",
+      "trainingPlanId": "tmpl_12w_century_ride",
+      "name": "基础期",
+      "phaseType": "base",
+      "orderIndex": 0,
+      "startWeek": 1,
+      "endWeek": 4,
+      "description": "通过稳定的zone2骑行和逐渐延长的周末长距离骑行建立有氧耐力",
+      "focus": "骑行时长的积累和有氧效率提升",
+      "coachNote": "所有骑行保持在zone2心率或60-70% FTP。关注流畅的踩踏技巧，逐渐适应更长时间的坐垫骑行。",
+      "createdAt": "2026-01-01T00:00:00Z",
+      "updatedAt": "2026-01-01T00:00:00Z"
+    },
+    {
+      "id": "ph_build",
+      "sourceId": "app_assets",
+      "trainingPlanId": "tmpl_12w_century_ride",
+      "name": "建基期",
+      "phaseType": "build",
+      "orderIndex": 1,
+      "startWeek": 5,
+      "endWeek": 8,
+      "description": "引入门槛间歇和VO2max间歇，延长长距离骑行",
+      "focus": "门槛功率、有氧能力和长距离补给策略",
+      "coachNote": "95% FTP门槛间歇应感到困难但可持续。VO2max间歇非常艰苦——每次尽全力。长距离骑行中练习补给——按时间吃、按时喝，不凭感觉。",
+      "createdAt": "2026-01-01T00:00:00Z",
+      "updatedAt": "2026-01-01T00:00:00Z"
+    },
+    {
+      "id": "ph_peak",
+      "sourceId": "app_assets",
+      "trainingPlanId": "tmpl_12w_century_ride",
+      "name": "巅峰期",
+      "phaseType": "peak",
+      "orderIndex": 2,
+      "startWeek": 9,
+      "endWeek": 10,
+      "description": "最长的训练骑行和百英里配速模拟",
+      "focus": "百英里距离的耐力、比赛配速的舒适感和补给策略",
+      "coachNote": "这是整个计划中最长的训练骑行。实践完整的比赛日补给计划：按时补给能量和水分——不要等饿了、渴了再补。",
+      "createdAt": "2026-01-01T00:00:00Z",
+      "updatedAt": "2026-01-01T00:00:00Z"
+    },
+    {
+      "id": "ph_taper",
+      "sourceId": "app_assets",
+      "trainingPlanId": "tmpl_12w_century_ride",
+      "name": "赛前减量期",
+      "phaseType": "taper",
+      "orderIndex": 3,
+      "startWeek": 11,
+      "endWeek": 12,
+      "description": "减少训练量，保持强度，以最佳状态迎赛",
+      "focus": "恢复和比赛准备",
+      "coachNote": "训练量大幅下降。保留一次短强度训练保持敏锐。检查车辆、打包装备、规划补给站。",
+      "createdAt": "2026-01-01T00:00:00Z",
+      "updatedAt": "2026-01-01T00:00:00Z"
+    }
+  ],
+  "weekTemplates": [
+    {
+      "name": "基础期",
+      "applyToWeeks": [1, 2, 3, 4],
+      "days": {
+        "Mon": {"name": "休息日", "sportType": "cycling", "isRestDay": true},
+        "Tue": {"name": "耐力骑行", "sportType": "cycling", "intensity": "endurance", "targetDuration": "60min", "targetHR": "zone2", "targetTSS": 50, "description": "平坦或起伏路线的稳定zone2骑行", "coachNote": "保持高踏频（85-95rpm）。关注流畅圆润的踩踏画圈。"},
+        "Wed": {"name": "休息日", "sportType": "cycling", "isRestDay": true},
+        "Thu": {"name": "耐力骑行", "sportType": "cycling", "intensity": "endurance", "targetDuration": "60min", "targetHR": "zone2", "targetTSS": 50, "description": "稳定耐力骑行，中间5分钟高踏频（100+rpm）", "coachNote": "踏频练习提升神经肌肉效率。轻松踩踏——不要用重齿比。"},
+        "Fri": {"name": "休息日", "sportType": "cycling", "isRestDay": true},
+        "Sat": {"name": "长距离耐力骑行", "sportType": "cycling", "intensity": "endurance", "targetDuration": "2h30min", "targetDistance": "60km", "targetHR": "zone2", "targetTSS": 130, "description": "耐力配速的长距离稳定骑行。带1瓶水和一份零食。", "coachNote": "起步轻松。目标是在车上待够时间，不是追求速度。找个舒适的节奏享受骑行。"},
+        "Sun": {"name": "休息日", "sportType": "cycling", "isRestDay": true}
+      }
+    },
+    {
+      "name": "建基期",
+      "applyToWeeks": [5, 6, 7, 8],
+      "days": {
+        "Mon": {"name": "休息日", "sportType": "cycling", "isRestDay": true},
+        "Tue": {"name": "VO2max 间歇", "sportType": "cycling", "intensity": "interval", "targetDuration": "60min", "targetHR": "zone5", "targetTSS": 75, "description": "热身15min轻松 + 4×5min @110% FTP（5min轻松骑行恢复）+ 放松10min轻松", "coachNote": "早期建基：4×4min。后期建基：5×5min。每组尽全力——这些提升你的上限功率。"},
+        "Wed": {"name": "休息日", "sportType": "cycling", "isRestDay": true},
+        "Thu": {"name": "门槛间歇", "sportType": "cycling", "intensity": "threshold", "targetDuration": "75min", "targetHR": "zone4", "targetTSS": 85, "description": "热身15min轻松 + 2×20min @95% FTP（5min轻松骑行恢复）+ 放松10min轻松", "coachNote": "平滑稳定的功率输出。踏频85-95rpm。这些建立你在长爬坡时的可持续功率。"},
+        "Fri": {"name": "休息日", "sportType": "cycling", "isRestDay": true},
+        "Sat": {"name": "长距离耐力骑行", "sportType": "cycling", "intensity": "endurance", "targetDuration": "3h30min", "targetDistance": "90km", "targetHR": "zone2", "targetTSS": 190, "description": "长距离zone2骑行。带2瓶水和2份零食。练习骑行中吃喝。", "coachNote": "每45分钟补给一次：不饿时就吃，不渴时就喝。现在正是在训练中测试肠胃对各种食物耐受性的时候。"},
+        "Sun": {"name": "休息日", "sportType": "cycling", "isRestDay": true}
+      }
+    },
+    {
+      "name": "巅峰期",
+      "applyToWeeks": [9, 10],
+      "days": {
+        "Mon": {"name": "休息日", "sportType": "cycling", "isRestDay": true},
+        "Tue": {"name": "VO2max 间歇", "sportType": "cycling", "intensity": "interval", "targetDuration": "65min", "targetHR": "zone5", "targetTSS": 80, "description": "热身15min轻松 + 5×5min @110% FTP（5min轻松骑行恢复）+ 放松10min轻松", "coachNote": "最大强度间歇。质量优于数量——如果你每组都掉功率，减少组数而不是降低强度。"},
+        "Wed": {"name": "休息日", "sportType": "cycling", "isRestDay": true},
+        "Thu": {"name": "门槛骑行", "sportType": "cycling", "intensity": "threshold", "targetDuration": "75min", "targetHR": "zone4", "targetTSS": 85, "description": "热身15min轻松 + 2×20min @95% FTP（5min轻松恢复）+ 放松10min轻松", "coachNote": "维持门槛功率。两个20分钟段保持功率一致是目标。"},
+        "Fri": {"name": "休息日", "sportType": "cycling", "isRestDay": true},
+        "Sat": {"name": "百英里模拟长骑", "sportType": "cycling", "intensity": "endurance", "targetDuration": "5h00min", "targetDistance": "135km", "targetHR": "zone2", "targetTSS": 280, "description": "计划中最长的一次训练。带3瓶水和真正的食物。模拟比赛日的配速和补给策略。", "coachNote": "这是你的赛前彩排。起步轻松，全程配速保守。练习补给站快速停靠：快进快出。比赛日不用新东西——现在测试一切。"},
+        "Sun": {"name": "休息日", "sportType": "cycling", "isRestDay": true}
+      }
+    },
+    {
+      "name": "赛前减量期",
+      "applyToWeeks": [11, 12],
+      "days": {
+        "Mon": {"name": "休息日", "sportType": "cycling", "isRestDay": true},
+        "Tue": {"name": "短门槛训练", "sportType": "cycling", "intensity": "threshold", "targetDuration": "55min", "targetHR": "zone4", "targetTSS": 55, "description": "第11周：热身15min + 15min @95% FTP + 放松15min。第12周：轻松骑行40min。", "coachNote": "短而精。保持腿部敏锐而不累积疲劳。第12周：只做轻松骑行。"},
+        "Wed": {"name": "休息日", "sportType": "cycling", "isRestDay": true},
+        "Thu": {"name": "轻松骑行", "sportType": "cycling", "intensity": "easy", "targetDuration": "45min", "targetHR": "zone1", "targetTSS": 25, "description": "非常轻的恢复骑行。高踏频、低阻力。", "coachNote": "仅主动恢复。不用力——只是促进血液循环。检查车辆是否比赛就绪。"},
+        "Fri": {"name": "休息日", "sportType": "cycling", "isRestDay": true},
+        "Sat": {"name": "长距离骑行（减量）或百英里赛", "sportType": "cycling", "intensity": "endurance", "targetDuration": "3h00min", "targetDistance": "80km", "targetHR": "zone2", "targetTSS": 140, "description": "第11周：轻松长距离骑行80km。第12周：百英里比赛日——160km。", "coachNote": "第11周：最后一次中长距离骑行。第12周：比赛日。控制配速——前80km应该感觉轻松。按时吃喝。你已经完成了训练。"},
+        "Sun": {"name": "休息日", "sportType": "cycling", "isRestDay": true}
+      }
+    }
+  ],
+  "overrides": [
+    {"weekId": 1, "day": "Sat", "field": "targetDistance", "value": "60km"},
+    {"weekId": 2, "day": "Sat", "field": "targetDistance", "value": "70km"},
+    {"weekId": 3, "day": "Sat", "field": "targetDistance", "value": "75km"},
+    {"weekId": 4, "day": "Sat", "field": "targetDistance", "value": "80km"},
+    {"weekId": 1, "day": "Sat", "field": "targetDuration", "value": "2h30min"},
+    {"weekId": 2, "day": "Sat", "field": "targetDuration", "value": "2h50min"},
+    {"weekId": 3, "day": "Sat", "field": "targetDuration", "value": "3h00min"},
+    {"weekId": 4, "day": "Sat", "field": "targetDuration", "value": "3h15min"},
+    {"weekId": 5, "day": "Sat", "field": "targetDistance", "value": "90km"},
+    {"weekId": 6, "day": "Sat", "field": "targetDistance", "value": "100km"},
+    {"weekId": 7, "day": "Sat", "field": "targetDistance", "value": "110km"},
+    {"weekId": 8, "day": "Sat", "field": "targetDistance", "value": "120km"},
+    {"weekId": 5, "day": "Sat", "field": "targetDuration", "value": "3h30min"},
+    {"weekId": 6, "day": "Sat", "field": "targetDuration", "value": "4h00min"},
+    {"weekId": 7, "day": "Sat", "field": "targetDuration", "value": "4h15min"},
+    {"weekId": 8, "day": "Sat", "field": "targetDuration", "value": "4h45min"},
+    {"weekId": 5, "day": "Sat", "field": "targetTSS", "value": "190"},
+    {"weekId": 6, "day": "Sat", "field": "targetTSS", "value": "210"},
+    {"weekId": 7, "day": "Sat", "field": "targetTSS", "value": "235"},
+    {"weekId": 8, "day": "Sat", "field": "targetTSS", "value": "260"},
+    {"weekId": 9, "day": "Sat", "field": "targetDistance", "value": "135km"},
+    {"weekId": 10, "day": "Sat", "field": "targetDistance", "value": "150km"},
+    {"weekId": 9, "day": "Sat", "field": "targetDuration", "value": "5h00min"},
+    {"weekId": 10, "day": "Sat", "field": "targetDuration", "value": "5h30min"},
+    {"weekId": 9, "day": "Sat", "field": "targetTSS", "value": "280"},
+    {"weekId": 10, "day": "Sat", "field": "targetTSS", "value": "310"},
+    {"weekId": 11, "day": "Sat", "field": "targetDistance", "value": "80km"},
+    {"weekId": 11, "day": "Sat", "field": "targetDuration", "value": "3h00min"},
+    {"weekId": 11, "day": "Sat", "field": "targetTSS", "value": "140"},
+    {"weekId": 12, "day": "Sat", "field": "name", "value": "百英里比赛日——160km"},
+    {"weekId": 12, "day": "Sat", "field": "targetDistance", "value": "160km"},
+    {"weekId": 12, "day": "Sat", "field": "targetDuration", "value": "6h00min"},
+    {"weekId": 12, "day": "Sat", "field": "targetTSS", "value": "330"},
+    {"weekId": 12, "day": "Sat", "field": "description", "value": "百英里比赛日——160km。你的目标。配速保守，补给稳定，享受成就。"},
+    {"weekId": 12, "day": "Tue", "field": "name", "value": "轻松骑行（比赛周）"},
+    {"weekId": 12, "day": "Tue", "field": "intensity", "value": "easy"},
+    {"weekId": 12, "day": "Tue", "field": "targetDuration", "value": "40min"},
+    {"weekId": 12, "day": "Tue", "field": "targetHR", "value": "zone1"},
+    {"weekId": 12, "day": "Tue", "field": "targetTSS", "value": "20"}
+  ],
+  "workouts": {},
+  "trainingPlan": {
+    "name": "12 周百英里骑行计划",
+    "sportType": "cycling",
+    "description": "为能舒适骑行50-80km的骑友设计的12周计划，目标是完成百英里骑行（160km）。长距离从60km逐步增加至150km，配合门槛、VO2max间歇和比赛日补给实战练习。",
+    "goal": "强壮而从容地完成百英里骑行（160km）",
+    "targetMetrics": {
+      "easyPower": "60",
+      "endurancePower": "70",
+      "thresholdPower": "95",
+      "intervalPower": "110"
+    }
+  }
+}

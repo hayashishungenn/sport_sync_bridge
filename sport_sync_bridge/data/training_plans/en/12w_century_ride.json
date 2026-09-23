@@ -1,0 +1,176 @@
+{
+  "type": "structuredPlan",
+  "id": "tmpl_12w_century_ride",
+  "sourceId": "app_assets",
+  "name": "12-Week Century Ride",
+  "phases": [
+    {
+      "id": "ph_base",
+      "sourceId": "app_assets",
+      "trainingPlanId": "tmpl_12w_century_ride",
+      "name": "Base",
+      "phaseType": "base",
+      "orderIndex": 0,
+      "startWeek": 1,
+      "endWeek": 4,
+      "description": "Build aerobic endurance with steady zone2 riding and gradually longer weekend rides",
+      "focus": "Time in saddle and aerobic efficiency",
+      "coachNote": "All rides in zone2 HR or 60-70% FTP. Focus on smooth pedaling and staying comfortable in the saddle for longer durations.",
+      "createdAt": "2026-01-01T00:00:00Z",
+      "updatedAt": "2026-01-01T00:00:00Z"
+    },
+    {
+      "id": "ph_build",
+      "sourceId": "app_assets",
+      "trainingPlanId": "tmpl_12w_century_ride",
+      "name": "Build",
+      "phaseType": "build",
+      "orderIndex": 1,
+      "startWeek": 5,
+      "endWeek": 8,
+      "description": "Introduce threshold and VO2max intervals, extend long ride distance",
+      "focus": "Threshold power, aerobic capacity, and long-ride fueling",
+      "coachNote": "Threshold intervals at 95% FTP should feel hard but sustainable. VO2max intervals are very hard — give full effort. Practice nutrition on long rides.",
+      "createdAt": "2026-01-01T00:00:00Z",
+      "updatedAt": "2026-01-01T00:00:00Z"
+    },
+    {
+      "id": "ph_peak",
+      "sourceId": "app_assets",
+      "trainingPlanId": "tmpl_12w_century_ride",
+      "name": "Peak",
+      "phaseType": "peak",
+      "orderIndex": 2,
+      "startWeek": 9,
+      "endWeek": 10,
+      "description": "Longest rides and century race-pace simulation",
+      "focus": "Endurance at century distance, race-pace comfort, and fueling strategy",
+      "coachNote": "These are your longest training rides. Practice your full race-day nutrition plan: eat and drink on schedule, not by feel.",
+      "createdAt": "2026-01-01T00:00:00Z",
+      "updatedAt": "2026-01-01T00:00:00Z"
+    },
+    {
+      "id": "ph_taper",
+      "sourceId": "app_assets",
+      "trainingPlanId": "tmpl_12w_century_ride",
+      "name": "Taper",
+      "phaseType": "taper",
+      "orderIndex": 3,
+      "startWeek": 11,
+      "endWeek": 12,
+      "description": "Reduce volume, maintain intensity, arrive fresh",
+      "focus": "Recovery and race readiness",
+      "coachNote": "Volume drops significantly. Keep one short intensity session to stay sharp. Check your bike, pack your kit, plan your aid stations.",
+      "createdAt": "2026-01-01T00:00:00Z",
+      "updatedAt": "2026-01-01T00:00:00Z"
+    }
+  ],
+  "weekTemplates": [
+    {
+      "name": "Base",
+      "applyToWeeks": [1, 2, 3, 4],
+      "days": {
+        "Mon": {"name": "Rest Day", "sportType": "cycling", "isRestDay": true},
+        "Tue": {"name": "Endurance Ride", "sportType": "cycling", "intensity": "endurance", "targetDuration": "60min", "targetHR": "zone2", "targetTSS": 50, "description": "Steady zone2 ride on flat to rolling terrain", "coachNote": "Keep cadence high (85-95 rpm). Focus on smooth, circular pedal strokes."},
+        "Wed": {"name": "Rest Day", "sportType": "cycling", "isRestDay": true},
+        "Thu": {"name": "Endurance Ride", "sportType": "cycling", "intensity": "endurance", "targetDuration": "60min", "targetHR": "zone2", "targetTSS": 50, "description": "Steady endurance ride with 5min at higher cadence (100+ rpm) in the middle", "coachNote": "Cadence drills improve neuromuscular efficiency. Spin easy — no mashing."},
+        "Fri": {"name": "Rest Day", "sportType": "cycling", "isRestDay": true},
+        "Sat": {"name": "Long Endurance Ride", "sportType": "cycling", "intensity": "endurance", "targetDuration": "2h30min", "targetDistance": "60km", "targetHR": "zone2", "targetTSS": 130, "description": "Long steady ride at endurance pace. Bring 1 bottle of water and a snack.", "coachNote": "Start easy. The goal is time in saddle, not speed. Find a comfortable pace and enjoy the ride."},
+        "Sun": {"name": "Rest Day", "sportType": "cycling", "isRestDay": true}
+      }
+    },
+    {
+      "name": "Build",
+      "applyToWeeks": [5, 6, 7, 8],
+      "days": {
+        "Mon": {"name": "Rest Day", "sportType": "cycling", "isRestDay": true},
+        "Tue": {"name": "VO2max Intervals", "sportType": "cycling", "intensity": "interval", "targetDuration": "60min", "targetHR": "zone5", "targetTSS": 75, "description": "Warmup 15min easy + 4×5min @110% FTP (5min easy spin recovery) + Cooldown 10min easy", "coachNote": "Early build: 4×4min. Late build: 5×5min. Full effort on each interval — these build top-end power."},
+        "Wed": {"name": "Rest Day", "sportType": "cycling", "isRestDay": true},
+        "Thu": {"name": "Threshold Intervals", "sportType": "cycling", "intensity": "threshold", "targetDuration": "75min", "targetHR": "zone4", "targetTSS": 85, "description": "Warmup 15min easy + 2×20min @95% FTP (5min easy spin recovery) + Cooldown 10min easy", "coachNote": "Smooth, steady power output. Cadence 85-95 rpm. These build your sustainable power for long climbs."},
+        "Fri": {"name": "Rest Day", "sportType": "cycling", "isRestDay": true},
+        "Sat": {"name": "Long Endurance Ride", "sportType": "cycling", "intensity": "endurance", "targetDuration": "3h30min", "targetDistance": "90km", "targetHR": "zone2", "targetTSS": 190, "description": "Long zone2 ride. Bring 2 bottles and 2 snacks. Practice eating and drinking on the bike.", "coachNote": "Fuel every 45min: eat before you're hungry, drink before you're thirsty. This is when you learn what your stomach tolerates."},
+        "Sun": {"name": "Rest Day", "sportType": "cycling", "isRestDay": true}
+      }
+    },
+    {
+      "name": "Peak",
+      "applyToWeeks": [9, 10],
+      "days": {
+        "Mon": {"name": "Rest Day", "sportType": "cycling", "isRestDay": true},
+        "Tue": {"name": "VO2max Intervals", "sportType": "cycling", "intensity": "interval", "targetDuration": "65min", "targetHR": "zone5", "targetTSS": 80, "description": "Warmup 15min easy + 5×5min @110% FTP (5min easy spin recovery) + Cooldown 10min easy", "coachNote": "Maximum effort intervals. Quality over quantity — if you fade, reduce the number, not the intensity."},
+        "Wed": {"name": "Rest Day", "sportType": "cycling", "isRestDay": true},
+        "Thu": {"name": "Threshold Ride", "sportType": "cycling", "intensity": "threshold", "targetDuration": "75min", "targetHR": "zone4", "targetTSS": 85, "description": "Warmup 15min easy + 2×20min @95% FTP (5min easy recovery) + Cooldown 10min easy", "coachNote": "Maintain threshold power. Consistency across both 20min blocks is the goal."},
+        "Fri": {"name": "Rest Day", "sportType": "cycling", "isRestDay": true},
+        "Sat": {"name": "Long Century Simulation", "sportType": "cycling", "intensity": "endurance", "targetDuration": "5h00min", "targetDistance": "135km", "targetHR": "zone2", "targetTSS": 280, "description": "Longest ride of the plan. Bring 3 bottles and real food. Simulate race-day pacing and fueling.", "coachNote": "This is your dress rehearsal. Start easy, pace conservatively. Practice aid station stops: quick, efficient, get back on the bike. Nothing new on race day — test everything now."},
+        "Sun": {"name": "Rest Day", "sportType": "cycling", "isRestDay": true}
+      }
+    },
+    {
+      "name": "Taper",
+      "applyToWeeks": [11, 12],
+      "days": {
+        "Mon": {"name": "Rest Day", "sportType": "cycling", "isRestDay": true},
+        "Tue": {"name": "Short Threshold", "sportType": "cycling", "intensity": "threshold", "targetDuration": "55min", "targetHR": "zone4", "targetTSS": 55, "description": "Week 11: Warmup 15min + 15min @95% FTP + Cooldown 15min. Week 12: Easy spin 40min.", "coachNote": "Short and sharp. Keep the legs primed without accumulating fatigue. Week 12: just an easy spin."},
+        "Wed": {"name": "Rest Day", "sportType": "cycling", "isRestDay": true},
+        "Thu": {"name": "Easy Spin", "sportType": "cycling", "intensity": "easy", "targetDuration": "45min", "targetHR": "zone1", "targetTSS": 25, "description": "Very light recovery spin. High cadence, low resistance.", "coachNote": "Active recovery only. No effort — just get the blood flowing. Check your bike is race-ready."},
+        "Fri": {"name": "Rest Day", "sportType": "cycling", "isRestDay": true},
+        "Sat": {"name": "Long Ride (Taper) or Century", "sportType": "cycling", "intensity": "endurance", "targetDuration": "3h00min", "targetDistance": "80km", "targetHR": "zone2", "targetTSS": 140, "description": "Week 11: easy long ride 80km. Week 12: CENTURY RIDE — 160km.", "coachNote": "Week 11: one last moderate long ride. Week 12: RACE DAY. Pace yourself — the first 80km should feel easy. Eat and drink on schedule. You've done the training."},
+        "Sun": {"name": "Rest Day", "sportType": "cycling", "isRestDay": true}
+      }
+    }
+  ],
+  "overrides": [
+    {"weekId": 1, "day": "Sat", "field": "targetDistance", "value": "60km"},
+    {"weekId": 2, "day": "Sat", "field": "targetDistance", "value": "70km"},
+    {"weekId": 3, "day": "Sat", "field": "targetDistance", "value": "75km"},
+    {"weekId": 4, "day": "Sat", "field": "targetDistance", "value": "80km"},
+    {"weekId": 1, "day": "Sat", "field": "targetDuration", "value": "2h30min"},
+    {"weekId": 2, "day": "Sat", "field": "targetDuration", "value": "2h50min"},
+    {"weekId": 3, "day": "Sat", "field": "targetDuration", "value": "3h00min"},
+    {"weekId": 4, "day": "Sat", "field": "targetDuration", "value": "3h15min"},
+    {"weekId": 5, "day": "Sat", "field": "targetDistance", "value": "90km"},
+    {"weekId": 6, "day": "Sat", "field": "targetDistance", "value": "100km"},
+    {"weekId": 7, "day": "Sat", "field": "targetDistance", "value": "110km"},
+    {"weekId": 8, "day": "Sat", "field": "targetDistance", "value": "120km"},
+    {"weekId": 5, "day": "Sat", "field": "targetDuration", "value": "3h30min"},
+    {"weekId": 6, "day": "Sat", "field": "targetDuration", "value": "4h00min"},
+    {"weekId": 7, "day": "Sat", "field": "targetDuration", "value": "4h15min"},
+    {"weekId": 8, "day": "Sat", "field": "targetDuration", "value": "4h45min"},
+    {"weekId": 5, "day": "Sat", "field": "targetTSS", "value": "190"},
+    {"weekId": 6, "day": "Sat", "field": "targetTSS", "value": "210"},
+    {"weekId": 7, "day": "Sat", "field": "targetTSS", "value": "235"},
+    {"weekId": 8, "day": "Sat", "field": "targetTSS", "value": "260"},
+    {"weekId": 9, "day": "Sat", "field": "targetDistance", "value": "135km"},
+    {"weekId": 10, "day": "Sat", "field": "targetDistance", "value": "150km"},
+    {"weekId": 9, "day": "Sat", "field": "targetDuration", "value": "5h00min"},
+    {"weekId": 10, "day": "Sat", "field": "targetDuration", "value": "5h30min"},
+    {"weekId": 9, "day": "Sat", "field": "targetTSS", "value": "280"},
+    {"weekId": 10, "day": "Sat", "field": "targetTSS", "value": "310"},
+    {"weekId": 11, "day": "Sat", "field": "targetDistance", "value": "80km"},
+    {"weekId": 11, "day": "Sat", "field": "targetDuration", "value": "3h00min"},
+    {"weekId": 11, "day": "Sat", "field": "targetTSS", "value": "140"},
+    {"weekId": 12, "day": "Sat", "field": "name", "value": "CENTURY RIDE — 160km"},
+    {"weekId": 12, "day": "Sat", "field": "targetDistance", "value": "160km"},
+    {"weekId": 12, "day": "Sat", "field": "targetDuration", "value": "6h00min"},
+    {"weekId": 12, "day": "Sat", "field": "targetTSS", "value": "330"},
+    {"weekId": 12, "day": "Sat", "field": "description", "value": "CENTURY RIDE — 160km. Your goal. Pace conservatively, fuel consistently, enjoy the achievement."},
+    {"weekId": 12, "day": "Tue", "field": "name", "value": "Easy Spin (Race Week)"},
+    {"weekId": 12, "day": "Tue", "field": "intensity", "value": "easy"},
+    {"weekId": 12, "day": "Tue", "field": "targetDuration", "value": "40min"},
+    {"weekId": 12, "day": "Tue", "field": "targetHR", "value": "zone1"},
+    {"weekId": 12, "day": "Tue", "field": "targetTSS", "value": "20"}
+  ],
+  "workouts": {},
+  "trainingPlan": {
+    "name": "12-Week Century Ride",
+    "sportType": "cycling",
+    "description": "A 12-week plan for cyclists who can comfortably ride 50-80km and want to complete a century ride (160km). Builds from 60km to 150km long rides with threshold, VO2max intervals, and race-day fueling practice.",
+    "goal": "Complete a century ride (160km / 100 miles) strong and well-fueled",
+    "targetMetrics": {
+      "easyPower": "60",
+      "endurancePower": "70",
+      "thresholdPower": "95",
+      "intervalPower": "110"
+    }
+  }
+}

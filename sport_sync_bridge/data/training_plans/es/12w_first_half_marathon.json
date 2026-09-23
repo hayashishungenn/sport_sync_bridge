@@ -1,0 +1,166 @@
+{
+  "type": "structuredPlan",
+  "id": "tmpl_12w_first_half_marathon",
+  "sourceId": "app_assets",
+  "name": "Plan de 12 Semanas: Primer Medio Maratón",
+  "phases": [
+    {
+      "id": "ph_base",
+      "sourceId": "app_assets",
+      "trainingPlanId": "tmpl_12w_first_half_marathon",
+      "name": "Base",
+      "phaseType": "base",
+      "orderIndex": 0,
+      "startWeek": 1,
+      "endWeek": 4,
+      "description": "Construye una base aeróbica con carreras suaves y fondos largos que se extienden gradualmente",
+      "focus": "Resistencia aeróbica y consistencia",
+      "coachNote": "Todas las carreras suaves a ritmo conversacional. El fondo largo es la sesión más importante cada semana, no te la saltes.",
+      "createdAt": "2026-01-01T00:00:00Z",
+      "updatedAt": "2026-01-01T00:00:00Z"
+    },
+    {
+      "id": "ph_build",
+      "sourceId": "app_assets",
+      "trainingPlanId": "tmpl_12w_first_half_marathon",
+      "name": "Construcción",
+      "phaseType": "build",
+      "orderIndex": 1,
+      "startWeek": 5,
+      "endWeek": 8,
+      "description": "Introduce trabajo de intervalos y ritmo, extiende la distancia del fondo largo",
+      "focus": "Resistencia de velocidad y desarrollo del umbral",
+      "coachNote": "Los intervalos deben sentirse desafiantes pero controlados. Las carreras de ritmo a un paso cómodamente exigente: podrías decir algunas palabras pero no una frase completa.",
+      "createdAt": "2026-01-01T00:00:00Z",
+      "updatedAt": "2026-01-01T00:00:00Z"
+    },
+    {
+      "id": "ph_peak",
+      "sourceId": "app_assets",
+      "trainingPlanId": "tmpl_12w_first_half_marathon",
+      "name": "Pico",
+      "phaseType": "peak",
+      "orderIndex": 2,
+      "startWeek": 9,
+      "endWeek": 10,
+      "description": "Entrenamiento específico de carrera con trabajo a ritmo de medio maratón y las carreras más largas",
+      "focus": "Adaptación al ritmo de carrera y confianza en la distancia de medio maratón",
+      "coachNote": "Intervalos más largos y segmentos a ritmo de carrera. Confía en tu entrenamiento, ya casi estás ahí.",
+      "createdAt": "2026-01-01T00:00:00Z",
+      "updatedAt": "2026-01-01T00:00:00Z"
+    },
+    {
+      "id": "ph_taper",
+      "sourceId": "app_assets",
+      "trainingPlanId": "tmpl_12w_first_half_marathon",
+      "name": "Reducción",
+      "phaseType": "taper",
+      "orderIndex": 3,
+      "startWeek": 11,
+      "endWeek": 12,
+      "description": "Reduce el volumen mientras mantienes la intensidad y la frescura",
+      "focus": "Recuperación y preparación para la carrera",
+      "coachNote": "El volumen baja pero la intensidad se mantiene. No estás construyendo condición física ahora, la estás revelando. Descansa el día antes de la carrera.",
+      "createdAt": "2026-01-01T00:00:00Z",
+      "updatedAt": "2026-01-01T00:00:00Z"
+    }
+  ],
+  "weekTemplates": [
+    {
+      "name": "Base",
+      "applyToWeeks": [1, 2, 3, 4],
+      "days": {
+        "Mon": {"name": "Descanso", "sportType": "running", "isRestDay": true},
+        "Tue": {"name": "Trote Suave", "sportType": "running", "intensity": "easy", "targetDuration": "30min", "targetHR": "zone2", "targetTSS": 25, "description": "Trote suave a ritmo conversacional en terreno plano", "coachNote": "Mantén la FC en zona2. Esto es recuperación activa."},
+        "Wed": {"name": "Descanso", "sportType": "running", "isRestDay": true},
+        "Thu": {"name": "Trote Suave", "sportType": "running", "intensity": "easy", "targetDuration": "35min", "targetHR": "zone2", "targetTSS": 30, "description": "Trote suave con aceleraciones en los últimos 5 minutos", "coachNote": "Añade 4-5 aceleraciones suaves (20-30 seg cada una) al final. Concéntrate en una zancada fluida."},
+        "Fri": {"name": "Descanso", "sportType": "running", "isRestDay": true},
+        "Sat": {"name": "Fondo Largo", "sportType": "running", "intensity": "endurance", "targetDistance": "8km", "targetDuration": "55min", "targetHR": "zone2", "targetTSS": 55, "description": "Carrera larga y lenta a ritmo suave", "coachNote": "Comienza suave y mantente suave durante todo el recorrido. Camina brevemente si es necesario, no hay vergüenza en tomar descansos para caminar en tus primeros fondos largos."},
+        "Sun": {"name": "Descanso", "sportType": "running", "isRestDay": true}
+      }
+    },
+    {
+      "name": "Construcción",
+      "applyToWeeks": [5, 6, 7, 8],
+      "days": {
+        "Mon": {"name": "Descanso", "sportType": "running", "isRestDay": true},
+        "Tue": {"name": "Intervalos 400m", "sportType": "running", "intensity": "interval", "targetDuration": "50min", "targetDistance": "8km", "targetPace": "5:00/km", "targetHR": "zone4", "targetTSS": 65, "description": "Calentamiento 2km suave + 6×400m @5:00/km (200m trote de recuperación) + Enfriamiento 2km suave", "coachNote": "Los parciales consistentes son más importantes que los rápidos. Trota las recuperaciones, no camines."},
+        "Wed": {"name": "Descanso", "sportType": "running", "isRestDay": true},
+        "Thu": {"name": "Carrera de Ritmo", "sportType": "running", "intensity": "threshold", "targetDuration": "45min", "targetDistance": "7km", "targetPace": "5:30/km", "targetHR": "zone3", "targetTSS": 55, "description": "Calentamiento 1.5km suave + 20min ritmo @5:30/km + Enfriamiento 1.5km suave", "coachNote": "Ritmo de tempo = cómodamente exigente. Puedes decir algunas palabras pero no mantener una conversación."},
+        "Fri": {"name": "Descanso", "sportType": "running", "isRestDay": true},
+        "Sat": {"name": "Fondo Largo", "sportType": "running", "intensity": "endurance", "targetDistance": "12km", "targetDuration": "1h20min", "targetHR": "zone2", "targetTSS": 85, "description": "Carrera larga y lenta con los últimos 2km a esfuerzo de medio maratón", "coachNote": "Practica la alimentación del día de carrera durante el trote. Prueba un gel o bebida deportiva para ver cómo lo tolera tu estómago."},
+        "Sun": {"name": "Descanso", "sportType": "running", "isRestDay": true}
+      }
+    },
+    {
+      "name": "Pico",
+      "applyToWeeks": [9, 10],
+      "days": {
+        "Mon": {"name": "Descanso", "sportType": "running", "isRestDay": true},
+        "Tue": {"name": "Intervalos 800m", "sportType": "running", "intensity": "interval", "targetDuration": "55min", "targetDistance": "9km", "targetPace": "5:10/km", "targetHR": "zone4", "targetTSS": 70, "description": "Calentamiento 2km suave + 5×800m @5:10/km (400m trote de recuperación) + Enfriamiento 2km suave", "coachNote": "Estos simulan la fatiga que sentirás al final de la carrera. Mantén la forma cuando estés cansado."},
+        "Wed": {"name": "Descanso", "sportType": "running", "isRestDay": true},
+        "Thu": {"name": "Carrera a Ritmo de Medio Maratón", "sportType": "running", "intensity": "threshold", "targetDuration": "55min", "targetDistance": "9km", "targetPace": "6:00/km", "targetHR": "zone3", "targetTSS": 65, "description": "Calentamiento 1.5km suave + 6km @ritmo MM (6:00/km) + Enfriamiento 1.5km suave", "coachNote": "Fija tu ritmo de carrera objetivo. Haz que se sienta automático, este es tu ritmo para el día de la carrera."},
+        "Fri": {"name": "Descanso", "sportType": "running", "isRestDay": true},
+        "Sat": {"name": "Fondo Largo", "sportType": "running", "intensity": "endurance", "targetDistance": "17km", "targetDuration": "1h55min", "targetHR": "zone2", "targetTSS": 125, "description": "Fondo largo con los últimos 3km a ritmo de medio maratón", "coachNote": "Practica todo: comida previa, equipo, hidratación, ritmo. Este es tu ensayo general."},
+        "Sun": {"name": "Descanso", "sportType": "running", "isRestDay": true}
+      }
+    },
+    {
+      "name": "Reducción",
+      "applyToWeeks": [11, 12],
+      "days": {
+        "Mon": {"name": "Descanso", "sportType": "running", "isRestDay": true},
+        "Tue": {"name": "Trote Suave + Aceleraciones", "sportType": "running", "intensity": "easy", "targetDuration": "35min", "targetDistance": "5km", "targetHR": "zone2", "targetTSS": 25, "description": "Trote suave con 4×20seg aceleraciones a ritmo de carrera", "coachNote": "Mantenlo ligero. Las aceleraciones mantienen la agudeza neuromuscular sin fatiga."},
+        "Wed": {"name": "Descanso", "sportType": "running", "isRestDay": true},
+        "Thu": {"name": "Ritmo Corto", "sportType": "running", "intensity": "threshold", "targetDuration": "40min", "targetDistance": "6km", "targetPace": "5:30/km", "targetHR": "zone3", "targetTSS": 40, "description": "Calentamiento 1.5km suave + 15min ritmo + Enfriamiento 1.5km suave", "coachNote": "Ritmo más corto para mantener el motor listo sin agotar el tanque."},
+        "Fri": {"name": "Descanso", "sportType": "running", "isRestDay": true},
+        "Sat": {"name": "Fondo Largo (Reducido) o Carrera", "sportType": "running", "intensity": "endurance", "targetDistance": "12km", "targetDuration": "1h20min", "targetHR": "zone2", "targetTSS": 75, "description": "Semana 11: fondo suave 12km. Semana 12: DÍA DE CARRERA — 21.1km. Confía en tu entrenamiento!", "coachNote": "Semana 11: un último fondo largo moderado. Semana 12: llegó el día! Comienza de forma conservadora, haz un negativo split si puedes."},
+        "Sun": {"name": "Descanso", "sportType": "running", "isRestDay": true}
+      }
+    }
+  ],
+  "overrides": [
+    {"weekId": 1, "day": "Sat", "field": "targetDistance", "value": "8km"},
+    {"weekId": 2, "day": "Sat", "field": "targetDistance", "value": "10km"},
+    {"weekId": 3, "day": "Sat", "field": "targetDistance", "value": "11km"},
+    {"weekId": 4, "day": "Sat", "field": "targetDistance", "value": "12km"},
+    {"weekId": 5, "day": "Sat", "field": "targetDistance", "value": "12km"},
+    {"weekId": 6, "day": "Sat", "field": "targetDistance", "value": "14km"},
+    {"weekId": 7, "day": "Sat", "field": "targetDistance", "value": "15km"},
+    {"weekId": 8, "day": "Sat", "field": "targetDistance", "value": "16km"},
+    {"weekId": 5, "day": "Sat", "field": "targetDuration", "value": "1h20min"},
+    {"weekId": 6, "day": "Sat", "field": "targetDuration", "value": "1h30min"},
+    {"weekId": 7, "day": "Sat", "field": "targetDuration", "value": "1h40min"},
+    {"weekId": 8, "day": "Sat", "field": "targetDuration", "value": "1h45min"},
+    {"weekId": 5, "day": "Tue", "field": "targetDistance", "value": "8km"},
+    {"weekId": 6, "day": "Tue", "field": "targetDistance", "value": "9km"},
+    {"weekId": 7, "day": "Tue", "field": "targetDistance", "value": "9km"},
+    {"weekId": 8, "day": "Tue", "field": "targetDistance", "value": "10km"},
+    {"weekId": 5, "day": "Thu", "field": "targetDistance", "value": "7km"},
+    {"weekId": 6, "day": "Thu", "field": "targetDistance", "value": "8km"},
+    {"weekId": 7, "day": "Thu", "field": "targetDistance", "value": "8km"},
+    {"weekId": 8, "day": "Thu", "field": "targetDistance", "value": "9km"},
+    {"weekId": 9, "day": "Sat", "field": "targetDistance", "value": "17km"},
+    {"weekId": 10, "day": "Sat", "field": "targetDistance", "value": "18km"},
+    {"weekId": 9, "day": "Sat", "field": "targetDuration", "value": "1h55min"},
+    {"weekId": 10, "day": "Sat", "field": "targetDuration", "value": "2h00min"},
+    {"weekId": 11, "day": "Sat", "field": "targetDistance", "value": "12km"},
+    {"weekId": 12, "day": "Sat", "field": "targetDistance", "value": "21.1km"},
+    {"weekId": 12, "day": "Sat", "field": "name", "value": "DÍA DE CARRERA — Medio Maratón"},
+    {"weekId": 12, "day": "Sat", "field": "targetDuration", "value": "2h06min"}
+  ],
+  "workouts": {},
+  "trainingPlan": {
+    "name": "Plan de 12 Semanas: Primer Medio Maratón",
+    "sportType": "running",
+    "description": "Un plan de 12 semanas para corredores que pueden correr cómodamente 5-10km y quieren completar su primer medio maratón (21.1km). Construye desde fondos de 8km hasta 18km con trabajo de intervalos, ritmo y paso de carrera.",
+    "goal": "Completar un medio maratón (21.1km) con fuerza y sin lesiones",
+    "targetMetrics": {
+      "MP": "6:00",
+      "easyPace": "6:30",
+      "thresholdPace": "5:30",
+      "5K_Pace": "5:00",
+      "10K_Pace": "5:20"
+    }
+  }
+}

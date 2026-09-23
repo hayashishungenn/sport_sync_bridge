@@ -1,0 +1,176 @@
+{
+  "type": "structuredPlan",
+  "id": "tmpl_12w_century_ride",
+  "sourceId": "app_assets",
+  "name": "Gran Fondo in 12 Settimane",
+  "phases": [
+    {
+      "id": "ph_base",
+      "sourceId": "app_assets",
+      "trainingPlanId": "tmpl_12w_century_ride",
+      "name": "Base",
+      "phaseType": "base",
+      "orderIndex": 0,
+      "startWeek": 1,
+      "endWeek": 4,
+      "description": "Costruisci la resistenza aerobica con uscite costanti in zona2 e uscite del fine settimana gradualmente più lunghe",
+      "focus": "Tempo in sella ed efficienza aerobica",
+      "coachNote": "Tutte le uscite in zona2 FC o 60-70% FTP. Concentrati su una pedalata fluida e sul comfort in sella per durate più lunghe.",
+      "createdAt": "2026-01-01T00:00:00Z",
+      "updatedAt": "2026-01-01T00:00:00Z"
+    },
+    {
+      "id": "ph_build",
+      "sourceId": "app_assets",
+      "trainingPlanId": "tmpl_12w_century_ride",
+      "name": "Costruzione",
+      "phaseType": "build",
+      "orderIndex": 1,
+      "startWeek": 5,
+      "endWeek": 8,
+      "description": "Introduci intervalli di soglia e VO2max, estendi la distanza delle uscite lunghe",
+      "focus": "Potenza di soglia, capacità aerobica e alimentazione nelle uscite lunghe",
+      "coachNote": "Gli intervalli di soglia al 95% FTP devono essere duri ma sostenibili. Gli intervalli VO2max sono molto duri — dai il massimo. Esercita la nutrizione nelle uscite lunghe.",
+      "createdAt": "2026-01-01T00:00:00Z",
+      "updatedAt": "2026-01-01T00:00:00Z"
+    },
+    {
+      "id": "ph_peak",
+      "sourceId": "app_assets",
+      "trainingPlanId": "tmpl_12w_century_ride",
+      "name": "Picco",
+      "phaseType": "peak",
+      "orderIndex": 2,
+      "startWeek": 9,
+      "endWeek": 10,
+      "description": "Uscite più lunghe e simulazione del ritmo del gran fondo",
+      "focus": "Resistenza sulla distanza del gran fondo, comfort al ritmo gara e strategia di alimentazione",
+      "coachNote": "Queste sono le tue uscite di allenamento più lunghe. Esercita il piano nutrizionale completo del giorno di gara: mangia e bevi secondo programma, non secondo la fame.",
+      "createdAt": "2026-01-01T00:00:00Z",
+      "updatedAt": "2026-01-01T00:00:00Z"
+    },
+    {
+      "id": "ph_taper",
+      "sourceId": "app_assets",
+      "trainingPlanId": "tmpl_12w_century_ride",
+      "name": "Riduzione",
+      "phaseType": "taper",
+      "orderIndex": 3,
+      "startWeek": 11,
+      "endWeek": 12,
+      "description": "Riduci il volume, mantieni l'intensità, arriva fresco",
+      "focus": "Recupero e prontezza alla gara",
+      "coachNote": "Il volume cala significativamente. Mantieni una breve sessione di intensità per rimanere reattivo. Controlla la bici, prepara il kit, pianifica i punti di ristoro.",
+      "createdAt": "2026-01-01T00:00:00Z",
+      "updatedAt": "2026-01-01T00:00:00Z"
+    }
+  ],
+  "weekTemplates": [
+    {
+      "name": "Base",
+      "applyToWeeks": [1, 2, 3, 4],
+      "days": {
+        "Mon": {"name": "Riposo", "sportType": "cycling", "isRestDay": true},
+        "Tue": {"name": "Uscita di Resistenza", "sportType": "cycling", "intensity": "endurance", "targetDuration": "60min", "targetHR": "zone2", "targetTSS": 50, "description": "Uscita costante in zona2 su terreno pianeggiante o ondulato", "coachNote": "Mantieni una cadenza alta (85-95 rpm). Concentrati su pedalate morbide e circolari."},
+        "Wed": {"name": "Riposo", "sportType": "cycling", "isRestDay": true},
+        "Thu": {"name": "Uscita di Resistenza", "sportType": "cycling", "intensity": "endurance", "targetDuration": "60min", "targetHR": "zone2", "targetTSS": 50, "description": "Uscita di resistenza costante con 5 min a cadenza più alta (100+ rpm) nella parte centrale", "coachNote": "Gli esercizi di cadenza migliorano l'efficienza neuromuscolare. Pedala leggero — niente spinte pesanti."},
+        "Fri": {"name": "Riposo", "sportType": "cycling", "isRestDay": true},
+        "Sat": {"name": "Uscita Lunga di Resistenza", "sportType": "cycling", "intensity": "endurance", "targetDuration": "2h30min", "targetDistance": "60km", "targetHR": "zone2", "targetTSS": 130, "description": "Uscita lunga costante a ritmo di resistenza. Porta 1 borraccia d'acqua e uno spuntino.", "coachNote": "Inizia facile. L'obiettivo è il tempo in sella, non la velocità. Trova un ritmo confortevole e goditi l'uscita."},
+        "Sun": {"name": "Riposo", "sportType": "cycling", "isRestDay": true}
+      }
+    },
+    {
+      "name": "Costruzione",
+      "applyToWeeks": [5, 6, 7, 8],
+      "days": {
+        "Mon": {"name": "Riposo", "sportType": "cycling", "isRestDay": true},
+        "Tue": {"name": "Intervalli VO2max", "sportType": "cycling", "intensity": "interval", "targetDuration": "60min", "targetHR": "zone5", "targetTSS": 75, "description": "Riscaldamento 15 min facile + 4×5 min @110% FTP (5 min recupero pedalata facile) + Defaticamento 10 min facile", "coachNote": "Inizio costruzione: 4×4 min. Fine costruzione: 5×5 min. Massimo impegno su ogni intervallo — questi costruiscono la potenza di punta."},
+        "Wed": {"name": "Riposo", "sportType": "cycling", "isRestDay": true},
+        "Thu": {"name": "Intervalli Soglia", "sportType": "cycling", "intensity": "threshold", "targetDuration": "75min", "targetHR": "zone4", "targetTSS": 85, "description": "Riscaldamento 15 min facile + 2×20 min @95% FTP (5 min recupero pedalata facile) + Defaticamento 10 min facile", "coachNote": "Potenza costante e fluida. Cadenza 85-95 rpm. Questi costruiscono la tua potenza sostenibile per le salite lunghe."},
+        "Fri": {"name": "Riposo", "sportType": "cycling", "isRestDay": true},
+        "Sat": {"name": "Uscita Lunga di Resistenza", "sportType": "cycling", "intensity": "endurance", "targetDuration": "3h30min", "targetDistance": "90km", "targetHR": "zone2", "targetTSS": 190, "description": "Uscita lunga in zona2. Porta 2 borracce e 2 spuntini. Esercitati a mangiare e bere in bici.", "coachNote": "Carburati ogni 45 min: mangia prima di avere fame, bevi prima di avere sete. È qui che impari cosa tollera il tuo stomaco."},
+        "Sun": {"name": "Riposo", "sportType": "cycling", "isRestDay": true}
+      }
+    },
+    {
+      "name": "Picco",
+      "applyToWeeks": [9, 10],
+      "days": {
+        "Mon": {"name": "Riposo", "sportType": "cycling", "isRestDay": true},
+        "Tue": {"name": "Intervalli VO2max", "sportType": "cycling", "intensity": "interval", "targetDuration": "65min", "targetHR": "zone5", "targetTSS": 80, "description": "Riscaldamento 15 min facile + 5×5 min @110% FTP (5 min recupero pedalata facile) + Defaticamento 10 min facile", "coachNote": "Intervalli a massimo sforzo. Qualità sulla quantità — se cali, riduci il numero, non l'intensità."},
+        "Wed": {"name": "Riposo", "sportType": "cycling", "isRestDay": true},
+        "Thu": {"name": "Uscita Soglia", "sportType": "cycling", "intensity": "threshold", "targetDuration": "75min", "targetHR": "zone4", "targetTSS": 85, "description": "Riscaldamento 15 min facile + 2×20 min @95% FTP (5 min recupero facile) + Defaticamento 10 min facile", "coachNote": "Mantieni la potenza di soglia. La costanza tra entrambi i blocchi da 20 min è l'obiettivo."},
+        "Fri": {"name": "Riposo", "sportType": "cycling", "isRestDay": true},
+        "Sat": {"name": "Simulazione Gran Fondo", "sportType": "cycling", "intensity": "endurance", "targetDuration": "5h00min", "targetDistance": "135km", "targetHR": "zone2", "targetTSS": 280, "description": "Uscita più lunga del programma. Porta 3 borracce e cibo vero. Simula il ritmo e l'alimentazione del giorno di gara.", "coachNote": "Questa è la tua prova generale. Inizia facile, mantieni un ritmo conservativo. Esercita le soste ai punti di ristoro: veloci, efficienti, e torna in sella. Niente di nuovo il giorno della gara — testa tutto ora."},
+        "Sun": {"name": "Riposo", "sportType": "cycling", "isRestDay": true}
+      }
+    },
+    {
+      "name": "Riduzione",
+      "applyToWeeks": [11, 12],
+      "days": {
+        "Mon": {"name": "Riposo", "sportType": "cycling", "isRestDay": true},
+        "Tue": {"name": "Soglia Breve", "sportType": "cycling", "intensity": "threshold", "targetDuration": "55min", "targetHR": "zone4", "targetTSS": 55, "description": "Settimana 11: Riscaldamento 15 min + 15 min @95% FTP + Defaticamento 15 min. Settimana 12: Pedalata facile 40 min.", "coachNote": "Breve e intenso. Mantieni le gambe pronte senza accumulare affaticamento. Settimana 12: solo una pedalata facile."},
+        "Wed": {"name": "Riposo", "sportType": "cycling", "isRestDay": true},
+        "Thu": {"name": "Pedalata Facile", "sportType": "cycling", "intensity": "easy", "targetDuration": "45min", "targetHR": "zone1", "targetTSS": 25, "description": "Pedalata di recupero molto leggera. Cadenza alta, resistenza bassa.", "coachNote": "Solo recupero attivo. Nessuno sforzo — solo per far circolare il sangue. Controlla che la bici sia pronta per la gara."},
+        "Fri": {"name": "Riposo", "sportType": "cycling", "isRestDay": true},
+        "Sat": {"name": "Lungo (Riduzione) o Gran Fondo", "sportType": "cycling", "intensity": "endurance", "targetDuration": "3h00min", "targetDistance": "80km", "targetHR": "zone2", "targetTSS": 140, "description": "Settimana 11: uscita lunga facile 80 km. Settimana 12: GRAN FONDO — 160 km.", "coachNote": "Settimana 11: un'ultima uscita lunga moderata. Settimana 12: GIORNO DI GARA. Mantieni il ritmo — i primi 80 km devono sembrare facili. Mangia e bevi secondo programma. Hai fatto l'allenamento."},
+        "Sun": {"name": "Riposo", "sportType": "cycling", "isRestDay": true}
+      }
+    }
+  ],
+  "overrides": [
+    {"weekId": 1, "day": "Sat", "field": "targetDistance", "value": "60km"},
+    {"weekId": 2, "day": "Sat", "field": "targetDistance", "value": "70km"},
+    {"weekId": 3, "day": "Sat", "field": "targetDistance", "value": "75km"},
+    {"weekId": 4, "day": "Sat", "field": "targetDistance", "value": "80km"},
+    {"weekId": 1, "day": "Sat", "field": "targetDuration", "value": "2h30min"},
+    {"weekId": 2, "day": "Sat", "field": "targetDuration", "value": "2h50min"},
+    {"weekId": 3, "day": "Sat", "field": "targetDuration", "value": "3h00min"},
+    {"weekId": 4, "day": "Sat", "field": "targetDuration", "value": "3h15min"},
+    {"weekId": 5, "day": "Sat", "field": "targetDistance", "value": "90km"},
+    {"weekId": 6, "day": "Sat", "field": "targetDistance", "value": "100km"},
+    {"weekId": 7, "day": "Sat", "field": "targetDistance", "value": "110km"},
+    {"weekId": 8, "day": "Sat", "field": "targetDistance", "value": "120km"},
+    {"weekId": 5, "day": "Sat", "field": "targetDuration", "value": "3h30min"},
+    {"weekId": 6, "day": "Sat", "field": "targetDuration", "value": "4h00min"},
+    {"weekId": 7, "day": "Sat", "field": "targetDuration", "value": "4h15min"},
+    {"weekId": 8, "day": "Sat", "field": "targetDuration", "value": "4h45min"},
+    {"weekId": 5, "day": "Sat", "field": "targetTSS", "value": "190"},
+    {"weekId": 6, "day": "Sat", "field": "targetTSS", "value": "210"},
+    {"weekId": 7, "day": "Sat", "field": "targetTSS", "value": "235"},
+    {"weekId": 8, "day": "Sat", "field": "targetTSS", "value": "260"},
+    {"weekId": 9, "day": "Sat", "field": "targetDistance", "value": "135km"},
+    {"weekId": 10, "day": "Sat", "field": "targetDistance", "value": "150km"},
+    {"weekId": 9, "day": "Sat", "field": "targetDuration", "value": "5h00min"},
+    {"weekId": 10, "day": "Sat", "field": "targetDuration", "value": "5h30min"},
+    {"weekId": 9, "day": "Sat", "field": "targetTSS", "value": "280"},
+    {"weekId": 10, "day": "Sat", "field": "targetTSS", "value": "310"},
+    {"weekId": 11, "day": "Sat", "field": "targetDistance", "value": "80km"},
+    {"weekId": 11, "day": "Sat", "field": "targetDuration", "value": "3h00min"},
+    {"weekId": 11, "day": "Sat", "field": "targetTSS", "value": "140"},
+    {"weekId": 12, "day": "Sat", "field": "name", "value": "GRAN FONDO — 160 km"},
+    {"weekId": 12, "day": "Sat", "field": "targetDistance", "value": "160km"},
+    {"weekId": 12, "day": "Sat", "field": "targetDuration", "value": "6h00min"},
+    {"weekId": 12, "day": "Sat", "field": "targetTSS", "value": "330"},
+    {"weekId": 12, "day": "Sat", "field": "description", "value": "GRAN FONDO — 160 km. Il tuo obiettivo. Mantieni un ritmo conservativo, alimentati costantemente, goditi il traguardo."},
+    {"weekId": 12, "day": "Tue", "field": "name", "value": "Pedalata Facile (Settimana Gara)"},
+    {"weekId": 12, "day": "Tue", "field": "intensity", "value": "easy"},
+    {"weekId": 12, "day": "Tue", "field": "targetDuration", "value": "40min"},
+    {"weekId": 12, "day": "Tue", "field": "targetHR", "value": "zone1"},
+    {"weekId": 12, "day": "Tue", "field": "targetTSS", "value": "20"}
+  ],
+  "workouts": {},
+  "trainingPlan": {
+    "name": "Gran Fondo in 12 Settimane",
+    "sportType": "cycling",
+    "description": "Un programma di 12 settimane per ciclisti che sanno pedalare comodamente per 50-80 km e vogliono completare un gran fondo (160 km). Progredisce da 60 km a 150 km di uscite lunghe con intervalli di soglia, VO2max e pratica di alimentazione per il giorno di gara.",
+    "goal": "Completare un gran fondo (160 km / 100 miglia) con forza e ben alimentati",
+    "targetMetrics": {
+      "easyPower": "60",
+      "endurancePower": "70",
+      "thresholdPower": "95",
+      "intervalPower": "110"
+    }
+  }
+}

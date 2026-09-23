@@ -208,6 +208,18 @@ def convert_activity_file(
     )
 
 
+def read_activity_file(input_path: Path) -> ActivityFile:
+    input_path = input_path.resolve()
+    source_format = _format_for_path(input_path)
+    if not input_path.is_file():
+        raise ValueError(f"Input file does not exist: {input_path}")
+    if source_format == "fit":
+        return _read_fit(input_path)
+    if source_format == "gpx":
+        return _read_gpx(input_path)
+    return _read_tcx(input_path)
+
+
 def _target_format_losses(activity: ActivityFile, target_format: str) -> list[str]:
     losses: list[str] = []
     missing_positions = sum(1 for point in activity.track_points if not _has_position(point))

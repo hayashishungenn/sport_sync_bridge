@@ -1,0 +1,290 @@
+from __future__ import annotations
+
+import contextlib
+import io
+import json
+import tempfile
+import threading
+import unittest
+import urllib.request
+import zipfile
+from datetime import date
+from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import patch
+from http.server import ThreadingHTTPServer
+
+from sport_sync_bridge.activity_analysis import build_ai_analysis_prompt, summarize_activity
+from sport_sync_bridge.activity_library import LocalActivityLibrary
+from sport_sync_bridge.cli import main
+from sport_sync_bridge.formats import read_activity_file
+from sport_sync_bridge.health import import_health_csv, summarize_health
+from sport_sync_bridge.sources import LocalFileSource
+from sport_sync_bridge.state import StateDB
+from sport_sync_bridge.training import (
+    export_training_plan_ics,
+    export_workout_template,
+    get_training_template,
+    install_training_plan,
+    list_training_templates,
+    list_workout_templates,
+)
+from sport_sync_bridge.wifi_transfer import _make_handler
+from tests.activity_fixtures import create_gpx
+
+
+class GarSyncLocalFeatureTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.temporary = tempfile.TemporaryDirectory()
+        self.root = Path(self.temporary.name)
+        self.state = StateDB(self.root / "state.db")
+        self.library = LocalActivityLibrary(self.state, self.root / ".data")
+
+    def tearDown(self) -> None:
+        self.state.close()
+        self.temporary.cleanup()
+
+    def test_local_import_deduplicates_and_exposes_syncable_source(self) -> None:
+        activity_path = create_gpx(self.root / "morning.gpx")
+        original = activity_path.read_bytes()
+        first = self.library.import_paths([activity_path])[0]
+        second = self.library.import_paths([activity_path])[0]
+
+        self.assertFalse(first.duplicate)
+        self.assertTrue(second.duplicate)
+        self.assertEqual(first.fingerprint, second.fingerprint)
+        self.assertEqual(activity_path.read_bytes(), original)
+        self.assertEqual(len(self.state.list_local_activities()), 1)
+        source = LocalFileSource(SimpleNamespace(), self.state)
+        found = source.list_activities(None, None, None)
+        self.assertEqual(len(found), 1)
+        self.assertEqual(found[0].source, "local")
+        self.assertEqual(source.download_fit(found[0], self.root).suffix, ".gpx")
+
+    def test_zip_import_does_not_extract_paths_and_imports_supported_members(self) -> None:
+        activity_path = create_gpx(self.root / "route.gpx")
+        archive_path = self.root / "activities.zip"
+        with zipfile.ZipFile(archive_path, "w") as archive:
+            archive.writestr("../../outside/route.gpx", activity_path.read_bytes())
+        results = self.library.import_paths([archive_path])
+
+        self.assertEqual(len(results), 1)
+        self.assertEqual(Path(self.state.get_local_activity(results[0].fingerprint)["file_path"]).parent, self.root / ".data" / "local_imports")
+        self.assertFalse((self.root / "outside").exists())
+
+    def test_json_and_track_csv_are_normalized_to_gpx(self) -> None:
+        json_path = self.root / "activity.json"
+        json_path.write_text(
+            json.dumps(
+                {
+                    "name": "JSON ride",
+                    "sport_type": "cycling",
+                    "track_points": [
+                        {"timestamp": "2026-01-02T03:04:00Z", "lat": 31.23, "lon": 121.47, "distance": 0},
+                        {"timestamp": "2026-01-02T03:05:00Z", "lat": 31.231, "lon": 121.471, "distance": 100},
+                    ],
+                }
+            ),
+            encoding="utf-8",
+        )
+        csv_path = self.root / "track.csv"
+        csv_path.write_text(
+            "timestamp,latitude,longitude,elevation,heart_rate\n"
+            "2026-01-02T03:04:00Z,31.23,121.47,10,150\n"
+            "2026-01-02T03:05:00Z,31.231,121.471,11,151\n",
+            encoding="utf-8",
+        )
+
+        json_result = self.library.import_paths([json_path])[0]
+        csv_result = self.library.import_paths([csv_path])[0]
+
+        self.assertEqual(json_result.file_format, "gpx")
+        self.assertEqual(csv_result.file_format, "gpx")
+        json_activity = read_activity_file(Path(self.state.get_local_activity(json_result.fingerprint)["file_path"]))
+        csv_activity = read_activity_file(Path(self.state.get_local_activity(csv_result.fingerprint)["file_path"]))
+        self.assertEqual(json_activity.name, "JSON ride")
+        self.assertEqual(csv_activity.track_points[0].heart_rate_bpm, 150)
+
+    def test_invalid_activity_is_not_added_to_library(self) -> None:
+        malformed = self.root / "bad.gpx"
+        malformed.write_text("<gpx", encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "Could not parse XML"):
+            self.library.import_paths([malformed])
+        self.assertEqual(self.state.list_local_activities(), [])
+
+    def test_invalid_json_coordinates_remove_partial_import_files(self) -> None:
+        activity_path = self.root / "invalid.json"
+        activity_path.write_text(
+            json.dumps(
+                {
+                    "track_points": [
+                        {"timestamp": "2026-01-02T03:04:00Z", "lat": 91, "lon": 121},
+                    ]
+                }
+            ),
+            encoding="utf-8",
+        )
+        with self.assertRaisesRegex(ValueError, "Invalid GPS coordinates"):
+            self.library.import_paths([activity_path])
+        self.assertEqual(list((self.root / ".data" / "local_imports").glob("*")), [])
+
+    def test_activity_start_time_is_normalized_for_date_filters(self) -> None:
+        activity_path = create_gpx(self.root / "offset.gpx")
+        payload = activity_path.read_text(encoding="utf-8")
+        payload = payload.replace("2026-01-02T03:04:00Z", "2026-01-02T00:04:00+09:00")
+        payload = payload.replace("2026-01-02T03:05:00Z", "2026-01-02T00:05:00+09:00")
+        activity_path.write_text(payload, encoding="utf-8")
+
+        imported = self.library.import_paths([activity_path])[0]
+        rows = self.state.list_local_activities(
+            since="2026-01-01T00:00:00+00:00",
+            until="2026-01-01T23:59:59.999999+00:00",
+        )
+
+        self.assertEqual(imported.start_time, "2026-01-01T15:04:00+00:00")
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["start_time"], imported.start_time)
+
+    def test_all_localized_plan_templates_schedule_and_export(self) -> None:
+        for locale in ("en", "es", "fr", "it", "pt", "zh"):
+            self.assertEqual(len(list_training_templates(locale=locale)), 7)
+        template = get_training_template("8w_beginner_run", locale="zh")
+        plan_id, items = install_training_plan(
+            self.state,
+            template,
+            locale="zh",
+            start_date=date(2026, 1, 5),
+        )
+
+        self.assertEqual(len(items), 56)
+        self.assertEqual(len(self.state.list_training_plans()), 1)
+        self.assertTrue(any(item["name"].startswith("5公里毕业跑") for item in items))
+        output = export_training_plan_ics(self.state, plan_id, self.root / "plan.ics")
+        calendar = output.read_text(encoding="utf-8")
+        self.assertIn("BEGIN:VCALENDAR", calendar)
+        self.assertIn("DTSTART;VALUE=DATE:20260228", calendar)
+        self.assertNotIn("SUMMARY:休息日", calendar)
+
+    def test_plan_requires_monday_start(self) -> None:
+        template = get_training_template("8w_beginner_run", locale="zh")
+        with self.assertRaisesRegex(ValueError, "Monday"):
+            install_training_plan(
+                self.state,
+                template,
+                locale="zh",
+                start_date=date(2026, 1, 6),
+            )
+
+    def test_workout_fit_assets_can_be_listed_and_exported(self) -> None:
+        templates = list_workout_templates()
+        self.assertEqual(len(templates), 33)
+        output = export_workout_template(templates[0].template_id, self.root / "workout.fit")
+        self.assertEqual(output.read_bytes(), templates[0].fit_path.read_bytes())
+
+    def test_health_csv_import_and_bmi_summary(self) -> None:
+        health_csv = self.root / "health.csv"
+        health_csv.write_text(
+            "date,metric,value,unit\n"
+            "2026-01-02,weight,70,kg\n"
+            "2026-01-02,height,175,cm\n"
+            "2026-01-02,steps,8000,count\n",
+            encoding="utf-8",
+        )
+        self.assertEqual(import_health_csv(self.state, health_csv), 3)
+        summary = summarize_health(self.state)
+        self.assertEqual(summary["measurement_count"], 3)
+        self.assertEqual(summary["latest"]["bmi"]["value"], 22.9)
+
+    def test_ai_prompt_uses_summary_data_without_track_coordinates(self) -> None:
+        activity = read_activity_file(create_gpx(self.root / "ride.gpx"))
+        summary = summarize_activity(activity)
+        prompt = build_ai_analysis_prompt(summary, self.state.list_local_activities(), "恢复训练怎么安排？")
+        self.assertIn("恢复训练怎么安排", prompt)
+        self.assertNotIn("31.23", prompt)
+        self.assertNotIn("121.47", prompt)
+        self.assertIn("未知", prompt)
+
+    def test_wifi_upload_page_accepts_activity_multipart(self) -> None:
+        sample = create_gpx(self.root / "wifi.gpx").read_bytes()
+        server = ThreadingHTTPServer(("127.0.0.1", 0), _make_handler(self.library, 1024 * 1024))
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            base_url = f"http://127.0.0.1:{server.server_address[1]}"
+            with urllib.request.urlopen(base_url + "/") as response:
+                self.assertIn("运动文件传输", response.read().decode("utf-8"))
+            boundary = "bridge-test-boundary"
+            body = (
+                f"--{boundary}\r\nContent-Disposition: form-data; name=\"file\"; filename=\"wifi.gpx\"\r\n"
+                "Content-Type: application/gpx+xml\r\n\r\n"
+            ).encode("ascii") + sample + f"\r\n--{boundary}--\r\n".encode("ascii")
+            request = urllib.request.Request(
+                base_url + "/upload",
+                data=body,
+                headers={
+                    "Content-Type": f"multipart/form-data; boundary={boundary}",
+                    "Content-Length": str(len(body)),
+                },
+                method="POST",
+            )
+            with urllib.request.urlopen(request) as response:
+                result = json.loads(response.read())
+            self.assertEqual(result["imported"], 1)
+            self.assertEqual(len(self.state.list_local_activities()), 1)
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join(timeout=2)
+
+    def test_wifi_upload_enforces_configured_per_file_limit(self) -> None:
+        sample = create_gpx(self.root / "large.gpx").read_bytes()
+        server = ThreadingHTTPServer(("127.0.0.1", 0), _make_handler(self.library, 64))
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            boundary = "bridge-size-boundary"
+            body = (
+                f"--{boundary}\r\nContent-Disposition: form-data; name=\"file\"; filename=\"large.gpx\"\r\n"
+                "Content-Type: application/gpx+xml\r\n\r\n"
+            ).encode("ascii") + sample + f"\r\n--{boundary}--\r\n".encode("ascii")
+            request = urllib.request.Request(
+                f"http://127.0.0.1:{server.server_port}/upload",
+                data=body,
+                headers={
+                    "Content-Type": f"multipart/form-data; boundary={boundary}",
+                    "Content-Length": str(len(body)),
+                },
+                method="POST",
+            )
+            with self.assertRaises(urllib.error.HTTPError) as raised:
+                urllib.request.urlopen(request)
+            self.assertEqual(raised.exception.code, 413)
+            raised.exception.close()
+            self.assertEqual(self.state.list_local_activities(), [])
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join(timeout=2)
+
+    def test_cli_local_import_and_list_run_without_account_engine(self) -> None:
+        activity_path = create_gpx(self.root / "cli.gpx")
+        config = SimpleNamespace(
+            data_dir=self.root / ".data",
+            db_path=self.root / ".data" / "state.db",
+            log_level="INFO",
+            log_path=self.root / "sync.log",
+        )
+        output = io.StringIO()
+        with (
+            patch("sport_sync_bridge.cli.AppConfig.load", return_value=config),
+            patch("sport_sync_bridge.cli.configure_logging"),
+            patch("sport_sync_bridge.cli.SyncEngine", side_effect=AssertionError("sync engine is not needed")),
+            contextlib.redirect_stdout(output),
+        ):
+            self.assertEqual(main(["library", "import", str(activity_path)]), 0)
+            self.assertEqual(main(["library", "list", "--json"]), 0)
+        self.assertIn('"format": "gpx"', output.getvalue())
+
+
+if __name__ == "__main__":
+    unittest.main()

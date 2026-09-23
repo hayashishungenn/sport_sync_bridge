@@ -11,6 +11,7 @@ import requests
 
 from .config import AppConfig
 from .models import Activity
+from .state import StateDB
 from .utils import (
     fit_signature_ok,
     maybe_relative_url,
@@ -364,3 +365,61 @@ def _igpsport_sport_type(value: object) -> str | None:
 
 def _activity_sort_key(activity: Activity) -> tuple[datetime, str]:
     return (activity.start_time or datetime(1970, 1, 1, tzinfo=timezone.utc), activity.source_id)
+
+
+class LocalFileSource(SourceAdapter):
+    name = "local"
+
+    def __init__(self, config: AppConfig, state_db: StateDB):
+        super().__init__(config)
+        self.state_db = state_db
+
+    def is_configured(self) -> bool:
+        return True
+
+    def authenticate(self) -> None:
+        return None
+
+    def list_activities(
+        self,
+        since: datetime | None,
+        until: datetime | None,
+        limit: int | None,
+    ) -> list[Activity]:
+        if limit is not None and limit <= 0:
+            return []
+        rows = self.state_db.list_local_activities(syncable_only=True)
+        activities: list[Activity] = []
+        for row in rows:
+            start_time = parse_datetime(row["start_time"])
+            if since and (start_time is None or start_time < since):
+                continue
+            if until and (start_time is None or start_time > until):
+                continue
+            activities.append(
+                Activity(
+                    source=self.name,
+                    source_id=str(row["fingerprint"]),
+                    name=str(row["name"]),
+                    sport_type=row["sport_type"],
+                    start_time=start_time,
+                    raw={"file_path": row["file_path"], "file_format": row["file_format"]},
+                )
+            )
+            if limit is not None and len(activities) >= limit:
+                break
+        return activities
+
+    def download_fit(self, activity: Activity, output_dir: Path) -> Path:
+        raw_path = activity.raw.get("file_path")
+        if not isinstance(raw_path, str):
+            row = self.state_db.get_local_activity(activity.source_id)
+            raw_path = row["file_path"] if row else None
+        if not isinstance(raw_path, str):
+            raise RuntimeError(f"Local activity file path is missing: {activity.source_id}")
+        path = Path(raw_path)
+        if not path.is_file():
+            raise RuntimeError(f"Local activity file was moved or removed: {path}")
+        if path.suffix.lower().lstrip(".") not in {"fit", "gpx", "tcx"}:
+            raise RuntimeError(f"Local activity format cannot be uploaded: {path.suffix}")
+        return path

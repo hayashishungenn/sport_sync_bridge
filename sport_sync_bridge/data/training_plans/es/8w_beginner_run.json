@@ -1,0 +1,105 @@
+{
+  "type": "structuredPlan",
+  "id": "tmpl_8w_beginner_run",
+  "sourceId": "app_assets",
+  "name": "8 semanas de iniciación al running 5K",
+  "phases": [
+    {
+      "id": "ph_adaptation",
+      "sourceId": "app_assets",
+      "trainingPlanId": "tmpl_8w_beginner_run",
+      "name": "Adaptación",
+      "phaseType": "base",
+      "orderIndex": 0,
+      "startWeek": 1,
+      "endWeek": 2,
+      "description": "Crea el hábito de correr regularmente con intervalos de caminar y correr",
+      "focus": "Consistencia y disfrute por encima de la distancia y el ritmo",
+      "coachNote": "Usa solo RPE (esfuerzo percibido). Suave = puedes mantener una conversación. No busques velocidad, solo aparecer.",
+      "createdAt": "2026-01-01T00:00:00Z",
+      "updatedAt": "2026-01-01T00:00:00Z"
+    },
+    {
+      "id": "ph_building",
+      "sourceId": "app_assets",
+      "trainingPlanId": "tmpl_8w_beginner_run",
+      "name": "Desarrollo",
+      "phaseType": "base",
+      "orderIndex": 1,
+      "startWeek": 3,
+      "endWeek": 5,
+      "description": "Aumenta los intervalos de carrera y reduce las pausas de caminata",
+      "focus": "Alargar los segmentos de carrera continua",
+      "coachNote": "Deberías empezar a sentirte más fuerte. Las pausas se acortan, los segmentos de carrera se alargan.",
+      "createdAt": "2026-01-01T00:00:00Z",
+      "updatedAt": "2026-01-01T00:00:00Z"
+    },
+    {
+      "id": "ph_consolidation",
+      "sourceId": "app_assets",
+      "trainingPlanId": "tmpl_8w_beginner_run",
+      "name": "Consolidación",
+      "phaseType": "build",
+      "orderIndex": 2,
+      "startWeek": 6,
+      "endWeek": 8,
+      "description": "Corre de forma continua 25 → 30 → 35 minutos, rumbo a los 5K",
+      "focus": "Carrera continua sin pausas, completa tu carrera de graduación 5K",
+      "coachNote": "Progresión: semana 6 = 25 min, semana 7 = 30 min, semana 8 = 35 min de carrera continua (unos 5K). ¡Celebra cada hito: el fin de semana de la semana 8 es tu carrera de graduación 5K!",
+      "createdAt": "2026-01-01T00:00:00Z",
+      "updatedAt": "2026-01-01T00:00:00Z"
+    }
+  ],
+  "weekTemplates": [
+    {
+      "name": "Adaptación",
+      "applyToWeeks": [1, 2],
+      "days": {
+        "Mon": {"name": "Descanso", "sportType": "running", "isRestDay": true},
+        "Tue": {"name": "Camina 5min + Corre 3min × 4 series", "sportType": "running", "intensity": "easy", "coachNote": "RPE 3-4 al correr. Camina rápido entre series."},
+        "Wed": {"name": "Descanso", "sportType": "running", "isRestDay": true},
+        "Thu": {"name": "Camina 5min + Corre 3min × 4 series", "sportType": "running", "intensity": "easy", "coachNote": "Igual que el martes. La consistencia es el objetivo."},
+        "Fri": {"name": "Descanso", "sportType": "running", "isRestDay": true},
+        "Sat": {"name": "Camina 5min + Corre 5min × 3 series", "sportType": "running", "intensity": "easy", "coachNote": "¡Segmentos de carrera más largos el fin de semana!"},
+        "Sun": {"name": "Descanso", "sportType": "running", "isRestDay": true}
+      }
+    },
+    {
+      "name": "Desarrollo",
+      "applyToWeeks": [3, 4, 5],
+      "days": {
+        "Mon": {"name": "Descanso", "sportType": "running", "isRestDay": true},
+        "Tue": {"name": "Camina 3min + Corre 5min × 4 series", "sportType": "running", "intensity": "easy", "coachNote": "Carreras más largas, caminatas más cortas. RPE 4-5."},
+        "Wed": {"name": "Descanso", "sportType": "running", "isRestDay": true},
+        "Thu": {"name": "Camina 3min + Corre 8min × 3 series", "sportType": "running", "intensity": "easy", "coachNote": "Concéntrate en el ritmo de respiración durante los segmentos de 8 min."},
+        "Fri": {"name": "Descanso", "sportType": "running", "isRestDay": true},
+        "Sat": {"name": "Camina 3min + Corre 10min × 2 series", "sportType": "running", "intensity": "easy", "coachNote": "¡Cada vez más fuerte! 10 min sin parar."},
+        "Sun": {"name": "Descanso", "sportType": "running", "isRestDay": true}
+      }
+    },
+    {
+      "name": "Consolidación",
+      "applyToWeeks": [6, 7, 8],
+      "days": {
+        "Mon": {"name": "Descanso", "sportType": "running", "isRestDay": true},
+        "Tue": {"name": "Calentamiento 3min + Corre 25min", "sportType": "running", "intensity": "easy", "coachNote": "S6: 20min / S7: 25min / S8: 25min. Encuentra tu ritmo cómodo."},
+        "Wed": {"name": "Descanso", "sportType": "running", "isRestDay": true},
+        "Thu": {"name": "Calentamiento 3min + Corre 25min", "sportType": "running", "intensity": "easy", "coachNote": "S6: 20min / S7: 25min / S8: 30min. Constante y relajado."},
+        "Fri": {"name": "Descanso", "sportType": "running", "isRestDay": true},
+        "Sat": {"name": "Camina 2min + Corre 30min", "sportType": "running", "intensity": "endurance", "coachNote": "S6: 25min / S7: 30min / S8: 35min. ¡Corriendo sin parar — te lo has ganado!"},
+        "Sun": {"name": "Descanso", "sportType": "running", "isRestDay": true}
+      }
+    }
+  ],
+  "overrides": [
+    {"weekId": 8, "day": "Sat", "field": "name", "value": "Carrera de graduación 5K – trote continuo de 35min"},
+    {"weekId": 8, "day": "Sat", "field": "targetDistance", "value": "5km"}
+  ],
+  "workouts": {},
+  "trainingPlan": {
+    "name": "Iniciación al running 5K en 8 semanas",
+    "sportType": "running",
+    "description": "Una introducción suave al running usando intervalos de caminar y correr. De mezclas caminar-correr a carrera continua — objetivo final: correr 5K sin parar.",
+    "goal": "Crear el hábito de correr y poder correr 5K seguidos"
+  }
+}

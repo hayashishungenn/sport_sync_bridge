@@ -1,25 +1,41 @@
 from __future__ import annotations
 
 import argparse
+import json
+import os
 import tempfile
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 
+from .activity_analysis import build_ai_analysis_prompt, format_activity_report
+from .activity_library import LocalActivityLibrary
 from .config import AppConfig
 from .engine import SyncEngine
 from .fit_tools import normalize_fit_coordinates
 from .formats import SUPPORTED_FORMATS, convert_activity_file
+from .health import import_health_csv, summarize_health
+from .state import StateDB
+from .training import (
+    export_training_plan_ics,
+    export_workout_template,
+    get_training_template,
+    get_workout_template,
+    install_training_plan,
+    list_training_templates,
+    list_workout_templates,
+)
 from .utils import configure_logging, ensure_directory, pack_directory_to_base64_zip, parse_datetime
+from .wifi_transfer import serve_transfer
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Sync FIT activities from iGPSPORT / OneLap to Garmin Connect global and Strava."
+        description="Import, analyze, convert, and sync sports activity files."
     )
     subparsers = parser.add_subparsers(dest="command", required=False)
 
     sync_parser = subparsers.add_parser("sync", help="Run a sync pass")
-    sync_parser.add_argument("--source", action="append", choices=["igpsport", "onelap"], help="Repeatable source")
+    sync_parser.add_argument("--source", action="append", choices=["igpsport", "onelap", "local"], help="Repeatable source")
     sync_parser.add_argument("--target", action="append", choices=["garmin", "strava"], help="Repeatable target")
     sync_parser.add_argument("--from", dest="date_from", help="Start date, e.g. 2026-01-01")
     sync_parser.add_argument("--to", dest="date_to", help="End date, e.g. 2026-03-01")
@@ -46,11 +62,81 @@ def build_parser() -> argparse.ArgumentParser:
         help="Coordinate fallback for unmatched FIT device rules",
     )
 
+    library_parser = subparsers.add_parser("library", help="Import and manage local activity files")
+    library_actions = library_parser.add_subparsers(dest="library_action", required=True)
+    library_import = library_actions.add_parser("import", help="Import FIT, GPX, TCX, JSON, CSV, or ZIP files")
+    library_import.add_argument("paths", nargs="+", type=Path, help="Files or directories to import")
+    library_import.add_argument("--recursive", action="store_true", help="Scan directories recursively")
+    library_import.add_argument(
+        "--password-env",
+        default="ACTIVITY_ARCHIVE_PASSWORD",
+        help="Environment variable for encrypted ZIP passwords (default: ACTIVITY_ARCHIVE_PASSWORD)",
+    )
+    library_list = library_actions.add_parser("list", help="List imported activities")
+    library_list.add_argument("--from", dest="date_from", help="Filter start date")
+    library_list.add_argument("--to", dest="date_to", help="Filter end date")
+    library_list.add_argument("--sport", help="Filter sport type")
+    library_list.add_argument("--limit", type=int, help="Maximum number of rows")
+    library_list.add_argument("--json", action="store_true", help="Print JSON lines")
+    library_show = library_actions.add_parser("show", help="Show a local activity summary")
+    library_show.add_argument("activity_id", help="Activity fingerprint or its unique prefix")
+    library_actions.add_parser("stats", help="Summarize local activity volume by sport and week")
+    library_report = library_actions.add_parser("report", help="Export local activity summaries")
+    library_report.add_argument("--format", choices=["txt", "json", "csv", "html"], default="txt")
+    library_report.add_argument("--output", type=Path, help="Output path; omit to print to stdout")
+    library_route = library_actions.add_parser("route", help="Export one activity track")
+    library_route.add_argument("activity_id", help="Activity fingerprint or its unique prefix")
+    library_route.add_argument("--to", choices=sorted(SUPPORTED_FORMATS), required=True)
+    library_route.add_argument("--output", type=Path, required=True)
+
+    plans_parser = subparsers.add_parser("plans", help="Use bundled training plan templates")
+    plans_actions = plans_parser.add_subparsers(dest="plans_action", required=True)
+    plans_templates = plans_actions.add_parser("list", help="List plan templates")
+    plans_templates.add_argument("--locale", default="zh", choices=["en", "es", "fr", "it", "pt", "zh"])
+    plans_templates.add_argument("--sport", help="Filter by sport type")
+    plans_show = plans_actions.add_parser("show", help="Show a plan template")
+    plans_show.add_argument("template_id")
+    plans_show.add_argument("--locale", default="zh", choices=["en", "es", "fr", "it", "pt", "zh"])
+    plans_install = plans_actions.add_parser("install", help="Create a dated local training schedule")
+    plans_install.add_argument("template_id")
+    plans_install.add_argument("--locale", default="zh", choices=["en", "es", "fr", "it", "pt", "zh"])
+    plans_install.add_argument("--start-date", required=True, help="Plan week 1 Monday, YYYY-MM-DD")
+    plans_installed = plans_actions.add_parser("installed", help="List local plan schedules")
+    plans_export = plans_actions.add_parser("export", help="Export an installed plan as iCalendar")
+    plans_export.add_argument("plan_id")
+    plans_export.add_argument("--output", type=Path, required=True)
+
+    workouts_parser = subparsers.add_parser("workouts", help="Browse and export bundled FIT workout templates")
+    workouts_actions = workouts_parser.add_subparsers(dest="workouts_action", required=True)
+    workouts_list = workouts_actions.add_parser("list", help="List FIT workout templates")
+    workouts_list.add_argument("--sport", help="Filter by sport type")
+    workouts_show = workouts_actions.add_parser("show", help="Show a workout template")
+    workouts_show.add_argument("workout_id")
+    workouts_export = workouts_actions.add_parser("export", help="Copy a workout FIT template")
+    workouts_export.add_argument("workout_id")
+    workouts_export.add_argument("--output", type=Path, required=True)
+
+    health_parser = subparsers.add_parser("health", help="Import and summarize local health measurements")
+    health_actions = health_parser.add_subparsers(dest="health_action", required=True)
+    health_import = health_actions.add_parser("import", help="Import a UTF-8 health CSV")
+    health_import.add_argument("input", type=Path)
+    health_actions.add_parser("summary", help="Show latest health measurements")
+
+    ai_parser = subparsers.add_parser("ai-analysis", help="Analyze an imported activity with a configured chat API")
+    ai_parser.add_argument("activity_id", help="Activity fingerprint or its unique prefix")
+    ai_parser.add_argument("--question", help="Optional focus for the analysis")
+    ai_parser.add_argument("--prompt-only", action="store_true", help="Print the analysis prompt without sending data")
+
+    receive_parser = subparsers.add_parser("receive", help="Start a local Wi-Fi file import page")
+    receive_parser.add_argument("--host", default="127.0.0.1", help="Bind address; use 0.0.0.0 for LAN access")
+    receive_parser.add_argument("--port", type=int, default=8765)
+    receive_parser.add_argument("--max-upload-mb", type=int, default=64)
+
     status_parser = subparsers.add_parser("status", help="Show local SQLite status")
     status_parser.add_argument("--json", action="store_true", help="Reserved for future use")
 
     check_parser = subparsers.add_parser("check", help="Verify configured source/target logins")
-    check_parser.add_argument("--source", action="append", choices=["igpsport", "onelap"], help="Repeatable source")
+    check_parser.add_argument("--source", action="append", choices=["igpsport", "onelap", "local"], help="Repeatable source")
     check_parser.add_argument("--target", action="append", choices=["garmin", "strava"], help="Repeatable target")
 
     garmin_export_parser = subparsers.add_parser(
@@ -88,6 +174,8 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "convert":
         return _convert_file(args, config)
+    if args.command in {"library", "plans", "workouts", "health", "ai-analysis", "receive"}:
+        return _run_local_command(args, config)
 
     engine = SyncEngine(config)
     try:
@@ -171,7 +259,7 @@ def _parse_cli_datetime(value: str | None, inclusive_end: bool = False) -> datet
     if parsed is None:
         return None
     if inclusive_end and parsed.hour == 0 and parsed.minute == 0 and parsed.second == 0:
-        return parsed.replace(hour=23, minute=59, second=59)
+        parsed = parsed.replace(hour=23, minute=59, second=59, microsecond=999999)
     return parsed.astimezone(timezone.utc)
 
 
@@ -248,3 +336,290 @@ def _convert_file(args: argparse.Namespace, config: AppConfig) -> int:
     for loss in result.losses:
         print(f"loss={loss}")
     return 0
+
+
+def _run_local_command(args: argparse.Namespace, config: AppConfig) -> int:
+    if args.command == "library":
+        state = StateDB(config.db_path)
+        library = LocalActivityLibrary(state, config.data_dir)
+        try:
+            if args.library_action == "import":
+                password_value = os.getenv(args.password_env) if args.password_env else None
+                results = library.import_paths(
+                    args.paths,
+                    recursive=args.recursive,
+                    zip_password=password_value.encode("utf-8") if password_value else None,
+                )
+                for result in results:
+                    print(
+                        json.dumps(
+                            {
+                                "id": result.fingerprint[:12],
+                                "name": result.name,
+                                "sport_type": result.sport_type,
+                                "start_time": result.start_time,
+                                "format": result.file_format,
+                                "duplicate": result.duplicate,
+                                "source": result.source_label,
+                            },
+                            ensure_ascii=False,
+                        )
+                    )
+                print(f"imported={len(results)}")
+                return 0
+
+            if args.library_action == "list":
+                since = _parse_cli_datetime(args.date_from)
+                until = _parse_cli_datetime(args.date_to, inclusive_end=True)
+                rows = state.list_local_activities(
+                    since=since.isoformat() if since else None,
+                    until=until.isoformat() if until else None,
+                    sport_type=args.sport,
+                    limit=args.limit,
+                )
+                for row in rows:
+                    if args.json:
+                        print(
+                            json.dumps(
+                                {
+                                    "id": str(row["fingerprint"])[:12],
+                                    "name": row["name"],
+                                    "sport_type": row["sport_type"],
+                                    "start_time": row["start_time"],
+                                    "format": row["file_format"],
+                                    "distance_m": json.loads(row["summary_json"]).get("distance_m"),
+                                },
+                                ensure_ascii=False,
+                            )
+                        )
+                    else:
+                        summary = json.loads(row["summary_json"])
+                        distance = summary.get("distance_m")
+                        distance_text = f"{float(distance) / 1000:.2f} km" if distance is not None else "unknown distance"
+                        print(
+                            f"{str(row['fingerprint'])[:12]}  {row['start_time'] or 'unknown time'}  "
+                            f"{row['sport_type'] or 'unknown'}  {distance_text}  {row['name']}  [{row['file_format']}]"
+                        )
+                print(f"activities={len(rows)}")
+                return 0
+
+            if args.library_action == "show":
+                row = library.get_activity(args.activity_id)
+                payload = json.loads(row["summary_json"])
+                payload.update(
+                    {
+                        "id": str(row["fingerprint"]),
+                        "name": row["name"],
+                        "sport_type": row["sport_type"],
+                        "start_time": row["start_time"],
+                        "format": row["file_format"],
+                        "source": row["source_label"],
+                    }
+                )
+                print(json.dumps(payload, ensure_ascii=False, indent=2))
+                return 0
+
+            if args.library_action == "stats":
+                from .activity_analysis import summarize_rows
+
+                print(json.dumps(summarize_rows(state.list_local_activities()), ensure_ascii=False, indent=2))
+                return 0
+
+            if args.library_action == "report":
+                rows = state.list_local_activities()
+                report = format_activity_report(rows, args.format)
+                if args.output:
+                    output_path = args.output.expanduser().resolve()
+                    output_path.parent.mkdir(parents=True, exist_ok=True)
+                    output_path.write_text(report, encoding="utf-8", newline="")
+                    print(f"written={output_path}")
+                else:
+                    print(report, end="")
+                return 0
+
+            if args.library_action == "route":
+                row = library.get_activity(args.activity_id)
+                result = convert_activity_file(Path(row["file_path"]), args.output, args.to)
+                print(f"output={result.output_path}")
+                for loss in result.losses:
+                    print(f"loss={loss}")
+                return 0
+        finally:
+            state.close()
+
+    if args.command == "plans":
+        if args.plans_action == "list":
+            templates = list_training_templates(locale=args.locale, sport_type=args.sport)
+            for template in templates:
+                plan = template.get("trainingPlan") if isinstance(template.get("trainingPlan"), dict) else {}
+                print(
+                    json.dumps(
+                        {
+                            "id": template.get("id") or template.get("_file_id"),
+                            "name": plan.get("name") or template.get("name"),
+                            "sport_type": plan.get("sportType"),
+                            "locale": args.locale,
+                            "weeks": _template_week_count(template),
+                        },
+                        ensure_ascii=False,
+                    )
+                )
+            print(f"templates={len(templates)}")
+            return 0
+
+        if args.plans_action == "show":
+            template = get_training_template(args.template_id, locale=args.locale)
+            print(json.dumps(template, ensure_ascii=False, indent=2))
+            return 0
+
+        state = StateDB(config.db_path)
+        try:
+            if args.plans_action == "install":
+                try:
+                    start_date = date.fromisoformat(args.start_date)
+                except ValueError as exc:
+                    raise ValueError("--start-date must use YYYY-MM-DD") from exc
+                template = get_training_template(args.template_id, locale=args.locale)
+                plan_id, schedule = install_training_plan(
+                    state,
+                    template,
+                    locale=args.locale,
+                    start_date=start_date,
+                )
+                print(f"plan_id={plan_id}")
+                print(f"scheduled_days={len(schedule)}")
+                print(f"workout_days={sum(item['item_type'] == 'workout' for item in schedule)}")
+                return 0
+
+            if args.plans_action == "installed":
+                plans = state.list_training_plans()
+                for plan in plans:
+                    print(
+                        json.dumps(
+                            {
+                                "plan_id": plan["plan_id"],
+                                "template_id": plan["template_id"],
+                                "name": plan["name"],
+                                "sport_type": plan["sport_type"],
+                                "locale": plan["locale"],
+                                "start_date": plan["start_date"],
+                            },
+                            ensure_ascii=False,
+                        )
+                    )
+                print(f"plans={len(plans)}")
+                return 0
+
+            if args.plans_action == "export":
+                output_path = export_training_plan_ics(state, args.plan_id, args.output)
+                print(f"output={output_path}")
+                return 0
+        finally:
+            state.close()
+
+    if args.command == "workouts":
+        if args.workouts_action == "list":
+            templates = list_workout_templates(args.sport)
+            for workout in templates:
+                print(
+                    json.dumps(
+                        {
+                            "id": workout.template_id,
+                            "name": workout.name,
+                            "sport_type": workout.sport_type,
+                            "duration_s": workout.estimated_duration_s,
+                            "distance_m": workout.estimated_distance_m,
+                            "steps": len(workout.steps),
+                        },
+                        ensure_ascii=False,
+                    )
+                )
+            print(f"workouts={len(templates)}")
+            return 0
+        if args.workouts_action == "show":
+            workout = get_workout_template(args.workout_id)
+            print(
+                json.dumps(
+                    {
+                        "id": workout.template_id,
+                        "name": workout.name,
+                        "sport_type": workout.sport_type,
+                        "duration_s": workout.estimated_duration_s,
+                        "distance_m": workout.estimated_distance_m,
+                        "steps": workout.steps,
+                    },
+                    ensure_ascii=False,
+                    indent=2,
+                )
+            )
+            return 0
+        output_path = export_workout_template(args.workout_id, args.output)
+        print(f"output={output_path}")
+        return 0
+
+    if args.command == "health":
+        state = StateDB(config.db_path)
+        try:
+            if args.health_action == "import":
+                imported = import_health_csv(state, args.input)
+                print(f"observations={imported}")
+            else:
+                print(json.dumps(summarize_health(state), ensure_ascii=False, indent=2))
+            return 0
+        finally:
+            state.close()
+
+    if args.command == "ai-analysis":
+        state = StateDB(config.db_path)
+        try:
+            row = state.get_local_activity(args.activity_id)
+            if row is None:
+                raise ValueError(f"Local activity was not found: {args.activity_id}")
+            summary = json.loads(row["summary_json"])
+            summary.update({"name": row["name"], "sport_type": row["sport_type"], "start_time": row["start_time"]})
+            prompt = build_ai_analysis_prompt(
+                summary,
+                state.list_local_activities(),
+                args.question,
+                summarize_health(state),
+            )
+            if args.prompt_only:
+                print(prompt)
+                return 0
+            if not config.ai_api_base_url or not config.ai_model:
+                raise ValueError("Set AI_API_BASE_URL and AI_MODEL before requesting AI analysis")
+            from .activity_analysis import request_ai_analysis
+
+            result = request_ai_analysis(
+                base_url=config.ai_api_base_url,
+                model=config.ai_model,
+                api_key=config.ai_api_key,
+                prompt=prompt,
+            )
+            print(result)
+            return 0
+        finally:
+            state.close()
+
+    if args.command == "receive":
+        if args.max_upload_mb <= 0 or not 0 <= args.port <= 65535:
+            raise ValueError("--max-upload-mb must be positive and --port must be between 0 and 65535")
+        state = StateDB(config.db_path)
+        try:
+            library = LocalActivityLibrary(state, config.data_dir)
+            serve_transfer(args.host, args.port, library, args.max_upload_mb * 1024 * 1024)
+            return 0
+        finally:
+            state.close()
+
+    raise ValueError(f"Unsupported local command: {args.command}")
+
+
+def _template_week_count(template: dict[str, object]) -> int:
+    weeks: set[int] = set()
+    week_templates = template.get("weekTemplates")
+    if isinstance(week_templates, list):
+        for week in week_templates:
+            if isinstance(week, dict) and isinstance(week.get("applyToWeeks"), list):
+                weeks.update(value for value in week["applyToWeeks"] if isinstance(value, int))
+    return max(weeks, default=0)

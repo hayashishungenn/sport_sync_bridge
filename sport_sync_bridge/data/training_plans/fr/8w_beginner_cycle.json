@@ -1,0 +1,102 @@
+{
+  "type": "structuredPlan",
+  "id": "tmpl_8w_beginner_cycle",
+  "sourceId": "app_assets",
+  "name": "8 semaines de cyclisme débutant",
+  "phases": [
+    {
+      "id": "ph_adaptation",
+      "sourceId": "app_assets",
+      "trainingPlanId": "tmpl_8w_beginner_cycle",
+      "name": "Adaptation",
+      "phaseType": "base",
+      "orderIndex": 0,
+      "startWeek": 1,
+      "endWeek": 2,
+      "description": "Familiarisez-vous avec le vélo lors de sorties courtes et faciles",
+      "focus": "Maîtrise du vélo et confort en selle",
+      "coachNote": "RPE 2-3 : pédalage très léger. Concentrez-vous sur un pédalage fluide et habituez-vous au temps en selle. Intérieur ou extérieur, les deux conviennent.",
+      "createdAt": "2026-01-01T00:00:00Z",
+      "updatedAt": "2026-01-01T00:00:00Z"
+    },
+    {
+      "id": "ph_building",
+      "sourceId": "app_assets",
+      "trainingPlanId": "tmpl_8w_beginner_cycle",
+      "name": "Développement",
+      "phaseType": "base",
+      "orderIndex": 1,
+      "startWeek": 3,
+      "endWeek": 5,
+      "description": "Allongez la durée des sorties et introduisez de légères variations d'effort",
+      "focus": "Construction de la base aérobie",
+      "coachNote": "RPE 3-4 : la respiration s'approfondit mais vous pouvez encore parler. Essayez de légères variations — une petite côte ou quelques accélérations.",
+      "createdAt": "2026-01-01T00:00:00Z",
+      "updatedAt": "2026-01-01T00:00:00Z"
+    },
+    {
+      "id": "ph_consolidation",
+      "sourceId": "app_assets",
+      "trainingPlanId": "tmpl_8w_beginner_cycle",
+      "name": "Consolidation",
+      "phaseType": "build",
+      "orderIndex": 2,
+      "startWeek": 6,
+      "endWeek": 8,
+      "description": "Roulez plus loin et plus fort avec confiance",
+      "focus": "Endurance et plaisir",
+      "coachNote": "À la semaine 8, visez 45-60 min de pédalage continu. Vous êtes prêt pour des sorties d'exploration le week-end !",
+      "createdAt": "2026-01-01T00:00:00Z",
+      "updatedAt": "2026-01-01T00:00:00Z"
+    }
+  ],
+  "weekTemplates": [
+    {
+      "name": "Adaptation",
+      "applyToWeeks": [1, 2],
+      "days": {
+        "Mon": {"name": "Repos", "sportType": "cycling", "isRestDay": true},
+        "Tue": {"name": "Pédalage léger 20min RPE 2-3", "sportType": "cycling", "intensity": "easy", "coachNote": "Parcours plat. Concentrez-vous sur des coups de pédale fluides."},
+        "Wed": {"name": "Repos", "sportType": "cycling", "isRestDay": true},
+        "Thu": {"name": "Pédalage léger 25min RPE 2-3", "sportType": "cycling", "intensity": "easy", "coachNote": "Gardez les jambes légères. Pas de force."},
+        "Fri": {"name": "Repos", "sportType": "cycling", "isRestDay": true},
+        "Sat": {"name": "Sortie facile 30min RPE 2-3", "sportType": "cycling", "intensity": "easy", "coachNote": "Profitez de la sortie du week-end. Explorez un nouvel itinéraire !"},
+        "Sun": {"name": "Repos", "sportType": "cycling", "isRestDay": true}
+      }
+    },
+    {
+      "name": "Développement",
+      "applyToWeeks": [3, 4, 5],
+      "days": {
+        "Mon": {"name": "Repos", "sportType": "cycling", "isRestDay": true},
+        "Tue": {"name": "Endurance 30min RPE 3-4", "sportType": "cycling", "intensity": "endurance", "coachNote": "Ajoutez une légère côte ou un tronçon vent de face. Restez gérable."},
+        "Wed": {"name": "Repos", "sportType": "cycling", "isRestDay": true},
+        "Thu": {"name": "Pédalage léger 25min RPE 2-3", "sportType": "cycling", "intensity": "easy", "coachNote": "Jour de récupération. Effort très léger."},
+        "Fri": {"name": "Repos", "sportType": "cycling", "isRestDay": true},
+        "Sat": {"name": "Endurance 40min RPE 3-4", "sportType": "cycling", "intensity": "endurance", "coachNote": "Sortie longue du week-end. Prenez de l'eau et profitez !"},
+        "Sun": {"name": "Repos", "sportType": "cycling", "isRestDay": true}
+      }
+    },
+    {
+      "name": "Consolidation",
+      "applyToWeeks": [6, 7, 8],
+      "days": {
+        "Mon": {"name": "Repos", "sportType": "cycling", "isRestDay": true},
+        "Tue": {"name": "Endurance 35min RPE 4", "sportType": "cycling", "intensity": "endurance", "coachNote": "Effort constant tout au long. Trouvez votre rythme."},
+        "Wed": {"name": "Repos", "sportType": "cycling", "isRestDay": true},
+        "Thu": {"name": "Pédalage léger 30min RPE 2-3", "sportType": "cycling", "intensity": "easy", "coachNote": "Récupération active. Jambes légères."},
+        "Fri": {"name": "Repos", "sportType": "cycling", "isRestDay": true},
+        "Sat": {"name": "Sortie longue 50min RPE 3-4", "sportType": "cycling", "intensity": "endurance", "coachNote": "Vous êtes un cycliste maintenant ! Profitez du voyage."},
+        "Sun": {"name": "Repos", "sportType": "cycling", "isRestDay": true}
+      }
+    }
+  ],
+  "overrides": [],
+  "workouts": {},
+  "trainingPlan": {
+    "name": "Cyclisme débutant 8 semaines",
+    "sportType": "cycling",
+    "description": "Une introduction douce au cyclisme, progressant de sorties de 20 minutes à 50 minutes de pédalage continu.",
+    "goal": "Développer l'endurance cycliste pour rouler 45-60 minutes confortablement"
+  }
+}

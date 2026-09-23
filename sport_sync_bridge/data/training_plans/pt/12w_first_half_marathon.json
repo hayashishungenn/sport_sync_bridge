@@ -1,0 +1,166 @@
+{
+  "type": "structuredPlan",
+  "id": "tmpl_12w_first_half_marathon",
+  "sourceId": "app_assets",
+  "name": "12-Week First Half Marathon",
+  "phases": [
+    {
+      "id": "ph_base",
+      "sourceId": "app_assets",
+      "trainingPlanId": "tmpl_12w_first_half_marathon",
+      "name": "Base",
+      "phaseType": "base",
+      "orderIndex": 0,
+      "startWeek": 1,
+      "endWeek": 4,
+      "description": "Construir base aeróbica com corridas leves e extensão gradual das corridas longas",
+      "focus": "Resistência aeróbica e consistência",
+      "coachNote": "Todas as corridas leves em ritmo de conversa. A corrida longa é a sessão mais importante de cada semana — não a pule.",
+      "createdAt": "2026-01-01T00:00:00Z",
+      "updatedAt": "2026-01-01T00:00:00Z"
+    },
+    {
+      "id": "ph_build",
+      "sourceId": "app_assets",
+      "trainingPlanId": "tmpl_12w_first_half_marathon",
+      "name": "Construção",
+      "phaseType": "build",
+      "orderIndex": 1,
+      "startWeek": 5,
+      "endWeek": 8,
+      "description": "Introduzir intervalos e trabalho de ritmo, estender a distância da corrida longa",
+      "focus": "Resistência de velocidade e desenvolvimento de limiar",
+      "coachNote": "Os intervalos devem ser desafiadores mas controlados. Corridas de ritmo em um ritmo confortavelmente difícil — você pode dizer algumas palavras mas não uma frase completa.",
+      "createdAt": "2026-01-01T00:00:00Z",
+      "updatedAt": "2026-01-01T00:00:00Z"
+    },
+    {
+      "id": "ph_peak",
+      "sourceId": "app_assets",
+      "trainingPlanId": "tmpl_12w_first_half_marathon",
+      "name": "Pico",
+      "phaseType": "peak",
+      "orderIndex": 2,
+      "startWeek": 9,
+      "endWeek": 10,
+      "description": "Treino específico para a prova com trabalho de ritmo de meia maratona e as corridas mais longas",
+      "focus": "Adaptação ao ritmo de prova e confiança na distância da meia maratona",
+      "coachNote": "Intervalos mais longos e segmentos no ritmo de prova. Confie no seu treino — você está quase lá.",
+      "createdAt": "2026-01-01T00:00:00Z",
+      "updatedAt": "2026-01-01T00:00:00Z"
+    },
+    {
+      "id": "ph_taper",
+      "sourceId": "app_assets",
+      "trainingPlanId": "tmpl_12w_first_half_marathon",
+      "name": "Redução",
+      "phaseType": "taper",
+      "orderIndex": 3,
+      "startWeek": 11,
+      "endWeek": 12,
+      "description": "Reduzir volume mantendo a intensidade e o frescor",
+      "focus": "Recuperação e preparação para a prova",
+      "coachNote": "O volume cai mas a intensidade permanece. Você não está construindo condicionamento agora, está revelando-o. Fique de repouso no dia anterior à prova.",
+      "createdAt": "2026-01-01T00:00:00Z",
+      "updatedAt": "2026-01-01T00:00:00Z"
+    }
+  ],
+  "weekTemplates": [
+    {
+      "name": "Base",
+      "applyToWeeks": [1, 2, 3, 4],
+      "days": {
+        "Mon": {"name": "Descanso", "sportType": "running", "isRestDay": true},
+        "Tue": {"name": "Corrida Leve", "sportType": "running", "intensity": "easy", "targetDuration": "30min", "targetHR": "zone2", "targetTSS": 25, "description": "Corrida leve em ritmo de conversa em terreno plano", "coachNote": "Mantenha a FC na zona2. Isto é recuperação ativa."},
+        "Wed": {"name": "Descanso", "sportType": "running", "isRestDay": true},
+        "Thu": {"name": "Corrida Leve", "sportType": "running", "intensity": "easy", "targetDuration": "35min", "targetHR": "zone2", "targetTSS": 30, "description": "Corrida leve com progressões nos últimos 5 minutos", "coachNote": "Adicione 4-5 progressões suaves (20-30 seg cada) no final. Foco em movimentos suaves."},
+        "Fri": {"name": "Descanso", "sportType": "running", "isRestDay": true},
+        "Sat": {"name": "Corrida Longa LSD", "sportType": "running", "intensity": "endurance", "targetDistance": "8km", "targetDuration": "55min", "targetHR": "zone2", "targetTSS": 55, "description": "Corrida longa e lenta em ritmo leve", "coachNote": "Comece leve e mantenha-se leve durante todo o percurso. Caminhe brevemente se necessário — não há vergonha em pausas para caminhar nas suas primeiras corridas longas."},
+        "Sun": {"name": "Descanso", "sportType": "running", "isRestDay": true}
+      }
+    },
+    {
+      "name": "Construção",
+      "applyToWeeks": [5, 6, 7, 8],
+      "days": {
+        "Mon": {"name": "Descanso", "sportType": "running", "isRestDay": true},
+        "Tue": {"name": "Intervalos de 400m", "sportType": "running", "intensity": "interval", "targetDuration": "50min", "targetDistance": "8km", "targetPace": "5:00/km", "targetHR": "zone4", "targetTSS": 65, "description": "Aquecimento 2km leve + 6x400m a 5:00/km (200m trote recuperação) + Desaquecimento 2km leve", "coachNote": "Parcelas consistentes são mais importantes que rápidas. Troque nas recuperações — não caminhe."},
+        "Wed": {"name": "Descanso", "sportType": "running", "isRestDay": true},
+        "Thu": {"name": "Corrida de Ritmo", "sportType": "running", "intensity": "threshold", "targetDuration": "45min", "targetDistance": "7km", "targetPace": "5:30/km", "targetHR": "zone3", "targetTSS": 55, "description": "Aquecimento 1,5km leve + 20min de ritmo a 5:30/km + Desaquecimento 1,5km leve", "coachNote": "Ritmo de tempo = confortavelmente difícil. Você pode dizer algumas palavras mas não manter uma conversa."},
+        "Fri": {"name": "Descanso", "sportType": "running", "isRestDay": true},
+        "Sat": {"name": "Corrida Longa LSD", "sportType": "running", "intensity": "endurance", "targetDistance": "12km", "targetDuration": "1h20min", "targetHR": "zone2", "targetTSS": 85, "description": "Corrida longa e lenta com os últimos 2km no esforço de meia maratona", "coachNote": "Pratique a nutrição do dia da prova durante a corrida. Experimente um gel ou bebida esportiva para ver como seu estômago reage."},
+        "Sun": {"name": "Descanso", "sportType": "running", "isRestDay": true}
+      }
+    },
+    {
+      "name": "Pico",
+      "applyToWeeks": [9, 10],
+      "days": {
+        "Mon": {"name": "Descanso", "sportType": "running", "isRestDay": true},
+        "Tue": {"name": "Intervalos de 800m", "sportType": "running", "intensity": "interval", "targetDuration": "55min", "targetDistance": "9km", "targetPace": "5:10/km", "targetHR": "zone4", "targetTSS": 70, "description": "Aquecimento 2km leve + 5x800m a 5:10/km (400m trote recuperação) + Desaquecimento 2km leve", "coachNote": "Estes simulam a fadiga que você sentirá no final da prova. Mantenha a forma quando estiver cansado."},
+        "Wed": {"name": "Descanso", "sportType": "running", "isRestDay": true},
+        "Thu": {"name": "Corrida no Ritmo de Meia Maratona", "sportType": "running", "intensity": "threshold", "targetDuration": "55min", "targetDistance": "9km", "targetPace": "6:00/km", "targetHR": "zone3", "targetTSS": 65, "description": "Aquecimento 1,5km leve + 6km a ritmo de MM (6:00/km) + Desaquecimento 1,5km leve", "coachNote": "Fixe no seu ritmo de prova objetivo. Torne-o automático — este é o seu ritmo para o dia da prova."},
+        "Fri": {"name": "Descanso", "sportType": "running", "isRestDay": true},
+        "Sat": {"name": "Corrida Longa LSD", "sportType": "running", "intensity": "endurance", "targetDistance": "17km", "targetDuration": "1h55min", "targetHR": "zone2", "targetTSS": 125, "description": "Corrida longa com os últimos 3km no ritmo de meia maratona", "coachNote": "Pratique tudo: refeição pré-corrida, equipamento, hidratação, ritmo. Este é o seu ensaio geral."},
+        "Sun": {"name": "Descanso", "sportType": "running", "isRestDay": true}
+      }
+    },
+    {
+      "name": "Redução",
+      "applyToWeeks": [11, 12],
+      "days": {
+        "Mon": {"name": "Descanso", "sportType": "running", "isRestDay": true},
+        "Tue": {"name": "Corrida Leve + Progressões", "sportType": "running", "intensity": "easy", "targetDuration": "35min", "targetDistance": "5km", "targetHR": "zone2", "targetTSS": 25, "description": "Corrida leve com 4x20seg de progressões no ritmo de prova", "coachNote": "Mantenha leve. As progressões mantêm o reflexo neuromuscular sem fadiga."},
+        "Wed": {"name": "Descanso", "sportType": "running", "isRestDay": true},
+        "Thu": {"name": "Ritmo Curto", "sportType": "running", "intensity": "threshold", "targetDuration": "40min", "targetDistance": "6km", "targetPace": "5:30/km", "targetHR": "zone3", "targetTSS": 40, "description": "Aquecimento 1,5km leve + 15min de ritmo + Desaquecimento 1,5km leve", "coachNote": "Ritmo mais curto para manter o motor aquecido sem esgotar o tanque."},
+        "Fri": {"name": "Descanso", "sportType": "running", "isRestDay": true},
+        "Sat": {"name": "Corrida Longa (Reduzida) ou Prova", "sportType": "running", "intensity": "endurance", "targetDistance": "12km", "targetDuration": "1h20min", "targetHR": "zone2", "targetTSS": 75, "description": "Semana 11: corrida longa leve 12km. Semana 12: DIA DA PROVA — 21,1km. Confie no seu treino!", "coachNote": "Semana 11: uma última corrida longa moderada. Semana 12: é agora! Comece conservadoramente, negative split se conseguir."},
+        "Sun": {"name": "Descanso", "sportType": "running", "isRestDay": true}
+      }
+    }
+  ],
+  "overrides": [
+    {"weekId": 1, "day": "Sat", "field": "targetDistance", "value": "8km"},
+    {"weekId": 2, "day": "Sat", "field": "targetDistance", "value": "10km"},
+    {"weekId": 3, "day": "Sat", "field": "targetDistance", "value": "11km"},
+    {"weekId": 4, "day": "Sat", "field": "targetDistance", "value": "12km"},
+    {"weekId": 5, "day": "Sat", "field": "targetDistance", "value": "12km"},
+    {"weekId": 6, "day": "Sat", "field": "targetDistance", "value": "14km"},
+    {"weekId": 7, "day": "Sat", "field": "targetDistance", "value": "15km"},
+    {"weekId": 8, "day": "Sat", "field": "targetDistance", "value": "16km"},
+    {"weekId": 5, "day": "Sat", "field": "targetDuration", "value": "1h20min"},
+    {"weekId": 6, "day": "Sat", "field": "targetDuration", "value": "1h30min"},
+    {"weekId": 7, "day": "Sat", "field": "targetDuration", "value": "1h40min"},
+    {"weekId": 8, "day": "Sat", "field": "targetDuration", "value": "1h45min"},
+    {"weekId": 5, "day": "Tue", "field": "targetDistance", "value": "8km"},
+    {"weekId": 6, "day": "Tue", "field": "targetDistance", "value": "9km"},
+    {"weekId": 7, "day": "Tue", "field": "targetDistance", "value": "9km"},
+    {"weekId": 8, "day": "Tue", "field": "targetDistance", "value": "10km"},
+    {"weekId": 5, "day": "Thu", "field": "targetDistance", "value": "7km"},
+    {"weekId": 6, "day": "Thu", "field": "targetDistance", "value": "8km"},
+    {"weekId": 7, "day": "Thu", "field": "targetDistance", "value": "8km"},
+    {"weekId": 8, "day": "Thu", "field": "targetDistance", "value": "9km"},
+    {"weekId": 9, "day": "Sat", "field": "targetDistance", "value": "17km"},
+    {"weekId": 10, "day": "Sat", "field": "targetDistance", "value": "18km"},
+    {"weekId": 9, "day": "Sat", "field": "targetDuration", "value": "1h55min"},
+    {"weekId": 10, "day": "Sat", "field": "targetDuration", "value": "2h00min"},
+    {"weekId": 11, "day": "Sat", "field": "targetDistance", "value": "12km"},
+    {"weekId": 12, "day": "Sat", "field": "targetDistance", "value": "21.1km"},
+    {"weekId": 12, "day": "Sat", "field": "name", "value": "DIA DA PROVA — Meia Maratona"},
+    {"weekId": 12, "day": "Sat", "field": "targetDuration", "value": "2h06min"}
+  ],
+  "workouts": {},
+  "trainingPlan": {
+    "name": "12-Week First Half Marathon",
+    "sportType": "running",
+    "description": "Um plano de 12 semanas para corredores que conseguem correr confortavelmente 5-10km e querem completar a sua primeira meia maratona (21,1km). Constrói de 8km a 18km em corridas longas com trabalho de intervalos, ritmo e ritmo de prova.",
+    "goal": "Completar uma meia maratona (21,1km) com força e sem lesões",
+    "targetMetrics": {
+      "MP": "6:00",
+      "easyPace": "6:30",
+      "thresholdPace": "5:30",
+      "5K_Pace": "5:00",
+      "10K_Pace": "5:20"
+    }
+  }
+}

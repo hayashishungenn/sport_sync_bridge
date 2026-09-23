@@ -1,0 +1,102 @@
+{
+  "type": "structuredPlan",
+  "id": "tmpl_8w_beginner_swim",
+  "sourceId": "app_assets",
+  "name": "8 semanas de iniciación a la natación",
+  "phases": [
+    {
+      "id": "ph_adaptation",
+      "sourceId": "app_assets",
+      "trainingPlanId": "tmpl_8w_beginner_swim",
+      "name": "Adaptación al agua",
+      "phaseType": "base",
+      "orderIndex": 0,
+      "startWeek": 1,
+      "endWeek": 2,
+      "description": "Siéntete cómodo en el agua con intervalos cortos de nado y descanso",
+      "focus": "Control de la respiración y posición corporal",
+      "coachNote": "Concéntrate en exhalar bajo el agua y girar para respirar. ¡No aguantes la respiración! Descansa lo necesario entre series.",
+      "createdAt": "2026-01-01T00:00:00Z",
+      "updatedAt": "2026-01-01T00:00:00Z"
+    },
+    {
+      "id": "ph_building",
+      "sourceId": "app_assets",
+      "trainingPlanId": "tmpl_8w_beginner_swim",
+      "name": "Desarrollo de resistencia",
+      "phaseType": "base",
+      "orderIndex": 1,
+      "startWeek": 3,
+      "endWeek": 5,
+      "description": "Alarga los intervalos de nado y reduce el descanso",
+      "focus": "Desarrollo de nado continuo",
+      "coachNote": "Intenta reducir el descanso entre series. Prioriza brazadas largas y suaves sobre la velocidad.",
+      "createdAt": "2026-01-01T00:00:00Z",
+      "updatedAt": "2026-01-01T00:00:00Z"
+    },
+    {
+      "id": "ph_consolidation",
+      "sourceId": "app_assets",
+      "trainingPlanId": "tmpl_8w_beginner_swim",
+      "name": "Nado seguro",
+      "phaseType": "build",
+      "orderIndex": 2,
+      "startWeek": 6,
+      "endWeek": 8,
+      "description": "Nada distancias más largas sin parar",
+      "focus": "200 metros de nado continuo",
+      "coachNote": "En la semana 8, apunta a 200 m sin parar. ¡Es un hito importante para cualquier nadador principiante!",
+      "createdAt": "2026-01-01T00:00:00Z",
+      "updatedAt": "2026-01-01T00:00:00Z"
+    }
+  ],
+  "weekTemplates": [
+    {
+      "name": "Adaptación al agua",
+      "applyToWeeks": [1, 2],
+      "days": {
+        "Mon": {"name": "Descanso", "sportType": "swimming", "isRestDay": true},
+        "Tue": {"name": "Nada 25m + Descansa 30s × 8 series", "sportType": "swimming", "intensity": "easy", "coachNote": "Total 200m. Concéntrate en exhalar bajo el agua. Descansa lo necesario."},
+        "Wed": {"name": "Descanso", "sportType": "swimming", "isRestDay": true},
+        "Thu": {"name": "Tabla 25m + Nado 25m × 6 series", "sportType": "swimming", "intensity": "easy", "coachNote": "Alterna tabla y nado. Fortalece las piernas."},
+        "Fri": {"name": "Descanso", "sportType": "swimming", "isRestDay": true},
+        "Sat": {"name": "Nada 25m + Descansa 20s × 10 series", "sportType": "swimming", "intensity": "easy", "coachNote": "Total 250m. Intenta reducir el descanso entre series."},
+        "Sun": {"name": "Descanso", "sportType": "swimming", "isRestDay": true}
+      }
+    },
+    {
+      "name": "Desarrollo de resistencia",
+      "applyToWeeks": [3, 4, 5],
+      "days": {
+        "Mon": {"name": "Descanso", "sportType": "swimming", "isRestDay": true},
+        "Tue": {"name": "Nada 50m + Descansa 30s × 6 series", "sportType": "swimming", "intensity": "easy", "coachNote": "Total 300m. Prioriza la eficiencia de brazada: larga y suave."},
+        "Wed": {"name": "Descanso", "sportType": "swimming", "isRestDay": true},
+        "Thu": {"name": "Nada 25m + Descansa 15s × 10 series", "sportType": "swimming", "intensity": "easy", "coachNote": "Descansos cortos. ¡La forma física mejora rápido!"},
+        "Fri": {"name": "Descanso", "sportType": "swimming", "isRestDay": true},
+        "Sat": {"name": "Nada 100m + Descansa 30s × 4 series", "sportType": "swimming", "intensity": "endurance", "coachNote": "Total 400m. ¡Series de 100m continuos — gran progreso!"},
+        "Sun": {"name": "Descanso", "sportType": "swimming", "isRestDay": true}
+      }
+    },
+    {
+      "name": "Consolidación",
+      "applyToWeeks": [6, 7, 8],
+      "days": {
+        "Mon": {"name": "Descanso", "sportType": "swimming", "isRestDay": true},
+        "Tue": {"name": "Nada 100m + Descansa 20s × 5 series", "sportType": "swimming", "intensity": "endurance", "coachNote": "Total 500m. Ritmo constante, brazadas suaves."},
+        "Wed": {"name": "Descanso", "sportType": "swimming", "isRestDay": true},
+        "Thu": {"name": "Nada 50m + Patada 25m × 6 series", "sportType": "swimming", "intensity": "easy", "coachNote": "Combina nado y patada. Trabajo técnico."},
+        "Fri": {"name": "Descanso", "sportType": "swimming", "isRestDay": true},
+        "Sat": {"name": "Nado continuo 200m", "sportType": "swimming", "intensity": "endurance", "coachNote": "¡200m seguidos! Lo has conseguido. Respira rítmicamente."},
+        "Sun": {"name": "Descanso", "sportType": "swimming", "isRestDay": true}
+      }
+    }
+  ],
+  "overrides": [],
+  "workouts": {},
+  "trainingPlan": {
+    "name": "Iniciación a la natación 8 semanas",
+    "sportType": "swimming",
+    "description": "Un plan de natación para principiantes que usa entrenamiento por intervalos para progresar de series de 25m a 200m de nado continuo.",
+    "goal": "Ganar confianza en el agua y nadar 200 metros sin parar"
+  }
+}

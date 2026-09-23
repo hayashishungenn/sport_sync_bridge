@@ -46,6 +46,9 @@ class AppConfig:
     strava_access_token: str | None
     strava_expires_at: str | None
     strava_scope: str | None
+    ai_api_base_url: str | None
+    ai_api_key: str | None
+    ai_model: str | None
 
     @classmethod
     def load(cls, root_dir: Path) -> "AppConfig":
@@ -96,4 +99,7 @@ class AppConfig:
             strava_access_token=env_or_none("STRAVA_ACCESS_TOKEN"),
             strava_expires_at=env_or_none("STRAVA_EXPIRES_AT"),
             strava_scope=env_or_none("STRAVA_SCOPE"),
+            ai_api_base_url=env_or_none("AI_API_BASE_URL"),
+            ai_api_key=env_or_none("AI_API_KEY"),
+            ai_model=env_or_none("AI_MODEL"),
         )
