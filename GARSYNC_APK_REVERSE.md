@@ -6,9 +6,9 @@ SHA-256：EEC71C4EA16B8E6F4458268DE65B7536E4F43C1AC55B1BF016F3255B0CA59B9D<br>
 
 ## 结论
 
-已完成 APK 容器、Android Manifest、资源、DEX/smali、Flutter AOT 元数据与可见字符串的整包静态盘点。已恢复应用的主要模块边界、35 个云端数据源适配器、FIT/GPX/TCX 转换结构、坐标修正入口、导入路径、主要数据表和应用功能范围。
+APK 容器、Android Manifest、资源、DEX/smali、Flutter AOT 元数据、字符串与主要 assets 已做整包静态盘点。AOTopsy 对 arm64 Flutter AOT 建立了函数、类、调用边和调用图索引；索引记录 61,983 个函数和 7,686 个类，并生成 16,514 个汇编文件、3,326 个控制流图文件。另对 21 个转换、解析、坐标、导入和同步关键方法生成了定向伪代码。
 
-这不等于恢复了原始源代码，也不能称为 100% 完全逆向。主要业务代码位于 Flutter Dart AOT 快照中。当前提取到 Dart 3.10.8 版本、源文件路径、类名/方法名和常量字符串，但 Blutter 需要编译对应 Dart VM；自动拉取 SDK 源码长时间低速后已停止，所以没有生成 AOT 汇编和对象池反汇编。没有在模拟器或真机上运行 APK，也没有登录账号、抓取运行期流量或验证各个平台接口。
+这属于较完整的静态逆向，不能称为源码级的“全部逆向”。Flutter 业务代码以 Dart AOT 存在；工具输出保留了不少类名和方法名，但局部变量、字段和动态调用仍有无法解析之处。21 个关键方法有函数级输出，尚未逐个解释全部 61,983 个函数；伪代码也不能直接替代原始 Dart 源码。没有在模拟器或真机运行 APK，没有登录平台账号、抓取运行期网络流量，也没有验证服务器交互和所有分支。
 
 ## APK 与工具结果
 
@@ -21,10 +21,12 @@ SHA-256：EEC71C4EA16B8E6F4458268DE65B7536E4F43C1AC55B1BF016F3255B0CA59B9D<br>
 | DEX | 一个 classes.dex，4,785,424 字节 |
 | Flutter AOT | arm64-v8a/libapp.so，24,249,264 字节 |
 | Flutter 引擎 | arm64-v8a/libflutter.so，11,107,920 字节 |
-| Dart | 3.10.8，快照标识 1ce86630892e2dca9a8543fdb8ed8e22，arm64 Android product AOT |
+| Dart 版本 | AOTopsy 的快照元数据显示 3.10.7；此前 Blutter 元数据脚本识别为 3.10.8，二者指向的快照标识相同（1ce86630892e2dca9a8543fdb8ed8e22），补丁版本判断存在冲突，未能消解 |
 | Apktool | 3.0.3 解包成功，生成 Manifest、资源、原生库和 smali |
 | JADX | 生成约 4,472 个 Java 文件；报告 31 个反编译错误，进程以错误状态结束。Android 资源和 Manifest 可读 |
-| Blutter | 没有完成对应运行时构建，未生成函数级 AOT 反汇编 |
+| AOTopsy | v1.6.0 Windows 发布版，校验官方 SHA-256 后执行；建立 61,983 个函数、7,686 个类和调用图索引 |
+| 定向伪代码 | 对 21 个关键方法生成输出，覆盖六种格式转换、FIT 解析/生成、坐标修正、导入、重复活动检查和同步 |
+| Blutter | 对应运行时构建未完成；它没有生成本报告依赖的反汇编结果，后续改用 AOTopsy 直接解析 |
 
 APK 中有 arm64-v8a、armeabi-v7a、x86_64 三种 ABI 目录；Flutter 主体 AOT 库位于 arm64-v8a。原始 APK 未修改。APK 文件 SHA-256 在分析开始和收尾时一致。
 
@@ -59,11 +61,32 @@ Blackbird、Codoon、Concept2、COROS、Cycling Analytics、Fitbit、Garmin、Gi
 
 ## 运动文件模型、格式转换与坐标
 
-FIT/GPX/TCX 的实现位于共享格式模块，不是三个孤立的文件重命名器。AOT 路径明确列出六个有向转换器：FIT→GPX、FIT→TCX、GPX→FIT、GPX→TCX、TCX→FIT、TCX→GPX；另有通用 format_converter、GPX/TCX reader/writer、FIT merger，以及活动格式的 parser/generator。
+AOT 中确认了 FIT、GPX、TCX 六种有向转换器，以及统一活动模型、FIT parser/generator、GPX/TCX reader/writer 和 FIT merger。统一模型包含 Activity、ActivityDetail、TrackPoint、TimeSeriesPoint、LapData、设备信息、天气、动态指标和跑步/骑行/游泳指标等类型。静态结构支持轨迹、时间、海拔、速度、距离、心率、踏频、圈段及运动类型等字段；转换到目标格式时的完整字段映射、舍入和损失策略没有全部恢复。
 
-统一活动模型有 Activity、ActivityDetail、TrackPoint、TimeSeriesPoint、LapData、设备信息、天气、动态指标、跑步/骑行/游泳指标等结构。结合模型名和 XML 扩展常量，可确认转换层面向轨迹坐标、时间、海拔、速度、距离、心率、踏频、圈段及运动类型等信息。应用文案说明 GPX 导出偏 GPS 轨迹，TCX 可带轨迹和心率；GPX/TCX 的 XML 扩展常量也包含心率、踏频和温度字段。FIT 可表达的字段更多。字段到字段的精确优先级、插值、舍入和损失规则需要函数级反汇编或样本运行才能确认。
+### AOT 函数级复核
 
-坐标管理页及字符串包含制造商 ID、产品 ID、固件版本、版本范围、旧/新版本边界和设备清单等字段。内置帮助文案说明：FIT 默认按 WGS-84，部分中国设备可能写入 GCJ-02；设备匹配后可按固件阈值将 GCJ-02 转为 WGS-84。另有 GPS 轨迹 Kalman 平滑选项，文案提示它能减小抖动但可能让急弯略有滞后。固件规则冲突、未知版本等精确判定仍未通过 AOT 函数体或运行样例验证。
+定向伪代码中的地址是 libapp.so 内的函数地址。文件保存在 `.data/apk_reverse/aotopsy/targeted/`。
+
+| 路径 | 复核到的逻辑 |
+| --- | --- |
+| FIT→GPX，`FitToGpxConverter.convert`（0x10af34c） | 调用 FIT `Decode.read`，使用 session 信息建立 GPX 轨迹和 segment，遍历 FIT record 构造 track point，最后交给 `GpxWriter`；坐标使用 FIT semicircle 到经纬度的比例常量 |
+| FIT→TCX，`FitToTcxConverter.convert`（0x10adec4） | 解码 FIT 并创建 TCX activity；可见路径读取 session 的 sport、开始时间、计时、距离、卡路里，并构建 TcxLap 与 TcxTrackPoint 后交给 `TcxWriter` 输出 |
+| GPX→FIT，`GpxToFitConverter.convert`（0x10a83dc） | 先经 `GpxReader` 读取，再通过 FIT `Encode` 与 profile message 写文件；伪代码可见创建 FileIdMesg、ActivityMesg、SessionMesg、LapMesg 和 RecordMesg，并调用运动类型/时间转换辅助函数 |
+| TCX→FIT，`TcxToFitConverter.convert`（0x10ad2e8） | 经 `TcxReader` 和 FIT `Encode` 生成 FIT 消息；伪代码可见创建 FileIdMesg、ActivityMesg、SessionMesg、LapMesg 和 RecordMesg，并调用运动类型映射函数 |
+| GPX→TCX、TCX→GPX | 伪代码分别显示 `GpxReader`→`TcxWriter` 和 `TcxReader`→`GpxWriter` |
+| `ActivityFitParser.parse`（0xe21090） | 可见读取 manufacturer、serial number、session 起始时间和 RecordMesg；构造 TrackPoint、ActivityDetail，解析 lap 与游泳长度，并存在 records-only 解析路径 |
+| FIT generator 与 merger | generator 通过 FIT `Encode` 和 profile message 写活动；`FitMerger._mergeInternal`（0x1027a90）先扫描统计信息，无有效 session 时抛出错误，并可见按统计信息选择 `_DecimationPolicy` 的路径 |
+| `ActivityPatcher.patchGCJ02ToWGS84`（0xe367dc） | 通过 map closure 更新 ActivityDetail 中的 TrackPoint/LapData 集合；`MapUtils.gcj02ToWGS84`（0xd55300）执行 GCJ-02 到 WGS-84 坐标计算 |
+| 导入与去重 | 单文件预览路径（0x11428a8）调用 `SingleFileDataSource.list`；本地导入路径为 0xfee6b8；`ImportProvider._checkIfActivityExists`（0xd93758）访问数据库查询 |
+| 同步 | `DataSyncService.bindAccount`（0xe52014）解析平台并获取数据源；`refreshMetadata`（0xc2a2b8）、`fetchContent`（0xe2f2e0）和 `pushActivity`（0x1001c64）包含数据源初始化、调用、异常处理与断开路径；设备自动同步入口位于 0xf6f23c |
+
+这些伪代码由 AOT 控制流恢复生成。方法中仍有大量 `fN`、`local_mN`、间接 dispatch 和孤立 CFG 块，因此表格只记录可以由命名符号和调用序列支撑的结论，不把字段编号猜成确定的业务字段，也不据此断言每种格式完整保留所有信息。
+
+应用文案说明 GPX 导出偏 GPS 轨迹，TCX 可带轨迹和心率；XML 扩展常量包含心率、踏频和温度。FIT 可表达的字段更多。APK 证据尚不足以列出每种转换的逐字段损失表，以下本仓库的转换实现不代表已与 GarSync 每个字段逐项等价。
+
+### 坐标规则
+
+坐标管理页及字符串包含制造商 ID、产品 ID、固件版本、版本范围、旧/新版本边界和设备清单等字段。内置帮助文案说明：FIT 默认按 WGS-84，部分中国设备可能写入 GCJ-02；设备匹配后可按固件阈值将 GCJ-02 转为 WGS-84。AOT 函数确认存在 `MapUtils.gcj02ToWGS84` 和面向活动轨迹的 patch 路径；GPX 另有 `GpxConvert.gcj2Wgs`。另有 GPS 轨迹 Kalman 平滑选项，文案提示它能减小抖动但可能让急弯略有滞后。规则数据、未命中时行为、未知固件处理与冲突判定没有全部从函数体或运行样例确认。
 
 ## 数据库与其他功能
 
@@ -88,17 +111,23 @@ FIT/GPX/TCX 的实现位于共享格式模块，不是三个孤立的文件重�
 
 ## 证据文件与限制
 
-已生成的完整解包结果留在被 .gitignore 忽略的 .data/apk_reverse/：
+完整解包和静态分析产物保存在被 `.gitignore` 忽略的 `.data/apk_reverse/`，没有随报告提交：
 
-- apktool/：解码后的 Manifest、smali、资源、Flutter assets 和 native libs。
-- jadx/：DEX 的 Java 反编译结果和 Android 资源；有 31 个类反编译错误。
-- aot_ascii_strings.txt、aot_feature_strings.txt、aot_hosts.txt：AOT 静态字符串筛选结果。字符串转储可能包含应用配置，不应公开或提交。
-- app_package_paths.txt、format_package_paths.txt、data_adapter_modules.txt、aot_sql_strings.txt：用于本报告的模块、格式和 SQL 名称盘点。
+- `apktool/`：解码后的 Manifest、smali、资源、Flutter assets 和 native libs。
+- `jadx/`：DEX 的 Java 反编译结果和 Android 资源；JADX 报告 31 个类反编译错误。
+- `aotopsy/pipeline/`：AOTopsy v1.6.0 对 arm64 `libapp.so` 生成的函数/类清单、调用边、调用图、字符串引用、类型/派发索引及部分函数汇编和 CFG。索引覆盖 61,983 个函数条目与 7,686 个类；当前汇编与 CFG 输出分别有 16,514、3,326 个文件。
+- `aotopsy/targeted/`：21 个关键函数的定向伪代码，包括六个转换器、活动 FIT parser/generator、坐标 patcher、导入/去重和同步入口。
+- `aot_ascii_strings.txt`、`aot_feature_strings.txt`、`aot_hosts.txt`：AOT 静态字符串筛选结果；完整字符串和端点转储可能含应用配置，不应公开或提交。
+- `app_package_paths.txt`、`format_package_paths.txt`、`data_adapter_modules.txt`、`aot_sql_strings.txt`：用于模块、格式和 SQL 名称盘点。
 
-剩余无法由本轮证据回答的问题包括：Dart 各函数的完整伪代码、每个适配器的实际认证/签名和请求响应协议、各平台方向与数据类型的运行状态、转换边界和损失精度、远端文件删除的准确触发条件，以及隐私声明与实际运行流量的一致性。APK v2/v3 签名证书也未检查，当前环境没有 apksigner。要继续回答这些问题，需要成功构建 Blutter AOT 解析器并运行 APK/使用脱敏样本与测试账号做动态验证。
+静态分析仍无法回答所有函数的真实行为、每个适配器的实际认证/签名和完整请求响应协议、所有平台的数据方向、转换字段损失精度、远端文件删除的准确触发条件，以及隐私声明与实际流量的一致性。JADX 有反编译错误；AOT 伪代码存在动态派发和变量/字段恢复限制；Dart 元数据解析器对补丁版本判断也不一致。APK v2/v3 签名证书未检查，当前工作未运行 APK、未做 Frida 动态跟踪或账号/API 联调。
 
-参考工具说明：JADX 能解码 DEX/资源，但官方文档说明无法保证 100% 反编译成功；Blutter 面向 Android arm64 libapp.so，输出带符号汇编、对象池转储和 Frida 模板，工具本身仍将更多代码分析列为待完成项。
+因此，若“全部逆向”指每个 Dart 函数都恢复成原始源码并通过运行验证，本次尚未达到。已完成的是整包静态清单与模块盘点、全量 AOT 索引/调用图、资源和 Android 层解包，以及 21 个关键函数的伪代码复核。继续提高行为覆盖需要逐模块追踪更多 AOT 方法，并以可运行设备、脱敏样本和测试账号做动态验证。
+
+参考工具说明：JADX 官方文档说明反编译结果不保证 100% 完整；AOTopsy 对 Dart AOT 快照做静态解析并提供汇编/伪代码与调用图，输出受 AOT 符号、动态派发和控制流恢复能力限制；Blutter 依赖对应 Dart VM 运行时。
 
 - JADX: https://github.com/skylot/jadx
 - Apktool: https://github.com/iBotPeaches/Apktool
 - Blutter: https://github.com/worawit/blutter
+- AOTopsy: https://github.com/BroNils/aotopsy
+- AOTopsy v1.6.0 发布版: https://github.com/BroNils/aotopsy/releases/tag/v1.6.0
