@@ -1,18 +1,36 @@
 from __future__ import annotations
 
+import hashlib
+import json
 import math
+import os
+import tempfile
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Sequence
+
+from .coordinate_rules import CoordinateRule, COORDINATE_MODES
+
+
+@dataclass(frozen=True, slots=True)
+class FitDeviceMetadata:
+    manufacturer_id: int | None
+    product_id: int | None
+    firmware_version: float | None
 
 
 def normalize_fit_coordinates(
     input_path: Path,
     output_path: Path,
     coordinate_mode: str,
+    coordinate_rules: Sequence[CoordinateRule] = (),
 ) -> tuple[Path, int]:
-    if coordinate_mode == "none":
-        return input_path, 0
-    if coordinate_mode != "gcj02_to_wgs84":
+    if coordinate_mode not in COORDINATE_MODES:
         raise RuntimeError(f"Unsupported coordinate mode: {coordinate_mode}")
+    input_path = input_path.resolve()
+    output_path = output_path.resolve()
+    if not input_path.is_file():
+        raise RuntimeError(f"FIT input file does not exist: {input_path}")
 
     try:
         from fit_tool.fit_file import FitFile
@@ -20,7 +38,24 @@ def normalize_fit_coordinates(
     except ImportError as exc:
         raise RuntimeError("fit-tool is required for FIT coordinate repair") from exc
 
-    fit_file = FitFile.from_file(str(input_path))
+    try:
+        fit_file = FitFile.from_file(str(input_path))
+    except Exception as exc:
+        raise RuntimeError(f"Could not decode FIT file {input_path}: {exc}") from exc
+
+    if _has_valid_coordinate_marker(input_path):
+        return input_path, 0
+
+    effective_mode = _resolve_coordinate_mode(
+        _fit_device_metadata(fit_file.records),
+        coordinate_mode,
+        coordinate_rules,
+    )
+    if effective_mode == "none":
+        return input_path, 0
+    if output_path == input_path:
+        raise RuntimeError("Coordinate repair requires a different output path")
+
     builder = FitFileBuilder(auto_define=False)
     changed_pairs = 0
 
@@ -33,8 +68,140 @@ def normalize_fit_coordinates(
         return input_path, 0
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    builder.build().to_file(str(output_path))
+    temporary_path = _temporary_sibling(output_path)
+    temporary_marker = _marker_path(temporary_path)
+    output_marker = _marker_path(output_path)
+    try:
+        builder.build().to_file(str(temporary_path))
+        FitFile.from_file(str(temporary_path))
+        marker = {
+            "format": 1,
+            "input_sha256": _sha256(input_path),
+            "output_sha256": _sha256(temporary_path),
+            "coordinate_mode": effective_mode,
+        }
+        _write_json_atomically(temporary_marker, marker)
+        os.replace(temporary_marker, output_marker)
+        os.replace(temporary_path, output_path)
+    except Exception:
+        temporary_path.unlink(missing_ok=True)
+        temporary_marker.unlink(missing_ok=True)
+        raise
     return output_path, changed_pairs
+
+
+def _resolve_coordinate_mode(
+    metadata: FitDeviceMetadata,
+    fallback_mode: str,
+    rules: Sequence[CoordinateRule],
+) -> str:
+    matching = [
+        rule
+        for rule in rules
+        if rule.matches(
+            metadata.manufacturer_id,
+            metadata.product_id,
+            metadata.firmware_version,
+        )
+    ]
+    if len(matching) > 1:
+        raise RuntimeError("More than one FIT coordinate rule matched this device")
+    return matching[0].coordinate_mode if matching else fallback_mode
+
+
+def _fit_device_metadata(records: Sequence[object]) -> FitDeviceMetadata:
+    file_id: tuple[int | None, int | None] = (None, None)
+    device_infos: list[tuple[int | None, int | None, float | None]] = []
+
+    for record in records:
+        message = getattr(record, "message", None)
+        name = getattr(message, "name", None)
+        if name not in {"file_id", "device_info"}:
+            continue
+        values = {
+            field.name: field.get_value()
+            for field in getattr(message, "fields", [])
+            if field.is_valid()
+        }
+        manufacturer = _to_int(values.get("manufacturer"))
+        product = _to_int(values.get("product"))
+        if name == "file_id" and (manufacturer is not None or product is not None):
+            file_id = (manufacturer, product)
+        elif name == "device_info":
+            version_value = values.get("software_version")
+            firmware = float(version_value) if isinstance(version_value, (int, float)) else None
+            device_infos.append((manufacturer, product, firmware))
+
+    manufacturer, product = file_id
+    if manufacturer is None and product is None and device_infos:
+        manufacturer, product, firmware = device_infos[0]
+        return FitDeviceMetadata(manufacturer, product, firmware)
+
+    matching_devices = [
+        item
+        for item in device_infos
+        if (manufacturer is None or item[0] == manufacturer)
+        and (product is None or item[1] == product)
+    ]
+    firmware_versions = {item[2] for item in matching_devices if item[2] is not None}
+    firmware = next(iter(firmware_versions)) if len(firmware_versions) == 1 else None
+    if product is None and matching_devices:
+        products = {item[1] for item in matching_devices if item[1] is not None}
+        product = next(iter(products)) if len(products) == 1 else None
+    if manufacturer is None and matching_devices:
+        manufacturers = {item[0] for item in matching_devices if item[0] is not None}
+        manufacturer = next(iter(manufacturers)) if len(manufacturers) == 1 else None
+    return FitDeviceMetadata(manufacturer, product, firmware)
+
+
+def _to_int(value: object) -> int | None:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    return int(value)
+
+
+def _marker_path(path: Path) -> Path:
+    return Path(f"{path}.coord.json")
+
+
+def _has_valid_coordinate_marker(path: Path) -> bool:
+    marker_path = _marker_path(path)
+    if not marker_path.exists():
+        return False
+    try:
+        marker = json.loads(marker_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise RuntimeError(f"Could not read coordinate marker {marker_path}: {exc}") from exc
+    expected_hash = marker.get("output_sha256") if isinstance(marker, dict) else None
+    if not isinstance(expected_hash, str) or _sha256(path) != expected_hash:
+        raise RuntimeError(
+            f"Coordinate marker does not match {path}; use the original FIT file or remove the marker"
+        )
+    return True
+
+
+def _sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _temporary_sibling(path: Path) -> Path:
+    handle, temporary = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=path.parent)
+    os.close(handle)
+    return Path(temporary)
+
+
+def _write_json_atomically(path: Path, payload: dict[str, object]) -> None:
+    temporary = _temporary_sibling(path)
+    try:
+        temporary.write_text(json.dumps(payload, sort_keys=True), encoding="utf-8")
+        os.replace(temporary, path)
+    except Exception:
+        temporary.unlink(missing_ok=True)
+        raise
 
 
 def _rewrite_message_positions(message: object) -> int:

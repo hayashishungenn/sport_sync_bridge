@@ -6,6 +6,7 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
+from .coordinate_rules import CoordinateRule, load_coordinate_rules
 from .utils import env_or_none, parse_bool, parse_csv
 
 
@@ -15,6 +16,9 @@ class AppConfig:
     data_dir: Path
     downloads_dir: Path
     repaired_dir: Path
+    converted_dir: Path
+    coordinate_rules_path: Path
+    coordinate_rules: tuple[CoordinateRule, ...]
     db_path: Path
     log_path: Path
     sources: list[str]
@@ -50,12 +54,21 @@ class AppConfig:
         data_dir = root_dir / os.getenv("SYNC_DATA_DIR", ".data")
         downloads_dir = data_dir / "downloads"
         repaired_dir = data_dir / "repaired"
+        converted_dir = data_dir / "converted"
+        coordinate_rules_path = Path(
+            os.getenv("FIT_COORDINATE_RULES_FILE", "device_coordinate_rules.json")
+        ).expanduser()
+        if not coordinate_rules_path.is_absolute():
+            coordinate_rules_path = root_dir / coordinate_rules_path
 
         return cls(
             root_dir=root_dir,
             data_dir=data_dir,
             downloads_dir=downloads_dir,
             repaired_dir=repaired_dir,
+            converted_dir=converted_dir,
+            coordinate_rules_path=coordinate_rules_path,
+            coordinate_rules=load_coordinate_rules(coordinate_rules_path),
             db_path=data_dir / "sync_state.db",
             log_path=data_dir / "sync.log",
             sources=parse_csv(os.getenv("SYNC_SOURCES"), ["igpsport", "onelap"]),

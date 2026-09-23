@@ -8,11 +8,12 @@ from typing import cast
 
 from .config import AppConfig
 from .fit_tools import normalize_fit_coordinates
-from .models import FileBundle
+from .formats import SUPPORTED_FORMATS, convert_activity_file
+from .models import FileBundle, UploadResult
 from .sources import IGPSportSource, OneLapSource, SourceAdapter
 from .state import StateDB
 from .targets import GarminTarget, StravaTarget, TargetAdapter
-from .utils import ensure_directory, sha1_file, utcnow
+from .utils import ensure_directory, safe_filename, sha1_file, utcnow
 
 
 LOGGER = logging.getLogger(__name__)
@@ -24,6 +25,7 @@ class SyncEngine:
         ensure_directory(config.data_dir)
         ensure_directory(config.downloads_dir)
         ensure_directory(config.repaired_dir)
+        ensure_directory(config.converted_dir)
         self.state_db = StateDB(config.db_path)
         self.sources = self._build_sources()
         self.targets = self._build_targets()
@@ -39,9 +41,21 @@ class SyncEngine:
         until: datetime | None = None,
         limit: int | None = None,
         dry_run: bool = False,
+        target_formats: dict[str, str] | None = None,
     ) -> int:
         selected_sources = sources or self.config.sources
         selected_targets = targets or self.config.targets
+        target_formats = target_formats or {}
+        invalid_formats = {
+            target: value
+            for target, value in target_formats.items()
+            if target not in {"garmin", "strava"}
+            or not isinstance(value, str)
+            or value.lower() not in SUPPORTED_FORMATS
+        }
+        if invalid_formats:
+            details = ", ".join(f"{target}={value}" for target, value in sorted(invalid_formats.items()))
+            raise ValueError(f"Unsupported target format mapping: {details}")
 
         if since is None and self.config.lookback_days > 0:
             since = utcnow() - timedelta(days=self.config.lookback_days)
@@ -78,11 +92,30 @@ class SyncEngine:
                 bundle = self._prepare_files(source, activity)
                 for target_name in pending_targets:
                     target = self.targets[target_name]
-                    result = target.upload_file(
-                        bundle.upload_path,
-                        activity,
-                        external_id=f"{activity.source}:{activity.source_id}",
-                    )
+                    target_format = target_formats.get(target_name, "fit").lower()
+                    try:
+                        upload_path, losses = self._prepare_target_file(
+                            bundle.upload_path,
+                            activity,
+                            target_name,
+                            target_format,
+                        )
+                    except Exception as exc:
+                        result = UploadResult(status="failed", message=f"Conversion to {target_format} failed: {exc}")
+                    else:
+                        for loss in losses:
+                            LOGGER.warning(
+                                "Conversion loss %s/%s for %s: %s",
+                                activity.source,
+                                activity.source_id,
+                                target_name,
+                                loss,
+                            )
+                        result = target.upload_file(
+                            upload_path,
+                            activity,
+                            external_id=f"{activity.source}:{activity.source_id}",
+                        )
                     LOGGER.info(
                         "Target result %s/%s -> %s: %s %s",
                         activity.source,
@@ -112,6 +145,7 @@ class SyncEngine:
         limit: int | None = None,
         dry_run: bool = False,
         interval_seconds: int | None = None,
+        target_formats: dict[str, str] | None = None,
     ) -> None:
         interval = interval_seconds or self.config.poll_interval_seconds
         while True:
@@ -123,6 +157,7 @@ class SyncEngine:
                     until=until,
                     limit=limit,
                     dry_run=dry_run,
+                    target_formats=target_formats,
                 )
             except Exception:
                 LOGGER.exception("Sync loop iteration failed")
@@ -169,43 +204,36 @@ class SyncEngine:
     def _prepare_files(self, source: SourceAdapter, activity) -> FileBundle:
         row = self.state_db.get_activity_row(activity.source, activity.source_id)
         original_path = None
-        upload_path = None
 
         if row:
             if row["original_path"]:
                 candidate = Path(row["original_path"])
                 if candidate.exists():
                     original_path = candidate
-            if row["upload_path"]:
-                candidate = Path(row["upload_path"])
-                if candidate.exists():
-                    upload_path = candidate
-
         if original_path is None:
             original_path = source.download_fit(activity, self.config.downloads_dir)
 
-        if upload_path is None:
-            upload_path = original_path
-            repaired_target = self.config.repaired_dir / activity.source / f"{original_path.stem}-wgs84.fit"
-            coordinate_mode, strict_mode = self._get_coordinate_config(activity.source)
-            try:
-                upload_path, changed_pairs = normalize_fit_coordinates(
-                    input_path=original_path,
-                    output_path=repaired_target,
-                    coordinate_mode=coordinate_mode,
+        repaired_target = self.config.repaired_dir / activity.source / f"{safe_filename(original_path.stem)}-wgs84.fit"
+        coordinate_mode, strict_mode = self._get_coordinate_config(activity.source)
+        try:
+            upload_path, changed_pairs = normalize_fit_coordinates(
+                input_path=original_path,
+                output_path=repaired_target,
+                coordinate_mode=coordinate_mode,
+                coordinate_rules=self.config.coordinate_rules,
+            )
+            if changed_pairs:
+                LOGGER.info(
+                    "Repaired %s coordinate pairs for %s/%s",
+                    changed_pairs,
+                    activity.source,
+                    activity.source_id,
                 )
-                if changed_pairs:
-                    LOGGER.info(
-                        "Repaired %s coordinate pairs for %s/%s",
-                        changed_pairs,
-                        activity.source,
-                        activity.source_id,
-                    )
-            except Exception as exc:
-                if strict_mode:
-                    raise
-                LOGGER.warning("FIT coordinate repair skipped for %s/%s: %s", activity.source, activity.source_id, exc)
-                upload_path = original_path
+        except Exception as exc:
+            if strict_mode:
+                raise
+            LOGGER.warning("FIT coordinate repair skipped for %s/%s: %s", activity.source, activity.source_id, exc)
+            upload_path = original_path
 
         sha1 = sha1_file(upload_path)
         self.state_db.upsert_activity(
@@ -215,6 +243,28 @@ class SyncEngine:
             sha1=sha1,
         )
         return FileBundle(original_path=original_path, upload_path=upload_path, sha1=sha1)
+
+    def _prepare_target_file(
+        self,
+        corrected_fit_path: Path,
+        activity,
+        target_name: str,
+        target_format: str,
+    ) -> tuple[Path, tuple[str, ...]]:
+        output_path = (
+            self.config.converted_dir
+            / activity.source
+            / target_name
+            / f"{safe_filename(activity.source_id)}.{target_format}"
+        )
+        result = convert_activity_file(
+            corrected_fit_path,
+            output_path,
+            target_format,
+            activity_name=activity.name,
+            sport_type=activity.sport_type,
+        )
+        return result.output_path, result.losses
 
     def _build_sources(self) -> dict[str, SourceAdapter]:
         sources: dict[str, SourceAdapter] = {}

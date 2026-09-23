@@ -25,6 +25,8 @@
 
 - 自动从 `iGPSPORT` / `OneLap` 拉取活动列表并下载 FIT
 - 自动对下载后的 FIT 做坐标修正
+- 按 FIT 设备厂商、产品和固件版本选择坐标修正规则
+- 在 FIT、GPX、TCX 之间转换活动文件
 - 自动上传到 `Garmin Connect 国际区`
 - 自动上传到 `Strava`
 - 用 `SQLite` 记录同步状态，避免重复上传
@@ -44,6 +46,30 @@
 
 - `IGPSPORT_COORD_MODE=none`
 - `ONELAP_COORD_MODE=none`
+
+### 设备坐标规则
+
+将 `FIT_COORDINATE_RULES_FILE` 指向的文件写成 JSON 数组。可把 `device_coordinate_rules.example.json` 复制为 `device_coordinate_rules.json` 后填写。文件不存在时按空规则处理，来源平台的坐标模式仍作为未匹配设备的回退值。规则使用 FIT 文件内的数字厂商和产品 ID，固件上下限均包含边界；固件未知时只匹配没有固件范围的规则。会重叠的规则会在启动时被拒绝。
+
+```json
+[
+  {
+    "manufacturer_id": 123,
+    "product_id": 456,
+    "firmware_min": 5.0,
+    "firmware_max": 5.9,
+    "coordinate_mode": "gcj02_to_wgs84"
+  },
+  {
+    "manufacturer_id": 789,
+    "coordinate_mode": "none"
+  }
+]
+```
+
+`coordinate_mode` 可设为 `gcj02_to_wgs84` 或 `none`。第二条示例不限制产品和固件版本。仓库提供空白模板 `device_coordinate_rules.example.json`，不会预置未经验证的厂商规则。
+
+上面数字只作 JSON 格式占位，不对应已确认的设备或固件阈值。
 
 ## 快速开始
 
@@ -105,6 +131,22 @@ python sync.py sync
 iGPSPORT / OneLap -> 下载 FIT -> 修正坐标 -> 上传 Garmin 国际区 -> 上传 Strava
 ```
 
+Garmin 和 Strava 默认仍上传 FIT。可按目标分别指定格式，未指定的目标保持 FIT：
+
+```powershell
+python sync.py sync --format garmin=fit --format strava=tcx
+python sync.py sync --target strava --format strava=gpx
+```
+
+也可以直接转换本地 FIT、GPX 或 TCX 文件：
+
+```powershell
+python sync.py convert ride.fit --to tcx --output ride.tcx --source igpsport
+python sync.py convert ride.gpx --to fit --output ride.fit
+```
+
+`convert --source` 只影响 FIT 输入，并为未命中设备规则的文件指定 iGPSPORT 或 OneLap 的坐标模式。转换不会覆盖输入文件。输出文件会报告未能保留的字段；FIT 输出要求每个 GPS 轨迹点都带时间，TCX 输出也要求轨迹点带时间。
+
 常用参数:
 
 ```powershell
@@ -134,6 +176,7 @@ python sync.py sync --loop --interval 900
 - `.data/sync.log`
 - `.data/downloads/`
 - `.data/repaired/`
+- `.data/converted/<source>/<target>/`，按目标生成的上传文件
 - `.data/.garmin_session/`
 
 ## 状态查看
