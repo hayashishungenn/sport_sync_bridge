@@ -850,7 +850,7 @@ def _write_tcx_point(track: ET.Element, point: TrackPoint) -> None:
             _subtext(tpx, TCX_EXT_NS, "Watts", _format_number(point.power_w))
 
 
-def _write_fit(activity: ActivityFile) -> bytes:
+def _write_fit(activity: ActivityFile, *, allow_trackless_records: bool = False) -> bytes:
     try:
         from fit_tool.fit_file_builder import FitFileBuilder
         from fit_tool.profile.messages.activity_message import ActivityMessage
@@ -863,7 +863,19 @@ def _write_fit(activity: ActivityFile) -> bytes:
     except ImportError as exc:
         raise RuntimeError("fit-tool is required for FIT conversion") from exc
 
-    points = [point for point in activity.track_points if _has_position(point)]
+    source_points = activity.track_points
+    if not source_points:
+        message = (
+            "FIT output requires activity record points"
+            if allow_trackless_records
+            else "FIT output requires GPS track points"
+        )
+        raise ValueError(message)
+    points = (
+        source_points
+        if allow_trackless_records
+        else [point for point in source_points if _has_position(point)]
+    )
     if not points:
         raise ValueError("FIT output requires GPS track points")
     if any(point.timestamp is None for point in points):
@@ -891,10 +903,29 @@ def _write_fit(activity: ActivityFile) -> bytes:
     builder.add(start_event)
 
     laps = activity.laps or [_make_lap(points)]
+    written_lap_count = 0
     for lap_index, lap in enumerate(laps):
-        lap_points = [point for point in lap.track_points if _has_position(point)]
-        if not lap_points:
+        lap_points = (
+            lap.track_points
+            if allow_trackless_records
+            else [point for point in lap.track_points if _has_position(point)]
+        )
+        if not lap_points and not allow_trackless_records:
             continue
+        if lap_points:
+            lap_start = lap.start_time or next(
+                (point.timestamp for point in lap_points if point.timestamp), None
+            )
+            lap_end = lap.end_time or next(
+                (point.timestamp for point in reversed(lap_points) if point.timestamp), None
+            )
+        else:
+            lap_start = lap.start_time
+            lap_end = lap.end_time
+        if lap_start is None or lap_end is None:
+            if allow_trackless_records:
+                continue
+            raise ValueError("FIT output requires start and end times for each lap")
         for point in lap_points:
             message = RecordMessage()
             _set_field(message, "timestamp", _fit_timestamp(point.timestamp))
@@ -909,8 +940,6 @@ def _write_fit(activity: ActivityFile) -> bytes:
             builder.add(message)
 
         lap_message = LapMessage()
-        lap_start = lap.start_time or lap_points[0].timestamp
-        lap_end = lap.end_time or lap_points[-1].timestamp
         _set_field(lap_message, "start_time", _fit_timestamp(lap_start))
         _set_field(lap_message, "timestamp", _fit_timestamp(lap_end))
         elapsed = lap.elapsed_time_s
@@ -929,6 +958,7 @@ def _write_fit(activity: ActivityFile) -> bytes:
         _set_field(lap_message, "sport", _sport_fit_value(activity.sport_type))
         _set_field(lap_message, "message_index", lap_index)
         builder.add(lap_message)
+        written_lap_count += 1
 
     session = SessionMessage()
     _set_field(session, "start_time", _fit_timestamp(start))
@@ -952,7 +982,7 @@ def _write_fit(activity: ActivityFile) -> bytes:
         )
     _set_field(session, "total_distance", total_distance)
     _set_field(session, "sport", _sport_fit_value(activity.sport_type))
-    _set_field(session, "num_laps", len([lap for lap in laps if lap.track_points]))
+    _set_field(session, "num_laps", written_lap_count)
     builder.add(session)
 
     stop_event = EventMessage()

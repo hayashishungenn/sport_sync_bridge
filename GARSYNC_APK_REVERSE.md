@@ -75,12 +75,23 @@ AOT 中确认了 FIT、GPX、TCX 六种有向转换器，以及统一活动模�
 | TCX→FIT，`TcxToFitConverter.convert`（0x10ad2e8） | 经 `TcxReader` 和 FIT `Encode` 生成 FIT 消息；伪代码可见创建 FileIdMesg、ActivityMesg、SessionMesg、LapMesg 和 RecordMesg，并调用运动类型映射函数 |
 | GPX→TCX、TCX→GPX | 伪代码分别显示 `GpxReader`→`TcxWriter` 和 `TcxReader`→`GpxWriter` |
 | `ActivityFitParser.parse`（0xe21090） | 可见读取 manufacturer、serial number、session 起始时间和 RecordMesg；构造 TrackPoint、ActivityDetail，解析 lap 与游泳长度，并存在 records-only 解析路径 |
-| FIT generator 与 merger | generator 通过 FIT `Encode` 和 profile message 写活动；`FitMerger._mergeInternal`（0x1027a90）先扫描统计信息，无有效 session 时抛出错误，并可见按统计信息选择 `_DecimationPolicy` 的路径 |
+| FIT generator 与 merger | generator 通过 FIT `Encode` 和 profile message 写活动；`FitMerger._mergeInternal`（0x1027a90）先扫描输入，无有效 session 时抛出错误，再创建 file ID、设备、运动类型、session 和 activity 消息。记录会经过时间戳映射并排序；代码还调用 `_writeRestLap`，以及 `_isGlobalExtreme` 和 `_DecimationPolicy.countWritten` |
 | `ActivityPatcher.patchGCJ02ToWGS84`（0xe367dc） | 通过 map closure 更新 ActivityDetail 中的 TrackPoint/LapData 集合；`MapUtils.gcj02ToWGS84`（0xd55300）执行 GCJ-02 到 WGS-84 坐标计算 |
 | 导入与去重 | 单文件预览路径（0x11428a8）调用 `SingleFileDataSource.list`；本地导入路径为 0xfee6b8；`ImportProvider._checkIfActivityExists`（0xd93758）访问数据库查询 |
 | 同步 | `DataSyncService.bindAccount`（0xe52014）解析平台并获取数据源；`refreshMetadata`（0xc2a2b8）、`fetchContent`（0xe2f2e0）和 `pushActivity`（0x1001c64）包含数据源初始化、调用、异常处理与断开路径；设备自动同步入口位于 0xf6f23c |
 
 这些伪代码由 AOT 控制流恢复生成。方法中仍有大量 `fN`、`local_mN`、间接 dispatch 和孤立 CFG 块，因此表格只记录可以由命名符号和调用序列支撑的结论，不把字段编号猜成确定的业务字段，也不据此断言每种格式完整保留所有信息。
+
+### 活动合并器补充复核
+
+本轮继续查看 `FitMerger._scanForStats`、`_buildForcedTimestamps`、`_isGlobalExtreme`、`_DecimationPolicy.forStats/countWritten`、`_writeRestLap` 和 `ActivityFitMerger.merge`：
+
+- 公共入口把选择的文件转换为输入列表；空列表抛出 `No files to merge`。内部扫描后若有效 session 数为零，抛出 `No valid sessions found in source files`。
+- 内部对各输入解码 `RecordMesg`，调用时间戳映射辅助函数并对记录排序。伪代码和汇编显示会构建强制时间戳表，但字段偏移仍无法可靠说明所有输入情况下具体如何平移。
+- 输出前统计运动数据，写入新的 FIT file ID、device info、sport、session 和 activity 消息。内部还调用休息圈写入方法；AOT 字符串 `Garsync merged (decimated: yes/no)`、`New activity created in Local` 和 `Failed to register merged activity` 支持输出会登记为本地新活动。
+- 抽稀相关路径包含十进制常量 50,000、已写入/扫描计数、`_isGlobalExtreme` 全局数值极值判断和统计驱动的策略构造。静态结果足以确认有抽稀和极值保留路径，但不足以精确恢复所有阈值、样本选择顺序及边界行为。
+
+本仓库新增的本地 `library merge` 据此重建 FIT 合并流程：按命令输入顺序处理同一运动类型的 FIT，重叠片段平移到上一片段结束后一秒，超过两秒的片段间休息写成休息圈；记录超过 50,000 时均匀抽样并保护首尾和可用指标极值。由于 APK 的 timestamp policy 与 sample policy 仍有未解析字段，这属于有损、可审查的行为移植，不声称二进制级等价。当前 `ActivityFile` 模型之外的开发者字段、设备身份及非记录消息不会从输入 FIT 复制。
 
 应用文案说明 GPX 导出偏 GPS 轨迹，TCX 可带轨迹和心率；XML 扩展常量包含心率、踏频和温度。FIT 可表达的字段更多。APK 证据尚不足以列出每种转换的逐字段损失表，以下本仓库的转换实现不代表已与 GarSync 每个字段逐项等价。
 
@@ -105,13 +116,13 @@ AOT 中确认了 FIT、GPX、TCX 六种有向转换器，以及统一活动模�
 
 ## 对 sport_sync_bridge 的映射
 
-当前仓库的目标比 GarSync 窄：iGPSPORT/OneLap 下载运动 FIT，再上传 Garmin Connect 国际区和 Strava，并用 SQLite 记录同步状态。仓库当前提交 507e9d7 已落地本任务直接相关的两项：按 FIT 厂商/产品/固件匹配坐标规则，以及 FIT/GPX/TCX 六方向转换和按目标格式生成上传文件。这与 GarSync 的统一活动模型、格式转换器和设备坐标管理结构相吻合。
+当前仓库的目标比 GarSync 窄：iGPSPORT/OneLap 下载运动 FIT，再上传 Garmin Connect 国际区和 Strava，并用 SQLite 记录同步状态。现有实现已包含按 FIT 厂商/产品/固件匹配坐标规则、FIT/GPX/TCX 六方向转换和按目标格式生成上传文件。这与 GarSync 的统一活动模型、格式转换器和设备坐标管理结构相吻合。
 
 整包逆向完成后，按用户要求继续把可在当前 Python CLI 中独立运行的本地能力改写进仓库。新增本地活动库、FIT/GPX/TCX 与 ZIP/轨迹 JSON/CSV 导入、活动汇总与报告、本地健康 CSV、训练计划日历、FIT 课表模板导出、Wi-Fi 上传页，以及可配置 Chat Completions 接口的 AI 活动分析。AI 分析按用户明确要求保留；请求只发送活动汇总、周汇总和健康指标，不发送 GPS 坐标。项目没有复制内购目录、支付流程、数独或音频资源。
 
 本地活动源已接入现有 Garmin / Strava 上传流程；原始文件存入 `.data/local_imports/`，数据库记录摘要和指纹。42 份训练计划模板覆盖六种语言，33 个 FIT 课表模板也随项目提供。健康数据通过用户提供的 CSV 导入；该实现不登录或抓取 APK 内的健康平台账号。
 
-仍未移植其余云平台的私有认证与同步协议、GarSync 账号系统、Samba 连接、手机 BLE 与传感器实时录制、活动合并、路线地图与分享海报、PDF 报告、训练负荷/VO2Max/恢复指标、在线健康数据源、天气服务、AI 聊天及 AI 计划/课表生成。当前 AI 活动分析只实现本地汇总提示词和可配置的兼容模型接口。AOT 静态索引无法单独证明运行时签名、认证交换、服务器校验和硬件交互；这些功能不能仅从类名或端点字符串推断完成。
+本轮已把活动合并接入本地 FIT 命令，但它依据静态可确认行为重写，字段和抽稀边界尚未与 GarSync 运行时结果逐项校准。仍未移植其余云平台的私有认证与同步协议、GarSync 账号系统、Samba 连接、手机 BLE 与传感器实时录制、路线地图与分享海报、PDF 报告、训练负荷/VO2Max/恢复指标、在线健康数据源、天气服务、AI 聊天及 AI 计划/课表生成。当前 AI 活动分析只实现本地汇总提示词和可配置的兼容模型接口。AOT 静态索引无法单独证明运行时签名、认证交换、服务器校验和硬件交互；这些功能不能仅从类名或端点字符串推断完成。
 
 ## 证据文件与限制
 

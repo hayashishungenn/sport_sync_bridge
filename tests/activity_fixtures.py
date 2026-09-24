@@ -18,10 +18,12 @@ START = datetime(2026, 1, 2, 3, 4, tzinfo=timezone.utc)
 def create_fit(
     path: Path,
     *,
+    start: datetime = START,
     manufacturer: int = 999,
     product: int = 123,
     firmware: float | None = 2.0,
     with_track: bool = True,
+    with_position: bool = True,
     with_timestamps: bool = True,
     sport: int = Sport.CYCLING.value,
 ) -> Path:
@@ -30,7 +32,7 @@ def create_fit(
     _set(file_id, "type", FileType.ACTIVITY.value)
     _set(file_id, "manufacturer", manufacturer)
     _set(file_id, "product", product)
-    _set(file_id, "time_created", _timestamp(START))
+    _set(file_id, "time_created", _timestamp(start))
     builder.add(file_id)
 
     if firmware is not None:
@@ -44,9 +46,10 @@ def create_fit(
         for index in range(2):
             point = RecordMessage()
             if with_timestamps:
-                _set(point, "timestamp", _timestamp(START.replace(minute=START.minute + index)))
-            _set(point, "position_lat", 31.2300 + index * 0.001)
-            _set(point, "position_long", 121.4700 + index * 0.001)
+                _set(point, "timestamp", _timestamp(start.replace(minute=start.minute + index)))
+            if with_position:
+                _set(point, "position_lat", 31.2300 + index * 0.001)
+                _set(point, "position_long", 121.4700 + index * 0.001)
             _set(point, "altitude", 10.0 + index)
             _set(point, "distance", 100.0 * index)
             _set(point, "speed", 5.0 + index * 0.1)
@@ -56,8 +59,8 @@ def create_fit(
             builder.add(point)
 
         lap = LapMessage()
-        _set(lap, "start_time", _timestamp(START))
-        _set(lap, "timestamp", _timestamp(START.replace(minute=START.minute + 1)))
+        _set(lap, "start_time", _timestamp(start))
+        _set(lap, "timestamp", _timestamp(start.replace(minute=start.minute + 1)))
         _set(lap, "total_elapsed_time", 61.0)
         _set(lap, "total_timer_time", 60.0)
         _set(lap, "total_distance", 100.0)
@@ -68,8 +71,8 @@ def create_fit(
         builder.add(lap)
 
         session = SessionMessage()
-        _set(session, "start_time", _timestamp(START))
-        _set(session, "timestamp", _timestamp(START.replace(minute=START.minute + 1)))
+        _set(session, "start_time", _timestamp(start))
+        _set(session, "timestamp", _timestamp(start.replace(minute=start.minute + 1)))
         _set(session, "sport", sport)
         _set(session, "total_distance", 100.0)
         _set(session, "total_elapsed_time", 62.0)

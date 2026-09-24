@@ -9,6 +9,7 @@ from pathlib import Path
 
 from .activity_analysis import build_ai_analysis_prompt, format_activity_report
 from .activity_library import LocalActivityLibrary
+from .activity_merge import merge_fit_files
 from .config import AppConfig
 from .engine import SyncEngine
 from .fit_tools import normalize_fit_coordinates
@@ -88,6 +89,10 @@ def build_parser() -> argparse.ArgumentParser:
     library_route.add_argument("activity_id", help="Activity fingerprint or its unique prefix")
     library_route.add_argument("--to", choices=sorted(SUPPORTED_FORMATS), required=True)
     library_route.add_argument("--output", type=Path, required=True)
+    library_merge = library_actions.add_parser("merge", help="Merge FIT activities into one FIT file")
+    library_merge.add_argument("paths", nargs="+", type=Path, help="FIT files in the desired activity order")
+    library_merge.add_argument("--output", type=Path, required=True, help="Merged FIT output path")
+    library_merge.add_argument("--name", help="Merged activity label for the command result")
 
     plans_parser = subparsers.add_parser("plans", help="Use bundled training plan templates")
     plans_actions = plans_parser.add_subparsers(dest="plans_action", required=True)
@@ -340,6 +345,16 @@ def _convert_file(args: argparse.Namespace, config: AppConfig) -> int:
 
 def _run_local_command(args: argparse.Namespace, config: AppConfig) -> int:
     if args.command == "library":
+        if args.library_action == "merge":
+            result = merge_fit_files(args.paths, args.output, name=args.name)
+            print(f"merged={result.input_count}")
+            print(f"records={result.records_after}/{result.records_before}")
+            print(f"decimated={'yes' if result.decimated else 'no'}")
+            print(f"output={result.output_path}")
+            for loss in result.losses:
+                print(f"loss={loss}")
+            return 0
+
         state = StateDB(config.db_path)
         library = LocalActivityLibrary(state, config.data_dir)
         try:

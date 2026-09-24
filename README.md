@@ -160,10 +160,13 @@ python sync.py library show <活动ID前缀>
 python sync.py library stats
 python sync.py library report --format html --output .\activities.html
 python sync.py library route <活动ID前缀> --to gpx --output .\route.gpx
+python sync.py library merge .\part-1.fit .\part-2.fit --output .\merged.fit --name "合并骑行"
 python sync.py sync --source local --target strava --format strava=tcx
 ```
 
 导入文件保存在 `.data/local_imports/`，索引和汇总写入 `.data/sync_state.db`。本地源只向现有 Garmin / Strava 目标提供 `FIT`、`GPX`、`TCX`；健康摘要类 JSON 不会被当成可上传运动文件。轨迹 CSV 需要时间戳、纬度和经度列；活动 JSON 接受 `activity`、`laps` 和 `track_points` 等结构。
+
+`library merge` 按输入顺序合并至少两个同运动类型的 FIT 活动。时间重叠的后续片段会平移到前一段结束后一秒，超过两秒的原有停顿会写成休息圈。输出最多保留 50,000 个记录点，抽稀时保留首尾点和可用指标的全局极值。合并会重新生成 FIT，因此来源设备身份、开发者字段和非记录消息不会复制；其他解析损失会随命令结果列出。该行为依据 APK AOT 静态线索实现，尚未用 GarSync 运行时样例逐字段对照。
 
 GarSync 内置的六种语言训练计划和 33 个 FIT 课表作为本地模板随项目提供，不包含购买目录、数独或音频资源。计划开始日期必须是周一，安装后可导出到日历：
 
@@ -201,7 +204,7 @@ python sync.py receive --host 0.0.0.0 --port 8765
 
 接收页不设访问口令，只应在可信的本地网络中临时开启。
 
-未移植到 Python CLI 的 APK 功能包括其余云平台的私有认证/同步协议、Samba、手机 BLE 与传感器实时录制、活动合并、路线地图/分享海报/PDF 报告、训练负荷/VO2Max/恢复指标、在线健康数据源、天气、AI 聊天及 AI 计划/课表生成。当前 AI 活动分析使用本地汇总和可配置模型接口。静态 AOT 索引不足以确认这些云端接口的运行期请求、服务端校验或设备交互行为；完整静态盘点见 `GARSYNC_APK_REVERSE.md`。
+未移植到 Python CLI 的 APK 功能包括其余云平台的私有认证/同步协议、Samba、手机 BLE 与传感器实时录制、路线地图/分享海报/PDF 报告、训练负荷/VO2Max/恢复指标、在线健康数据源、天气、AI 聊天及 AI 计划/课表生成。当前 AI 活动分析使用本地汇总和可配置模型接口。静态 AOT 索引不足以确认这些云端接口的运行期请求、服务端校验或设备交互行为；完整静态盘点见 `GARSYNC_APK_REVERSE.md`。
 
 常用参数:
 
