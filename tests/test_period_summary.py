@@ -62,6 +62,59 @@ class PeriodSummaryTests(unittest.TestCase):
         self.assertEqual(scored["total_tss"], 146.25)
         self.assertEqual(scored["scored_tss_activity_count"], 2)
 
+    def test_period_aggregates_recorded_time_in_zone_seconds(self) -> None:
+        rows = [
+            self._row(
+                "a" * 64,
+                "running",
+                "2026-01-01T08:00:00Z",
+                "fit",
+                5000,
+                1500,
+                150,
+                zones=[
+                    {
+                        "heart_rate_zones": [{"zone": 1, "seconds": 600}, {"zone": 2, "seconds": 300}],
+                        "speed_zones": [{"zone": 2, "seconds": 500}],
+                        "cadence_zones": [{"zone": 3, "seconds": 800}],
+                        "power_zones": [{"zone": 1, "seconds": 450}],
+                    },
+                    {"heart_rate_zones": [{"zone": 1, "seconds": 60}]},
+                ],
+            ),
+            self._row(
+                "b" * 64,
+                "running",
+                "2026-01-03T08:00:00Z",
+                "fit",
+                5000,
+                1500,
+                150,
+                zones=[{"heart_rate_zones": [{"zone": 1, "seconds": 120}]}],
+            ),
+            self._row(
+                "c" * 64,
+                "running",
+                "2026-02-01T08:00:00Z",
+                "fit",
+                5000,
+                1500,
+                150,
+                zones=[{"heart_rate_zones": [{"zone": 1, "seconds": 1000}]}],
+            ),
+        ]
+
+        result = calculate_period_summary(
+            rows,
+            date_from=date(2026, 1, 1),
+            date_to=date(2026, 1, 31),
+        )
+
+        self.assertEqual(result["recorded_zone_time_s"]["heart_rate"], {1: 780.0, 2: 300.0})
+        self.assertEqual(result["recorded_zone_time_s"]["speed"], {2: 500.0})
+        self.assertEqual(result["recorded_zone_time_s"]["cadence"], {3: 800.0})
+        self.assertEqual(result["recorded_zone_time_s"]["power"], {1: 450.0})
+
     def test_running_vdot_trend_and_sport_filter(self) -> None:
         rows = [
             self._row("a" * 64, "running", "2026-01-01T08:00:00Z", "fit", 5000, 1500, 80),
@@ -156,6 +209,7 @@ class PeriodSummaryTests(unittest.TestCase):
         average_hr: float,
         *,
         tss: float | None = None,
+        zones: list[dict[str, object]] | None = None,
     ) -> dict[str, object]:
         summary: dict[str, object] = {
             "distance_m": distance,
@@ -165,6 +219,8 @@ class PeriodSummaryTests(unittest.TestCase):
         }
         if tss is not None:
             summary["training_stress_score"] = tss
+        if zones is not None:
+            summary["time_in_zone_messages"] = zones
         return {
             "fingerprint": fingerprint,
             "name": "Test activity",

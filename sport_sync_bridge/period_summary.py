@@ -18,6 +18,12 @@ SPORT_ALIASES = {
     "walk": "walking",
     "trail_run": "trail_running",
 }
+RECORDED_ZONE_FIELDS = {
+    "heart_rate": "heart_rate_zones",
+    "speed": "speed_zones",
+    "cadence": "cadence_zones",
+    "power": "power_zones",
+}
 
 
 def calculate_period_summary(
@@ -94,6 +100,7 @@ def calculate_period_summary(
                 "average_power_w": average_power,
                 "normalized_power_w": normalized_power,
                 "intensity_factor": _optional_nonnegative(summary.get("intensity_factor")),
+                "time_in_zone_messages": _zone_messages(summary.get("time_in_zone_messages")),
                 "training_stress_score": tss,
                 "vdot": vdot,
                 "ftp": _optional_nonnegative(summary.get("functional_threshold_power_w")),
@@ -128,6 +135,7 @@ def calculate_period_summary(
         "vdot_end": vdot_values[-1] if vdot_values else None,
         "vdot_max": max(vdot_values) if vdot_values else None,
         "weekly_slices": weekly_slices,
+        "recorded_zone_time_s": _aggregate_recorded_zone_time(activities),
         "key_activities": _find_key_activities(activities),
         "activity_log": [_activity_log_entry(item) for item in reversed(activities)],
         "fit_file_count": fit_count,
@@ -267,6 +275,46 @@ def _activity_log_entry(item: dict[str, object]) -> dict[str, object]:
         "sport_type": item["sport_type"],
         "name": item["name"],
     }
+
+
+def _aggregate_recorded_zone_time(activities: list[dict[str, object]]) -> dict[str, dict[int, float]]:
+    totals: dict[str, dict[int, float]] = {name: defaultdict(float) for name in RECORDED_ZONE_FIELDS}
+    for activity in activities:
+        messages = activity["time_in_zone_messages"]
+        if not isinstance(messages, list):
+            raise ValueError("Activity time_in_zone_messages must be a list")
+        for message in messages:
+            if not isinstance(message, Mapping):
+                raise ValueError("Activity time-in-zone message must be an object")
+            for zone_type, field_name in RECORDED_ZONE_FIELDS.items():
+                zones = message.get(field_name)
+                if zones is None:
+                    continue
+                if not isinstance(zones, list):
+                    raise ValueError(f"Activity {field_name} must be a list")
+                for zone in zones:
+                    if not isinstance(zone, Mapping):
+                        raise ValueError(f"Activity {field_name} entry must be an object")
+                    zone_id = _optional_finite(zone.get("zone"))
+                    if zone_id is None or zone_id < 0 or not zone_id.is_integer():
+                        raise ValueError(f"Activity {field_name} entry has an invalid zone")
+                    seconds = _optional_nonnegative(zone.get("seconds"))
+                    if seconds is not None:
+                        totals[zone_type][int(zone_id)] += seconds
+    return {name: dict(sorted(values.items())) for name, values in totals.items()}
+
+
+def _zone_messages(value: object) -> list[Mapping[str, object]]:
+    if value is None:
+        return []
+    if not isinstance(value, list):
+        raise ValueError("Activity time_in_zone_messages must be a list")
+    messages: list[Mapping[str, object]] = []
+    for message in value:
+        if not isinstance(message, Mapping):
+            raise ValueError("Activity time-in-zone message must be an object")
+        messages.append(message)
+    return messages
 
 
 def _format_highlight(value: float, kind: str, unit: str, sport: str) -> str:

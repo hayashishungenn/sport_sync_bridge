@@ -140,7 +140,7 @@ AOT 伪代码与 Blutter ARM64 汇编交叉确认了 GarSync 的计算步骤：H
 
 `PeriodSummaryService.computeFast` 排序周期活动后调用距离、时长、TSS、能力估算、踏频、标准化功率、时间切片、PR、训练类型/强度模型、心率区间、关键活动和活动日志计算。`PeriodStats.toJson` 的字段名确认有 `totalDistance`、`totalDuration`、`activityCount`、`totalTSS`、`vdotStart`、`vdotEnd`、`weeklySlices`、`keyActivities` 与 `activityLog` 等；`WeeklySlice.toJson` 包含周起始日、距离、时长、活动数、TSS、均速和均功率。`_buildTimeSlices` 的周键通过 `_mondayOf` 格式为 `yyyy-MM-dd`。
 
-关键活动函数可见七项标签和比较指标：最长距离、最高 TSS、最快配速、最高 NP、最高爬升、最长时长、最高均速。`library period` 已从本地活动摘要重建周期总量、周切片、支持的 TSS/跑步 VDOT 字段、活动日志和这七类亮点。HR-TSS 仅在用户提供阈值心率时估算。APK 的训练类型分类、心率/配速/功率区间分布、功率曲线、PR 检测、FTP/CSS 估计尚未复刻；这些函数的 AOT 控制流仍有字段和派发恢复限制。
+关键活动函数可见七项标签和比较指标：最长距离、最高 TSS、最快配速、最高 NP、最高爬升、最长时长、最高均速。`library period` 已从本地活动摘要重建周期总量、周切片、支持的 TSS/跑步 VDOT 字段、活动日志和这七类亮点。`recorded_zone_time_s` 按活动 FIT `time_in_zone` 已存的 `heart_rate_zones`、`speed_zones`、`cadence_zones`、`power_zones` 秒数累加，和 APK `_accumulateHrZones` / `_accumulatePaceZones` 从活动采样与阈值生成的周期分布不是同一种计算。HR-TSS 仅在用户提供阈值心率时估算。APK 的训练类型分类、基于采样点重算的分区分布、功率曲线、PR 检测、FTP/CSS 估计尚未复刻；相关 AOT 伪代码仍有对象字段和动态派发恢复限制。
 
 ## 证据文件与限制
 
