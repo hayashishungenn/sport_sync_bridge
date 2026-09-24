@@ -18,6 +18,7 @@ from sport_sync_bridge.ble_bigrun_ecg import (
     BIGRUN_ECG_SERVICE_UUID,
     BigRunEcgFrame,
     build_bigrun_ecg_mode_packets,
+    decode_bigrun_ecg_payload,
     set_bigrun_ecg_work_mode,
     stream_bigrun_ecg,
     validate_bigrun_ecg_options,
@@ -27,6 +28,63 @@ from sport_sync_bridge.cli import main
 
 
 class BigRunEcgTests(unittest.TestCase):
+    def test_decodes_little_endian_samples_with_sensor_center_offset(self) -> None:
+        payload = bytes((0x41, 0x00, 0x10, 0x27, 0x18, 0x27, 0xFF))
+
+        self.assertEqual(decode_bigrun_ecg_payload(payload), (0, 8))
+        self.assertIsNone(decode_bigrun_ecg_payload(bytes((0x14, 0x06, 0x10, 0x27))))
+
+    def test_cli_decodes_raw_capture_to_samples_without_overwriting_input(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            config = SimpleNamespace(
+                data_dir=root / ".data",
+                db_path=root / ".data" / "state.db",
+                log_level="INFO",
+                log_path=root / "sync.log",
+            )
+            input_path = root / "ecg.jsonl"
+            original = (
+                json.dumps(
+                    {
+                        "timestamp": "2026-09-24T12:00:00+00:00",
+                        "payload_length": 6,
+                        "payload_hex": "410010271827",
+                    }
+                )
+                + "\n"
+                + json.dumps(
+                    {
+                        "timestamp": "2026-09-24T12:00:00.008+00:00",
+                        "payload_length": 2,
+                        "payload_hex": "1406",
+                    }
+                )
+                + "\n"
+            )
+            input_path.write_text(original, encoding="utf-8")
+            output_path = root / "decoded" / "samples.json"
+            stdout = io.StringIO()
+
+            with (
+                patch("sport_sync_bridge.cli.AppConfig.load", return_value=config),
+                patch("sport_sync_bridge.cli.configure_logging"),
+                contextlib.redirect_stdout(stdout),
+            ):
+                status = main(
+                    ["ble", "bigrun-ecg-decode", str(input_path), "--output", str(output_path)]
+                )
+
+            self.assertEqual(status, 0)
+            self.assertIn("frames=1 samples=2 sample_rate_hz=125", stdout.getvalue())
+            self.assertEqual(input_path.read_text(encoding="utf-8"), original)
+            decoded = json.loads(output_path.read_text(encoding="utf-8"))
+            self.assertEqual(decoded["frames"][0]["samples"], [0, 8])
+            self.assertEqual(decoded["frames"][0]["timestamp"], "2026-09-24T12:00:00+00:00")
+            self.assertEqual(decoded["sample_rate_hz"], 125)
+            self.assertEqual(decoded["ignored_frame_count"], 1)
+            self.assertEqual(decoded["decoded_frame_count"], 1)
+
     def test_identifies_bigrun_service_for_ble_registry(self) -> None:
         self.assertIn("bigrun_ecg", BLE_TYPES)
         self.assertEqual(

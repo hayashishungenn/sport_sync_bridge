@@ -35,6 +35,8 @@ from .ble_sensors import (
 )
 from .ble_bigrun_ecg import (
     BIGRUN_ECG_MODES,
+    BIGRUN_ECG_SAMPLE_RATE_HZ,
+    decode_bigrun_ecg_payload,
     set_bigrun_ecg_work_mode,
     stream_bigrun_ecg,
     validate_bigrun_ecg_options,
@@ -238,6 +240,12 @@ def build_parser() -> argparse.ArgumentParser:
     ble_bigrun_ecg.add_argument("--duration", type=float, default=60.0, help="Recording duration in seconds")
     ble_bigrun_ecg.add_argument("--timeout", type=float, default=15.0, help="Connection timeout in seconds")
     ble_bigrun_ecg.add_argument("--output", type=Path, help="Optional JSON Lines output path")
+    ble_bigrun_ecg_decode = ble_actions.add_parser(
+        "bigrun-ecg-decode",
+        help="Decode a raw BigRun ECG JSON Lines capture",
+    )
+    ble_bigrun_ecg_decode.add_argument("input", type=Path, help="Raw JSON Lines capture from bigrun-ecg")
+    ble_bigrun_ecg_decode.add_argument("--output", type=Path, required=True, help="Decoded JSON output path")
     ble_bigrun_ecg_mode = ble_actions.add_parser(
         "bigrun-ecg-mode",
         help="Set a BigRun ECG sensor work mode",
@@ -1092,6 +1100,82 @@ def _run_ble_command(args: argparse.Namespace, config: AppConfig) -> int:
             asyncio.run(set_bigrun_ecg_work_mode(args.address, args.mode, args.timeout))
             registry.update_last_connected(args.address)
             print(f"mode={args.mode}")
+            return 0
+
+        if args.ble_action == "bigrun-ecg-decode":
+            input_path = args.input.expanduser().resolve()
+            output_path = args.output.expanduser().resolve()
+            if input_path == output_path:
+                raise ValueError("Decoded ECG output must not overwrite the raw capture")
+
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            descriptor, temporary_name = tempfile.mkstemp(
+                prefix=f".{output_path.name}.",
+                suffix=".tmp",
+                dir=output_path.parent,
+            )
+            temporary_path = Path(temporary_name)
+            sample_count = 0
+            decoded_frame_count = 0
+            ignored_frame_count = 0
+            try:
+                with os.fdopen(descriptor, "w", encoding="utf-8", newline="") as output_stream:
+                    output_stream.write(
+                        f'{{"sample_rate_hz":{BIGRUN_ECG_SAMPLE_RATE_HZ},"frames":['
+                    )
+                    with input_path.open("r", encoding="utf-8") as input_stream:
+                        for line_number, line in enumerate(input_stream, start=1):
+                            if not line.strip():
+                                continue
+                            try:
+                                record = json.loads(line)
+                            except json.JSONDecodeError as exc:
+                                raise ValueError(f"Invalid JSON on ECG capture line {line_number}") from exc
+                            if not isinstance(record, dict) or not isinstance(record.get("payload_hex"), str):
+                                raise ValueError(f"ECG capture line {line_number} has no payload_hex string")
+                            try:
+                                payload = bytes.fromhex(record["payload_hex"])
+                            except ValueError as exc:
+                                raise ValueError(f"Invalid payload_hex on ECG capture line {line_number}") from exc
+                            payload_length = record.get("payload_length")
+                            if payload_length is not None and (
+                                isinstance(payload_length, bool)
+                                or not isinstance(payload_length, int)
+                                or payload_length != len(payload)
+                            ):
+                                raise ValueError(f"ECG capture line {line_number} has a mismatched payload_length")
+
+                            frame_samples = decode_bigrun_ecg_payload(payload)
+                            if frame_samples is None:
+                                ignored_frame_count += 1
+                                continue
+                            if decoded_frame_count:
+                                output_stream.write(",")
+                            frame = {"samples": frame_samples}
+                            timestamp = record.get("timestamp")
+                            if timestamp is not None:
+                                if not isinstance(timestamp, str):
+                                    raise ValueError(
+                                        f"ECG capture line {line_number} has an invalid timestamp"
+                                    )
+                                frame["timestamp"] = timestamp
+                            output_stream.write(json.dumps(frame, separators=(",", ":")))
+                            decoded_frame_count += 1
+                            sample_count += len(frame_samples)
+
+                    output_stream.write(
+                        f'],"sample_count":{sample_count},"decoded_frame_count":{decoded_frame_count},'
+                        f'"ignored_frame_count":{ignored_frame_count}}}\n'
+                    )
+                    output_stream.flush()
+                    os.fsync(output_stream.fileno())
+                os.replace(temporary_path, output_path)
+            finally:
+                if temporary_path.exists():
+                    temporary_path.unlink()
+
+            print(f"frames={decoded_frame_count} samples={sample_count} sample_rate_hz={BIGRUN_ECG_SAMPLE_RATE_HZ}")
+            print(f"output={output_path}")
             return 0
 
         if args.ble_action == "record":

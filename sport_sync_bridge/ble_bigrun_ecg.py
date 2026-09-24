@@ -14,6 +14,10 @@ BIGRUN_ECG_CONTROL_UUID = "f000efe104514000000000000000b000"
 BIGRUN_ECG_DATA_UUID = "f000efe304514000000000000000b000"
 BIGRUN_ECG_ENABLE_COMMAND = bytes((0x62,))
 BIGRUN_ECG_MODES = ("standard", "hrv", "ecg")
+BIGRUN_ECG_SAMPLE_RATE_HZ = 125
+_BIGRUN_ECG_SAMPLE_MARKER = 0x41
+_BIGRUN_ECG_SAMPLE_OFFSET = 2
+_BIGRUN_ECG_SAMPLE_CENTER = 10000
 
 _BIGRUN_ECG_MODE_BYTES = {
     "standard": (0, 0, 0),
@@ -29,6 +33,16 @@ class BigRunEcgFrame:
     timestamp: str
     payload_length: int
     payload_hex: str
+
+
+def decode_bigrun_ecg_payload(payload: bytes) -> tuple[int, ...] | None:
+    if not payload or payload[0] != _BIGRUN_ECG_SAMPLE_MARKER:
+        return None
+
+    return tuple(
+        ((payload[index + 1] << 8) | payload[index]) - _BIGRUN_ECG_SAMPLE_CENTER
+        for index in range(_BIGRUN_ECG_SAMPLE_OFFSET, len(payload) - 1, 2)
+    )
 
 
 async def stream_bigrun_ecg(
