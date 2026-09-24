@@ -168,6 +168,20 @@ AOT class 表确认 `TrainingType` 是六值枚举；活动详情页构造的本
 
 本项目的 `library period` 重新读取本地 FIT、GPX、TCX 活动文件，复现这些窗口和跨活动最大值聚合。JSON 结果使用 `power_curve_w`（秒数到整数瓦数），并报告可解析的功率样本活动数和缺少可读取源文件的活动数。静态伪代码与汇编不足以确认 GarSync 在不规则采样、长时间缺样和边界点上的全部处理；Python 重写采用时间戳滑动窗口，未通过 GarSync 运行时对照。
 
+### AI 单次活动分析提示词
+
+`AiCoachPageState._generateAnalysis` 从 `PreferenceProvider` 读取 `ai_analysis_detail` 与 `ai_analysis_focus`。AOT 字符串引用确认详略选项为 `brief`、`normal`、`detailed`，默认 `normal`；侧重点为 `performance`、`health`、`recovery`，默认 `performance`。默认值分别出现在 `PreferenceProvider.get:aiAnalysisDetail`（0xf90ba8）和 `PreferenceProvider.get:aiAnalysisFocus`（0x1020cb0），选项值出现在 `_AiCoachPageState._buildOptions`。
+
+`AiPromptBuilder.build`（0x101d0b0 起）提示模型先分析活动和健康数据，再给行动建议。提示词要求不提供医疗建议或诊断、按指定语言代码作答、引用数字时照录输入数据且不取整/近似/编造，并分成 Training Analysis 与 Improvement Advice 两部分。详略规则为：
+
+- `brief`：纯文本、不用 Markdown，分析 2–3 句，建议 1–2 条，约一屏。
+- `normal`：使用 Markdown 标题，分析 2–3 段，建议 1–2 段并含 2–3 条建议，约两屏。
+- `detailed`：使用 Markdown 标题，分析 3–5 个维度，给 3–5 条有数据依据的建议，约五屏以内。
+
+侧重点分别覆盖运动表现（速度、功率、心率效率）、健康与长期健康收益、休息恢复与过度训练风险。提示词还包含运动员资料、近期训练、待分析活动和 Training Type 区块；独立 helper 会写入活动前一夜睡眠、活动日早间基线、建议恢复时长、Body Battery、静息心率、HRV 状态/基线，以及睡眠时长、评分、阶段和夜间生理指标。字符串与调用路径来自 AOTopsy `string_refs.jsonl`、`AiPromptBuilder` 汇编和 `_AiCoachPageState._generateAnalysis` 静态结果。
+
+本项目现有 `ai-analysis` CLI 已提供相同的三种侧重点和详略值，语言代码可选，默认 `zh-CN`；没有复刻 GarSync 偏好持久化。其健康上下文来自用户导入的健康 CSV，仅带入当前本地摘要中的最新指标，未按活动日期构造睡眠/早间恢复上下文，也没有独立的年龄、运动员档案或 GarSync 的 Training Type 分类。AI 接口、提示词和静态字段均不证明 GarSync 运行时实际发送了哪些数据。
+
 ## 证据文件与限制
 
 完整解包和静态分析产物保存在被 `.gitignore` 忽略的 `.data/apk_reverse/`，没有随报告提交：
