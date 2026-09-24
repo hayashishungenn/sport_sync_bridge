@@ -530,6 +530,20 @@ def build_ai_analysis_prompt(
             "heart_rate_calculation",
             "bpm",
         ),
+        "速度分区时间："
+        + _format_zone_groups(
+            activity_summary.get("time_in_zone_messages"),
+            "speed_zones",
+            "",
+            "m/s",
+        ),
+        "踏频分区时间："
+        + _format_zone_groups(
+            activity_summary.get("time_in_zone_messages"),
+            "cadence_zones",
+            "",
+            "rpm",
+        ),
         "功率分区时间："
         + _format_zone_groups(
             activity_summary.get("time_in_zone_messages"),

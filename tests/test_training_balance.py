@@ -152,6 +152,10 @@ class TrainingBalanceTests(unittest.TestCase):
                         "time_in_hr_zone": [30, 60],
                         "hr_zone_high_boundary": [140, 160],
                         "hr_calc_type": 2,
+                        "time_in_speed_zone": [5, 10],
+                        "speed_zone_high_boundary": [3, 4],
+                        "time_in_cadence_zone": [15, 20],
+                        "cadence_zone_high_bondary": [80, 90],
                         "time_in_power_zone": [40, 50],
                         "power_zone_high_boundary": [200, 250],
                         "pwr_calc_type": 1,
@@ -173,6 +177,10 @@ class TrainingBalanceTests(unittest.TestCase):
             self.assertIn("心率分区时间：", prompt)
             self.assertIn("心率储备百分比", prompt)
             self.assertIn("Z2 60.0秒（上界 160.0 bpm）", prompt)
+            self.assertIn("速度分区时间：", prompt)
+            self.assertIn("Z2 10.0秒（上界 4.0 m/s）", prompt)
+            self.assertIn("踏频分区时间：", prompt)
+            self.assertIn("Z2 20.0秒（上界 90.0 rpm）", prompt)
             self.assertIn("功率分区时间：", prompt)
             self.assertIn("FTP 百分比", prompt)
 
