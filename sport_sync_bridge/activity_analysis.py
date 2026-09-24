@@ -4,13 +4,14 @@ import csv
 import html
 import io
 import json
+import math
 import os
 import re
 import statistics
 import tempfile
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Callable, Iterable
+from typing import Callable, Iterable, Sequence
 
 from .formats import ActivityFile, ActivityTimeInZone, ActivityZoneTime, TrackPoint
 from .training_intensity import (
@@ -18,6 +19,7 @@ from .training_intensity import (
     classify_heart_rate_intensity,
     classify_power_intensity,
     classify_speed_intensity,
+    derive_speed_zone_times,
 )
 from .utils import ensure_directory, safe_filename
 
@@ -482,6 +484,7 @@ def build_ai_analysis_prompt(
     language: str = "zh-CN",
     focus: str = "performance",
     detail: str = "normal",
+    speed_samples: Sequence[tuple[datetime | None, object]] | None = None,
 ) -> str:
     language = validate_ai_language_code(language)
     focus_instructions = {
@@ -557,7 +560,8 @@ def build_ai_analysis_prompt(
             "power_calculation",
             "W",
         ),
-        "FIT 分区训练强度参考：" + _format_training_intensity(activity_summary),
+        "FIT 分区训练强度参考："
+        + _format_training_intensity(activity_summary, health_summary, speed_samples),
         "",
         f"已导入活动：{recent['activity_count']} 次",
         f"活动总距离（米）：{recent['distance_m']:.1f}",
@@ -570,7 +574,11 @@ def build_ai_analysis_prompt(
             f"{week_start}: {values['activities']} 次，{values['distance_m'] / 1000:.2f} 公里，"
             f"{values['duration_s'] / 3600:.2f} 小时"
         )
-    health_before = health_summary.get("before_activity") if isinstance(health_summary, dict) else None
+    health_before = (
+        health_summary.get("before_activity")
+        if isinstance(health_summary, dict)
+        else None
+    )
     if isinstance(health_before, dict) and health_before:
         lines.extend(("", "活动开始前每项指标最近一次记录（时间均早于活动开始，时间戳为 UTC）："))
         for metric, value in sorted(health_before.items()):
@@ -850,10 +858,14 @@ def _zone_summary(zone: ActivityZoneTime) -> dict[str, float | int | None]:
     return {"zone": zone.zone, "seconds": zone.seconds, "high_boundary": zone.high_boundary}
 
 
-def _format_training_intensity(activity_summary: dict[str, object]) -> str:
+def _format_training_intensity(
+    activity_summary: dict[str, object],
+    health_summary: dict[str, object] | None = None,
+    speed_samples: Sequence[tuple[datetime | None, object]] | None = None,
+) -> str:
     messages = activity_summary.get("time_in_zone_messages")
     if not isinstance(messages, list):
-        return "未知（无分区记录）"
+        messages = []
 
     duration = activity_summary.get("timer_time_s")
     if duration is None:
@@ -864,10 +876,42 @@ def _format_training_intensity(activity_summary: dict[str, object]) -> str:
         else None
     )
     sport_type = activity_summary.get("sport_type")
+    threshold_speed = None
+    health_before = (
+        health_summary.get("before_activity")
+        if isinstance(health_summary, dict)
+        else None
+    )
+    if isinstance(health_before, dict):
+        threshold_observation = health_before.get("lactate_threshold_speed_kmh")
+        if isinstance(threshold_observation, dict):
+            unit = str(threshold_observation.get("unit") or "").strip().casefold()
+            if unit in {"km/h", "kmh", "kph"}:
+                threshold_speed = threshold_observation.get("value")
+
+    derived_speed_zones: list[dict[str, float | int]] = []
+    timer_duration = activity_summary.get("timer_time_s")
+    if (
+        speed_samples is not None
+        and isinstance(threshold_speed, (int, float))
+        and not isinstance(threshold_speed, bool)
+        and math.isfinite(float(threshold_speed))
+        and threshold_speed > 0
+        and isinstance(timer_duration, (int, float))
+        and not isinstance(timer_duration, bool)
+        and math.isfinite(float(timer_duration))
+        and threshold_speed > timer_duration
+    ):
+        derived_speed_zones = derive_speed_zone_times(speed_samples, threshold_speed)
+
+    messages = [message for message in messages if isinstance(message, dict)]
+    if not messages and not derived_speed_zones:
+        return "未知（无分区记录）"
+    if not messages:
+        messages = [{}]
+
     labels: list[str] = []
     for index, message in enumerate(messages, start=1):
-        if not isinstance(message, dict):
-            continue
         heart_rate = classify_heart_rate_intensity(
             message.get("heart_rate_zones"), duration, sport_type
         )
@@ -884,6 +928,7 @@ def _format_training_intensity(activity_summary: dict[str, object]) -> str:
             duration,
             sport_type,
             intensity_factor=power_intensity_factor,
+            speed_zones=derived_speed_zones if index == 1 else None,
         )
         group_labels = []
         if heart_rate is not None:

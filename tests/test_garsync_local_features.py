@@ -8,7 +8,7 @@ import threading
 import unittest
 import urllib.request
 import zipfile
-from datetime import date
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -288,6 +288,63 @@ class GarSyncLocalFeatureTests(unittest.TestCase):
         self.assertIn("未知", prompt)
         self.assertIn("必须使用语言代码 zh-CN", prompt)
         self.assertIn("医学诊断", prompt)
+
+    def test_ai_analysis_cli_uses_track_speed_for_garsync_intensity(self) -> None:
+        start = datetime(2026, 1, 2, 3, 4, tzinfo=timezone.utc)
+        speeds = [6.0] * 11 + [11.0] * 8 + [12.0] * 12
+        points = "".join(
+            "<trkpt lat=\"31.23\" lon=\"121.47\">"
+            f"<time>{(start + timedelta(seconds=index)).isoformat().replace('+00:00', 'Z')}</time>"
+            f"<extensions><ssb:speed>{speed}</ssb:speed></extensions></trkpt>"
+            for index, speed in enumerate(speeds)
+        )
+        activity_path = self.root / "rowing.gpx"
+        activity_path.write_text(
+            "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+            "<gpx xmlns=\"http://www.topografix.com/GPX/1/1\" "
+            "xmlns:ssb=\"https://sport-sync-bridge.example/xmlschemas/extensions/v1\" "
+            "version=\"1.1\" creator=\"test\"><trk><name>Intervals</name>"
+            f"<type>rowing</type><trkseg>{points}</trkseg></trk></gpx>",
+            encoding="utf-8",
+        )
+        imported = self.library.import_paths([activity_path])[0]
+        self.state.upsert_local_activity(
+            fingerprint=imported.fingerprint,
+            name="Intervals",
+            sport_type="rowing",
+            start_time=start.isoformat(),
+            file_path=str(activity_path),
+            source_label="test",
+            file_format="gpx",
+            summary={
+                "timer_time_s": 30,
+                "end_time": (start + timedelta(seconds=30)).isoformat(),
+                "time_in_zone_messages": [],
+            },
+        )
+        self.state.upsert_health_observation(
+            observed_at="2026-01-02T03:00:00+00:00",
+            metric="lactate_threshold_speed_kmh",
+            value=36,
+            unit="km/h",
+            source_label="test",
+            fingerprint="threshold-speed-before-activity",
+        )
+        config = SimpleNamespace(
+            data_dir=self.root / ".data",
+            db_path=self.state.path,
+            log_level="INFO",
+            log_path=self.root / "sync.log",
+        )
+        output = io.StringIO()
+        with (
+            patch("sport_sync_bridge.cli.AppConfig.load", return_value=config),
+            patch("sport_sync_bridge.cli.configure_logging"),
+            contextlib.redirect_stdout(output),
+        ):
+            self.assertEqual(main(["ai-analysis", imported.fingerprint, "--prompt-only"]), 0)
+
+        self.assertIn("FIT 分区训练强度参考：GarSync分类=VO2max", output.getvalue())
 
     def test_ai_prompt_options_cover_reversed_focus_and_detail_modes(self) -> None:
         activity = read_activity_file(create_gpx(self.root / "ai-options.gpx"))

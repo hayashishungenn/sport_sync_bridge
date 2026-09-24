@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import unittest
+from datetime import datetime, timedelta, timezone
 
 from sport_sync_bridge.activity_analysis import build_ai_analysis_prompt
 from sport_sync_bridge.training_intensity import (
@@ -8,6 +9,7 @@ from sport_sync_bridge.training_intensity import (
     classify_heart_rate_intensity,
     classify_power_intensity,
     classify_speed_intensity,
+    derive_speed_zone_times,
 )
 
 
@@ -232,6 +234,57 @@ class TrainingIntensityTests(unittest.TestCase):
         self.assertIsNone(classify_speed_intensity([{"zone": 1, "seconds": 100}]))
         self.assertIsNone(classify_speed_intensity([]))
 
+    def test_speed_zone_derivation_uses_threshold_kmh_and_median_filter(self) -> None:
+        start = datetime(2026, 1, 1, tzinfo=timezone.utc)
+        steady_samples = [
+            (start + timedelta(seconds=index), 7.5) for index in range(5)
+        ]
+        zones = derive_speed_zone_times(steady_samples, 36.0)
+
+        self.assertEqual(zones, [{"zone": 2, "seconds": 4.0, "high_boundary": 8.0}])
+
+        noisy_samples = [
+            (start + timedelta(seconds=index), speed)
+            for index, speed in enumerate((10.0, 10.0, 0.0, 10.0, 10.0))
+        ]
+        filtered_zones = derive_speed_zone_times(noisy_samples, 36.0)
+        self.assertEqual(
+            filtered_zones,
+            [{"zone": 4, "seconds": 4.0, "high_boundary": 10.5}],
+        )
+
+    def test_speed_zone_derivation_caps_long_sample_gaps(self) -> None:
+        start = datetime(2026, 1, 1, tzinfo=timezone.utc)
+        zones = derive_speed_zone_times(
+            [(start, 6.0), (start + timedelta(seconds=60), 6.0)],
+            36.0,
+        )
+
+        self.assertEqual(zones, [{"zone": 1, "seconds": 30.0, "high_boundary": 7.0}])
+
+    def test_speed_training_selector_uses_speed_except_for_hr_only_sports(self) -> None:
+        speed_zones = [
+            {"zone": 1, "seconds": 80},
+            {"zone": 5, "seconds": 8},
+            {"zone": 6, "seconds": 12},
+        ]
+        self.assertEqual(
+            classify_activity_training_intensity(
+                [], [], 1200, "rowing", speed_zones=speed_zones
+            ),
+            "VO2max",
+        )
+        self.assertEqual(
+            classify_activity_training_intensity(
+                [{"zone": 1, "seconds": 100}],
+                [],
+                1200,
+                "running",
+                speed_zones=speed_zones,
+            ),
+            "Recovery",
+        )
+
     def test_missing_or_invalid_zone_times_do_not_create_a_label(self) -> None:
         self.assertIsNone(classify_heart_rate_intensity([], 7200, "cycling"))
         self.assertIsNone(
@@ -312,6 +365,55 @@ class TrainingIntensityTests(unittest.TestCase):
         )
 
         self.assertIn("FIT 分区训练强度参考：功率=Anaerobic", prompt)
+
+    def test_ai_prompt_uses_pre_activity_threshold_speed_for_garsync_selection(self) -> None:
+        start = datetime(2026, 1, 1, tzinfo=timezone.utc)
+        speeds = [6.0] * 11 + [11.0] * 8 + [12.0] * 12
+        samples = [
+            (start + timedelta(seconds=index), speed)
+            for index, speed in enumerate(speeds)
+        ]
+        prompt = build_ai_analysis_prompt(
+            {
+                "sport_type": "rowing",
+                "timer_time_s": 30,
+                "time_in_zone_messages": [],
+            },
+            [],
+            health_summary={
+                "before_activity": {
+                    "lactate_threshold_speed_kmh": {"value": 36.0, "unit": "km/h"}
+                }
+            },
+            speed_samples=samples,
+        )
+
+        self.assertIn("FIT 分区训练强度参考：GarSync分类=VO2max", prompt)
+
+    def test_ai_prompt_uses_heart_rate_when_ltp_does_not_exceed_timer(self) -> None:
+        start = datetime(2026, 1, 1, tzinfo=timezone.utc)
+        samples = [
+            (start + timedelta(seconds=index), 12.0)
+            for index in range(37)
+        ]
+        prompt = build_ai_analysis_prompt(
+            {
+                "sport_type": "rowing",
+                "timer_time_s": 36,
+                "time_in_zone_messages": [
+                    {"heart_rate_zones": [{"zone": 1, "seconds": 30}]}
+                ],
+            },
+            [],
+            health_summary={
+                "before_activity": {
+                    "lactate_threshold_speed_kmh": {"value": 36.0, "unit": "km/h"}
+                }
+            },
+            speed_samples=samples,
+        )
+
+        self.assertIn("FIT 分区训练强度参考：心率=Recovery，GarSync分类=Recovery", prompt)
 
 
 if __name__ == "__main__":

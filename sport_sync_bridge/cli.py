@@ -918,14 +918,43 @@ def _run_local_command(args: argparse.Namespace, config: AppConfig) -> int:
             summary = json.loads(row["summary_json"])
             summary.update({"name": row["name"], "sport_type": row["sport_type"]})
             summary["start_time"] = row["start_time"] or summary.get("start_time")
+            health_context = summarize_health_for_activity(
+                state, summary.get("start_time"), summary.get("end_time")
+            )
+            speed_samples = None
+            health_before = health_context.get("before_activity")
+            threshold_speed = (
+                health_before.get("lactate_threshold_speed_kmh")
+                if isinstance(health_before, dict)
+                else None
+            )
+            if (
+                isinstance(threshold_speed, dict)
+                and str(threshold_speed.get("unit") or "").strip().casefold()
+                in {"km/h", "kmh", "kph"}
+                and isinstance(threshold_speed.get("value"), (int, float))
+                and not isinstance(threshold_speed.get("value"), bool)
+                and threshold_speed["value"] > 0
+                and isinstance(summary.get("timer_time_s"), (int, float))
+                and not isinstance(summary.get("timer_time_s"), bool)
+                and threshold_speed["value"] > summary["timer_time_s"]
+            ):
+                source_path = Path(row["file_path"])
+                if source_path.is_file():
+                    source_activity = read_activity_file(source_path)
+                    speed_samples = [
+                        (point.timestamp, point.speed_mps)
+                        for point in source_activity.track_points
+                    ]
             prompt = build_ai_analysis_prompt(
                 summary,
                 state.list_local_activities(),
                 args.question,
-                summarize_health_for_activity(state, summary.get("start_time"), summary.get("end_time")),
+                health_context,
                 language=args.language,
                 focus=args.focus,
                 detail=args.detail,
+                speed_samples=speed_samples,
             )
             if args.prompt_only:
                 print(prompt)
