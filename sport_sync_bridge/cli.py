@@ -33,7 +33,12 @@ from .ble_sensors import (
     stream_sensor_data,
     validate_sensor_recording_options,
 )
-from .ble_bigrun_ecg import stream_bigrun_ecg, validate_bigrun_ecg_options
+from .ble_bigrun_ecg import (
+    BIGRUN_ECG_MODES,
+    set_bigrun_ecg_work_mode,
+    stream_bigrun_ecg,
+    validate_bigrun_ecg_options,
+)
 from .config import AppConfig
 from .engine import SyncEngine
 from .fit_tools import normalize_fit_coordinates
@@ -233,6 +238,13 @@ def build_parser() -> argparse.ArgumentParser:
     ble_bigrun_ecg.add_argument("--duration", type=float, default=60.0, help="Recording duration in seconds")
     ble_bigrun_ecg.add_argument("--timeout", type=float, default=15.0, help="Connection timeout in seconds")
     ble_bigrun_ecg.add_argument("--output", type=Path, help="Optional JSON Lines output path")
+    ble_bigrun_ecg_mode = ble_actions.add_parser(
+        "bigrun-ecg-mode",
+        help="Set a BigRun ECG sensor work mode",
+    )
+    ble_bigrun_ecg_mode.add_argument("address", help="BigRun BLE device address or platform identifier")
+    ble_bigrun_ecg_mode.add_argument("mode", choices=BIGRUN_ECG_MODES)
+    ble_bigrun_ecg_mode.add_argument("--timeout", type=float, default=15.0, help="Connection timeout in seconds")
     ble_rename = ble_actions.add_parser("rename", help="Rename a saved BLE sensor")
     ble_rename.add_argument("address", help="Saved BLE device address")
     ble_rename.add_argument("name", help="Local display name")
@@ -1074,6 +1086,12 @@ def _run_ble_command(args: argparse.Namespace, config: AppConfig) -> int:
             print(f"frames={frame_count}")
             if output_path is not None:
                 print(f"output={output_path}")
+            return 0
+
+        if args.ble_action == "bigrun-ecg-mode":
+            asyncio.run(set_bigrun_ecg_work_mode(args.address, args.mode, args.timeout))
+            registry.update_last_connected(args.address)
+            print(f"mode={args.mode}")
             return 0
 
         if args.ble_action == "record":
