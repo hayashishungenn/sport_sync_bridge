@@ -4,8 +4,10 @@ import json
 import math
 from collections import defaultdict
 from datetime import date, datetime, timedelta, timezone
+from pathlib import Path
 from typing import Iterable, Mapping
 
+from .formats import read_activity_file
 from .utils import parse_datetime
 from .vdot import RUNNING_SPORTS, calculate_vdot
 
@@ -24,6 +26,8 @@ RECORDED_ZONE_FIELDS = {
     "cadence": "cadence_zones",
     "power": "power_zones",
 }
+POWER_CURVE_DURATIONS_S = (10, 60, 120, 360, 600, 2400, 3600, 7200, 14400, 21600)
+POWER_FILE_FORMATS = {"fit", "gpx", "tcx"}
 
 
 def calculate_period_summary(
@@ -90,6 +94,7 @@ def calculate_period_summary(
                 "name": str(_row_value(row, "name") or summary.get("name") or "Activity"),
                 "sport_type": activity_sport,
                 "file_format": str(_row_value(row, "file_format") or ""),
+                "file_path": _row_value(row, "file_path"),
                 "start_time": start_time,
                 "date": start_time.date(),
                 "distance_m": distance,
@@ -118,6 +123,7 @@ def calculate_period_summary(
     total_duration = sum(float(item["duration_s"]) for item in activities if item["duration_s"] is not None)
     total_tss = sum(float(item["training_stress_score"]) for item in scored)
     fit_count = sum(item["file_format"] == "fit" for item in activities)
+    power_curve, power_sample_activity_count, power_curve_unavailable_count = _aggregate_power_curves(activities)
 
     weekly_slices = _build_weekly_slices(activities)
     return {
@@ -136,6 +142,9 @@ def calculate_period_summary(
         "vdot_max": max(vdot_values) if vdot_values else None,
         "weekly_slices": weekly_slices,
         "recorded_zone_time_s": _aggregate_recorded_zone_time(activities),
+        "power_curve_w": power_curve,
+        "power_curve_sample_activity_count": power_sample_activity_count,
+        "power_curve_unavailable_activity_count": power_curve_unavailable_count,
         "key_activities": _find_key_activities(activities),
         "activity_log": [_activity_log_entry(item) for item in reversed(activities)],
         "fit_file_count": fit_count,
@@ -172,6 +181,17 @@ def format_period_summary(summary: dict[str, object], output_format: str) -> str
         lines.extend(f"  {item['title']}：{item['metric_label']}（{item['name']}，{item['date']}）" for item in highlights)
     else:
         lines.append("  无可用亮点")
+    power_curve = summary["power_curve_w"]
+    if isinstance(power_curve, Mapping) and power_curve:
+        values = ", ".join(
+            f"{int(duration)} 秒 {int(watts)} W"
+            for duration, watts in sorted(power_curve.items(), key=lambda item: int(item[0]))
+        )
+        lines.append(f"功率曲线：{values}")
+    else:
+        lines.append("功率曲线：暂无符合时长要求的功率样本")
+    if int(summary["power_curve_unavailable_activity_count"]):
+        lines.append(f"功率曲线缺少可读取的运动文件：{summary['power_curve_unavailable_activity_count']} 项")
     return "\n".join(lines) + "\n"
 
 
@@ -275,6 +295,78 @@ def _activity_log_entry(item: dict[str, object]) -> dict[str, object]:
         "sport_type": item["sport_type"],
         "name": item["name"],
     }
+
+
+def _aggregate_power_curves(
+    activities: list[dict[str, object]],
+) -> tuple[dict[int, int], int, int]:
+    curve: dict[int, int] = {}
+    sample_activity_count = 0
+    unavailable_activity_count = 0
+    for activity in activities:
+        file_format = str(activity.get("file_format") or "").lower()
+        raw_path = activity.get("file_path")
+        if file_format not in POWER_FILE_FORMATS or not isinstance(raw_path, (str, Path)) or not raw_path:
+            unavailable_activity_count += 1
+            continue
+        path = Path(raw_path)
+        if not path.is_file():
+            unavailable_activity_count += 1
+            continue
+        parsed = read_activity_file(path)
+        if any(
+            isinstance(getattr(point, "timestamp", None), datetime)
+            and _optional_nonnegative(getattr(point, "power_w", None)) is not None
+            for point in parsed.track_points
+        ):
+            sample_activity_count += 1
+        samples = _activity_power_samples(parsed.track_points)
+        for duration, watts in samples.items():
+            curve[duration] = max(curve.get(duration, watts), watts)
+    return dict(sorted(curve.items())), sample_activity_count, unavailable_activity_count
+
+
+def _activity_power_samples(points: Iterable[object]) -> dict[int, int]:
+    samples: list[tuple[datetime, float | None]] = []
+    for point in points:
+        timestamp = getattr(point, "timestamp", None)
+        if not isinstance(timestamp, datetime):
+            continue
+        timestamp = timestamp.replace(tzinfo=timezone.utc) if timestamp.tzinfo is None else timestamp.astimezone(timezone.utc)
+        power = _optional_nonnegative(getattr(point, "power_w", None))
+        samples.append((timestamp, power))
+    samples.sort(key=lambda item: item[0])
+    if len(samples) < 2:
+        return {}
+
+    activity_span = (samples[-1][0] - samples[0][0]).total_seconds()
+    curve: dict[int, int] = {}
+    for duration in POWER_CURVE_DURATIONS_S:
+        if activity_span < duration:
+            continue
+        left = 0
+        power_sum = 0.0
+        power_count = 0
+        best_average: float | None = None
+        for right, (end_time, power) in enumerate(samples):
+            if power is not None:
+                power_sum += power
+                power_count += 1
+            cutoff = end_time - timedelta(seconds=duration)
+            while left <= right and samples[left][0] < cutoff:
+                old_power = samples[left][1]
+                if old_power is not None:
+                    power_sum -= old_power
+                    power_count -= 1
+                left += 1
+            if end_time - samples[left][0] < timedelta(seconds=duration) or power_count == 0:
+                continue
+            average = power_sum / power_count
+            if best_average is None or average > best_average:
+                best_average = average
+        if best_average is not None:
+            curve[duration] = int(best_average)
+    return curve
 
 
 def _aggregate_recorded_zone_time(activities: list[dict[str, object]]) -> dict[str, dict[int, float]]:

@@ -5,15 +5,21 @@ import io
 import json
 import tempfile
 import unittest
-from datetime import date
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
 from sport_sync_bridge.activity_library import LocalActivityLibrary
 from sport_sync_bridge.cli import main
-from sport_sync_bridge.period_summary import calculate_period_summary, format_period_summary
+from sport_sync_bridge.formats import TrackPoint
+from sport_sync_bridge.period_summary import (
+    _activity_power_samples,
+    calculate_period_summary,
+    format_period_summary,
+)
 from sport_sync_bridge.state import StateDB
+from tests.activity_fixtures import create_gpx
 
 
 class PeriodSummaryTests(unittest.TestCase):
@@ -115,6 +121,75 @@ class PeriodSummaryTests(unittest.TestCase):
         self.assertEqual(result["recorded_zone_time_s"]["cadence"], {3: 800.0})
         self.assertEqual(result["recorded_zone_time_s"]["power"], {1: 450.0})
 
+    def test_period_merges_sampled_power_curves_from_activity_files(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            first = create_gpx(root / "first.gpx")
+            second = create_gpx(root / "second.gpx")
+            second.write_text(
+                second.read_text(encoding="utf-8").replace(
+                    "<ssb:power>200</ssb:power>", "<ssb:power>300</ssb:power>"
+                ).replace("<ssb:power>201</ssb:power>", "<ssb:power>400</ssb:power>"),
+                encoding="utf-8",
+            )
+            rows = [
+                self._row(
+                    "a" * 64,
+                    "cycling",
+                    "2026-01-02T03:04:00Z",
+                    "gpx",
+                    100,
+                    60,
+                    150,
+                    file_path=first,
+                ),
+                self._row(
+                    "b" * 64,
+                    "cycling",
+                    "2026-01-03T03:04:00Z",
+                    "gpx",
+                    100,
+                    60,
+                    150,
+                    file_path=second,
+                ),
+            ]
+
+            result = calculate_period_summary(
+                rows,
+                date_from=date(2026, 1, 1),
+                date_to=date(2026, 1, 7),
+            )
+
+        self.assertEqual(result["power_curve_w"], {60: 350})
+        self.assertEqual(result["power_curve_sample_activity_count"], 2)
+        self.assertEqual(result["power_curve_unavailable_activity_count"], 0)
+        self.assertIn("60 秒 350 W", format_period_summary(result, "txt"))
+
+    def test_sampled_power_curve_uses_maximum_sliding_window_mean(self) -> None:
+        start = datetime.fromisoformat("2026-01-01T00:00:00+00:00")
+        points = [
+            TrackPoint(timestamp=start + timedelta(seconds=second), power_w=power)
+            for second, power in ((0, 100), (5, 100), (10, 500), (15, 600))
+        ]
+
+        result = _activity_power_samples(points)
+
+        self.assertEqual(result, {10: 400})
+
+    def test_period_reports_activities_without_readable_power_source(self) -> None:
+        rows = [self._row("a" * 64, "running", "2026-01-01T08:00:00Z", "fit", 5000, 1500, 150)]
+
+        result = calculate_period_summary(
+            rows,
+            date_from=date(2026, 1, 1),
+            date_to=date(2026, 1, 1),
+        )
+
+        self.assertEqual(result["power_curve_w"], {})
+        self.assertEqual(result["power_curve_sample_activity_count"], 0)
+        self.assertEqual(result["power_curve_unavailable_activity_count"], 1)
+
     def test_running_vdot_trend_and_sport_filter(self) -> None:
         rows = [
             self._row("a" * 64, "running", "2026-01-01T08:00:00Z", "fit", 5000, 1500, 80),
@@ -210,6 +285,7 @@ class PeriodSummaryTests(unittest.TestCase):
         *,
         tss: float | None = None,
         zones: list[dict[str, object]] | None = None,
+        file_path: Path | None = None,
     ) -> dict[str, object]:
         summary: dict[str, object] = {
             "distance_m": distance,
@@ -227,6 +303,7 @@ class PeriodSummaryTests(unittest.TestCase):
             "sport_type": sport,
             "start_time": start_time,
             "file_format": file_format,
+            "file_path": str(file_path) if file_path else None,
             "summary_json": json.dumps(summary),
         }
 

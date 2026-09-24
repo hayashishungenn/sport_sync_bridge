@@ -140,7 +140,13 @@ AOT 伪代码与 Blutter ARM64 汇编交叉确认了 GarSync 的计算步骤：H
 
 `PeriodSummaryService.computeFast` 排序周期活动后调用距离、时长、TSS、能力估算、踏频、标准化功率、时间切片、PR、训练类型/强度模型、心率区间、关键活动和活动日志计算。`PeriodStats.toJson` 的字段名确认有 `totalDistance`、`totalDuration`、`activityCount`、`totalTSS`、`vdotStart`、`vdotEnd`、`weeklySlices`、`keyActivities` 与 `activityLog` 等；`WeeklySlice.toJson` 包含周起始日、距离、时长、活动数、TSS、均速和均功率。`_buildTimeSlices` 的周键通过 `_mondayOf` 格式为 `yyyy-MM-dd`。
 
-关键活动函数可见七项标签和比较指标：最长距离、最高 TSS、最快配速、最高 NP、最高爬升、最长时长、最高均速。`library period` 已从本地活动摘要重建周期总量、周切片、支持的 TSS/跑步 VDOT 字段、活动日志和这七类亮点。`recorded_zone_time_s` 按活动 FIT `time_in_zone` 已存的 `heart_rate_zones`、`speed_zones`、`cadence_zones`、`power_zones` 秒数累加，和 APK `_accumulateHrZones` / `_accumulatePaceZones` 从活动采样与阈值生成的周期分布不是同一种计算。HR-TSS 仅在用户提供阈值心率时估算。APK 的训练类型分类、基于采样点重算的分区分布、功率曲线、PR 检测、FTP/CSS 估计尚未复刻；相关 AOT 伪代码仍有对象字段和动态派发恢复限制。
+关键活动函数可见七项标签和比较指标：最长距离、最高 TSS、最快配速、最高 NP、最高爬升、最长时长、最高均速。`library period` 已从本地活动摘要重建周期总量、周切片、支持的 TSS/跑步 VDOT 字段、活动日志和这七类亮点。`recorded_zone_time_s` 按活动 FIT `time_in_zone` 已存的 `heart_rate_zones`、`speed_zones`、`cadence_zones`、`power_zones` 秒数累加，和 APK `_accumulateHrZones` / `_accumulatePaceZones` 从活动采样与阈值生成的周期分布不是同一种计算。HR-TSS 仅在用户提供阈值心率时估算。训练类型分类、基于采样点重算的分区分布、PR 检测和 FTP/CSS 估计尚未复刻；相关 AOT 伪代码仍有对象字段和动态派发恢复限制。
+
+### 周期功率曲线补充复核
+
+`PeriodSummaryService._computePowerCurve` 的 AOT 汇编初始化 10 个窗口秒数：10、60、120、360、600、2400、3600、7200、14400、21600。实现按活动轨迹采样点滚动维护窗口内功率总和与样本数，计算算术平均值并转为整数；活动时长达不到窗口长度时跳过。`_mergePowerCurves` 遍历各活动结果，对相同窗口保留较大的功率值。`PeriodStats.toJson` 将结果暴露为 `powerCurve`，周期复核页显示曲线，并可标注基于近期样本或全部活动。
+
+本项目的 `library period` 重新读取本地 FIT、GPX、TCX 活动文件，复现这些窗口和跨活动最大值聚合。JSON 结果使用 `power_curve_w`（秒数到整数瓦数），并报告可解析的功率样本活动数和缺少可读取源文件的活动数。静态伪代码与汇编不足以确认 GarSync 在不规则采样、长时间缺样和边界点上的全部处理；Python 重写采用时间戳滑动窗口，未通过 GarSync 运行时对照。
 
 ## 证据文件与限制
 
