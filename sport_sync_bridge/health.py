@@ -4,7 +4,7 @@ import csv
 import hashlib
 import io
 import math
-from datetime import datetime, timezone
+from datetime import datetime, time, timedelta, timezone
 from pathlib import Path
 
 from .state import StateDB
@@ -125,6 +125,53 @@ def summarize_health(state_db: StateDB) -> dict[str, object]:
             ),
         }
     return {"measurement_count": sum(len(rows) for rows in grouped.values()), "latest": latest}
+
+
+def summarize_health_for_activity(
+    state_db: StateDB,
+    activity_start: object,
+    activity_end: object,
+) -> dict[str, dict[str, dict[str, object]]]:
+    if activity_start in (None, ""):
+        return {"before_activity": {}, "after_activity": {}}
+    start = parse_datetime(activity_start)
+    if start is None:
+        raise ValueError("Activity start time is invalid")
+    start = start.astimezone(timezone.utc)
+
+    before = _latest_health_by_metric(
+        state_db.list_health_observations(observed_before=start.isoformat())
+    )
+    after: dict[str, dict[str, object]] = {}
+    if activity_end not in (None, ""):
+        end = parse_datetime(activity_end)
+        if end is None:
+            raise ValueError("Activity end time is invalid")
+        end = end.astimezone(timezone.utc)
+        if end < start:
+            raise ValueError("Activity end time is before its start time")
+        end_of_day = datetime.combine(end.date() + timedelta(days=1), time.min, tzinfo=timezone.utc)
+        after = _latest_health_by_metric(
+            state_db.list_health_observations(
+                observed_after=end.isoformat(),
+                observed_before=end_of_day.isoformat(),
+            )
+        )
+    return {"before_activity": before, "after_activity": after}
+
+
+def _latest_health_by_metric(rows: list[object]) -> dict[str, dict[str, object]]:
+    latest: dict[str, dict[str, object]] = {}
+    for row in rows:
+        metric = str(row["metric"])
+        if metric in latest:
+            continue
+        latest[metric] = {
+            "value": float(row["value"]),
+            "unit": str(row["unit"]),
+            "observed_at": str(row["observed_at"]),
+        }
+    return latest
 
 
 def _normalize_metric(name: object, raw_value: object, raw_unit: object) -> tuple[str, float, str] | None:

@@ -276,10 +276,19 @@ def build_ai_analysis_prompt(
             f"{week_start}: {values['activities']} 次，{values['distance_m'] / 1000:.2f} 公里，"
             f"{values['duration_s'] / 3600:.2f} 小时"
         )
-    latest_health = health_summary.get("latest") if isinstance(health_summary, dict) else None
-    if isinstance(latest_health, dict) and latest_health:
-        lines.extend(("", "近期健康指标："))
-        for metric, value in sorted(latest_health.items()):
+    health_before = health_summary.get("before_activity") if isinstance(health_summary, dict) else None
+    if isinstance(health_before, dict) and health_before:
+        lines.extend(("", "活动开始前每项指标最近一次记录（时间均早于活动开始，时间戳为 UTC）："))
+        for metric, value in sorted(health_before.items()):
+            if isinstance(value, dict):
+                lines.append(
+                    f"{metric}: {value.get('value')} {value.get('unit', '')} "
+                    f"({value.get('observed_at', 'unknown time')})"
+                )
+    health_after = health_summary.get("after_activity") if isinstance(health_summary, dict) else None
+    if isinstance(health_after, dict) and health_after:
+        lines.extend(("", "活动结束后至结束日 UTC 日末记录的健康指标（时间戳为 UTC）："))
+        for metric, value in sorted(health_after.items()):
             if isinstance(value, dict):
                 lines.append(
                     f"{metric}: {value.get('value')} {value.get('unit', '')} "

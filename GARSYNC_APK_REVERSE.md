@@ -26,7 +26,8 @@ APK 容器、Android Manifest、资源、DEX/smali、Flutter AOT 元数据、字
 | JADX | 生成约 4,472 个 Java 文件；报告 31 个反编译错误，进程以错误状态结束。Android 资源和 Manifest 可读 |
 | AOTopsy | v1.6.0 Windows 发布版，校验官方 SHA-256 后执行；建立 61,983 个函数、7,686 个类和调用图索引，并为 40,460 个方法导出 Dart 伪代码 |
 | 定向伪代码 | 对 21 个关键方法逐项复核，覆盖六种格式转换、FIT 解析/生成、坐标修正、导入、重复活动检查和同步 |
-| Blutter | 对应 Dart VM 在 WSL 构建成功；生成 2,576 个 Dart 汇编文件（其中 GarSync 包 414 个）、对象池、汇编索引、IDA 命名脚本和 Frida 脚本。3 个可选命名参数分析报错，但主体解析和产物导出完成 |
+| Blutter | 此前分析记录为对应 Dart VM 在 WSL 构建成功，生成 2,576 个 Dart 汇编文件（其中 GarSync 包 414 个）、对象池、汇编索引、IDA 命名脚本和 Frida 脚本；3 个可选命名参数分析报错。本轮连接的 Ubuntu-26.04 未找到此前登记的缓存目录，相关输出无法重新核验 |
+| FlutterDec | GitHub `v0.1.0-alpha.4` Linux 发布包 SHA-256 校验通过；安装与快照哈希匹配的适配器，并确认 arm64、Dart 3.10.7 与 AOTopsy 识别结果一致。内部反编译报告 9,556 个函数中解码 0 个，严格质量门失败，因此没有据此增加业务逻辑结论 |
 
 APK 中有 arm64-v8a、armeabi-v7a、x86_64 三种 ABI 目录；Flutter 主体 AOT 库位于 arm64-v8a。原始 APK 未修改。APK 文件 SHA-256 在分析开始和收尾时一致。
 
@@ -124,7 +125,7 @@ AOT 伪代码与 Blutter ARM64 汇编交叉确认了 GarSync 的计算步骤：H
 
 当前仓库的目标比 GarSync 窄：iGPSPORT/OneLap 下载运动 FIT，再上传 Garmin Connect 国际区和 Strava，并用 SQLite 记录同步状态。现有实现已包含按 FIT 厂商/产品/固件匹配坐标规则、FIT/GPX/TCX 六方向转换和按目标格式生成上传文件。这与 GarSync 的统一活动模型、格式转换器和设备坐标管理结构相吻合。
 
-完成 APK 静态解包、DEX 反编译和 Flutter AOT 全量方法伪代码导出后，按用户要求继续把可在当前 Python CLI 中独立运行的本地能力改写进仓库。全量伪代码是反编译近似结果，不等于每个方法都已人工语义复核；未做 GarSync 运行时、网络或真机行为验证。已加入本地活动库、FIT/GPX/TCX 与 ZIP/轨迹 JSON/CSV 导入、活动汇总与报告、本地健康 CSV、训练计划日历、FIT 课表模板导出、Wi-Fi 上传页，以及可配置 Chat Completions 接口的 AI 活动分析和本地结果历史。AOT 静态索引显示 GarSync 的 `AiAnalysisRepository` 按活动读取分析结果，并将来源、活动 ID、模型名、正文、时间和元数据写入 SQLite；本项目保存模型名和正文，可按活动查看历史。AI 分析按用户明确要求保留；请求只发送活动汇总、周汇总和健康指标，不发送 GPS 坐标。项目没有复制内购目录、支付流程、数独或音频资源。
+完成 APK 静态解包、DEX 反编译和 Flutter AOT 全量方法伪代码导出后，按用户要求继续把可在当前 Python CLI 中独立运行的本地能力改写进仓库。全量伪代码是反编译近似结果，不等于每个方法都已人工语义复核；未做 GarSync 运行时、网络或真机行为验证。已加入本地活动库、FIT/GPX/TCX 与 ZIP/轨迹 JSON/CSV 导入、活动汇总与报告、本地健康 CSV、训练计划日历、FIT 课表模板导出、Wi-Fi 上传页，以及可配置 Chat Completions 接口的 AI 活动分析和本地结果历史。AOT 静态索引显示 GarSync 的 `AiAnalysisRepository` 按活动读取分析结果，并将来源、活动 ID、模型名、正文、时间和元数据写入 SQLite；本项目保存模型名和正文，可按活动查看历史。AI 分析按用户明确要求保留；提示词使用活动开始前记录和活动结束当日 UTC 内的恢复记录，不把后续日期的健康数据带入历史活动分析；请求不包含 GPS 坐标。项目没有复制内购目录、支付流程、数独或音频资源。
 
 本地活动源已接入现有 Garmin / Strava 上传流程；原始文件存入 `.data/local_imports/`，数据库记录摘要和指纹。42 份训练计划模板覆盖六种语言，33 个 FIT 课表模板也随项目提供。健康数据通过用户提供的 CSV 导入；该实现不登录或抓取 APK 内的健康平台账号。已将 HR-TSS、CTL、ATL、TSB 计算加入本地活动库。FIT session 的平均/最大功率、标准化功率、强度因子、有氧/无氧训练效果和 TSS 会保留到活动摘要及 AI 分析上下文；FIT `time_in_zone` 的心率、速度、踏频和功率数组、区间上界、心率/FTP 计算参数、消息引用信息也会保留。AI 提示词带入心率和功率分区结果。GPX/TCX 导出和 FIT 合并会报告无法保留的分区统计。
 
@@ -184,7 +185,7 @@ AOT class 表确认 `TrainingType` 是六值枚举；活动详情页构造的本
 
 侧重点分别覆盖运动表现（速度、功率、心率效率）、健康与长期健康收益、休息恢复与过度训练风险。提示词还包含运动员资料、近期训练、待分析活动和 Training Type 区块；独立 helper 会写入活动前一夜睡眠、活动日早间基线、建议恢复时长、Body Battery、静息心率、HRV 状态/基线，以及睡眠时长、评分、阶段和夜间生理指标。字符串与调用路径来自 AOTopsy `string_refs.jsonl`、`AiPromptBuilder` 汇编和 `_AiCoachPageState._generateAnalysis` 静态结果。
 
-本项目现有 `ai-analysis` CLI 已提供相同的三种侧重点和详略值，语言代码可选，默认 `zh-CN`；没有复刻 GarSync 偏好持久化。其健康上下文来自用户导入的健康 CSV，仅带入当前本地摘要中的最新指标，未按活动日期构造睡眠/早间恢复上下文，也没有独立的年龄、运动员档案或 GarSync 的 Training Type 分类。AI 接口、提示词和静态字段均不证明 GarSync 运行时实际发送了哪些数据。
+本项目现有 `ai-analysis` CLI 已提供相同的三种侧重点和详略值，语言代码可选，默认 `zh-CN`；没有复刻 GarSync 偏好持久化。其健康上下文来自用户导入的健康 CSV；按活动开始前的最新记录和活动结束当日 UTC 日末前的记录筛选，并保留测量时间，排除活动日期之后的数据。CSV 普通观测不会被推断成睡眠阶段、HRV 基线或建议恢复时长。项目尚无独立年龄/运动员档案，也没有 GarSync 的 Training Type 分类。AI 接口、提示词和静态字段均不证明 GarSync 运行时实际发送了哪些数据。
 
 ## 证据文件与限制
 
@@ -195,7 +196,8 @@ AOT class 表确认 `TrainingType` 是六值枚举；活动详情页构造的本
 - `aotopsy/pipeline/`：AOTopsy v1.6.0 对 arm64 `libapp.so` 生成的函数/类清单、调用边、调用图、字符串引用、类型/派发索引及部分函数汇编和 CFG。索引覆盖 61,983 个函数条目与 7,686 个类；当前汇编与 CFG 输出分别有 16,514、3,326 个文件。
 - `aotopsy/reconstructed_dart_all/`：AOTopsy 的 app-only 全量方法伪代码导出，共 40,460 个方法、2,795 个类、1,728 个 `.dart` 命名文件，约 1.4 百万行；不是原始或可编译 Dart 源码。
 - `aotopsy/targeted/`：21 个关键函数的定向伪代码，包括六个转换器、活动 FIT parser/generator、坐标 patcher、导入/去重和同步入口。
-- WSL `/root/.cache/sport_sync_bridge/garsync_blutter/`：Blutter 生成的对象池、Dart AOT 汇编、IDA 命名脚本和 Frida 脚本，包含训练平衡计算路径；产物留在本机分析缓存，没有提交。
+- `flutterdec_classifier/`：FlutterDec 针对分类器名称的定向反编译输出；适配器精确识别快照，但内部反编译 0/9,556 个函数通过质量门，故没有作为行为证据。GitHub 发布包和对应源码放在 `tools/flutterdec-v0.1.0-alpha.4/`、`tools/flutterdec-src/`。
+- Blutter：此前登记的输出位置为 WSL `/root/.cache/sport_sync_bridge/garsync_blutter/`；本轮检查连接的 Ubuntu-26.04 时该路径和 `/home/hayas/.cache/sport_sync_bridge/garsync_blutter/` 都不存在，故无法重读此前记录的对象池、汇编及脚本。
 - `aot_ascii_strings.txt`、`aot_feature_strings.txt`、`aot_hosts.txt`：AOT 静态字符串筛选结果；完整字符串和端点转储可能含应用配置，不应公开或提交。
 - `app_package_paths.txt`、`format_package_paths.txt`、`data_adapter_modules.txt`、`aot_sql_strings.txt`：用于模块、格式和 SQL 名称盘点。
 

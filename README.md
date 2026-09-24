@@ -206,7 +206,7 @@ python sync.py ai-analysis <活动ID前缀> --prompt-only
 python sync.py ai-analysis <活动ID前缀> --prompt-only --language en-US --focus recovery --detail detailed
 ```
 
-`--language` 接受语言代码，默认 `zh-CN`；`--focus` 可选 `performance`、`health` 或 `recovery`，默认 `performance`；`--detail` 可选 `brief`、`normal` 或 `detailed`，默认 `normal`。提示词会要求模型准确引用已有数值，并避免医疗诊断。
+`--language` 接受语言代码，默认 `zh-CN`；`--focus` 可选 `performance`、`health` 或 `recovery`，默认 `performance`；`--detail` 可选 `brief`、`normal` 或 `detailed`，默认 `normal`。提示词会要求模型准确引用已有数值，并避免医疗诊断。健康指标按活动时间筛选：活动开始前各指标最近一次记录，以及活动结束后至结束日 UTC 日末的记录；不把活动之后其他日期的数据带入历史活动分析，所有指标都保留时间戳。
 
 在 `.env` 中设置 `AI_API_BASE_URL`、`AI_MODEL`，远端服务需要时再设置 `AI_API_KEY`。请求成功后会在本地 SQLite 中保存模型名和分析正文，可用 `python sync.py ai-analysis <活动ID前缀> --history` 查看。项目不会附带 GarSync 的服务凭据或计费代码。
 

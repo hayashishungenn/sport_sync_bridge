@@ -18,7 +18,7 @@ from sport_sync_bridge.activity_analysis import build_ai_analysis_prompt, summar
 from sport_sync_bridge.activity_library import LocalActivityLibrary
 from sport_sync_bridge.cli import main
 from sport_sync_bridge.formats import read_activity_file
-from sport_sync_bridge.health import import_health_csv, summarize_health
+from sport_sync_bridge.health import import_health_csv, summarize_health, summarize_health_for_activity
 from sport_sync_bridge.sources import LocalFileSource
 from sport_sync_bridge.state import StateDB
 from sport_sync_bridge.training import (
@@ -195,6 +195,45 @@ class GarSyncLocalFeatureTests(unittest.TestCase):
         self.assertEqual(summary["measurement_count"], 3)
         self.assertEqual(summary["latest"]["bmi"]["value"], 22.9)
 
+    def test_activity_health_context_respects_activity_and_utc_day_boundaries(self) -> None:
+        observations = [
+            ("2025-12-01T08:00:00+00:00", "weight_kg", 70, "kg"),
+            ("2026-01-02T02:50:00+00:00", "hrv_ms", 42, "ms"),
+            ("2026-01-02T03:00:00+00:00", "spo2_percent", 98, "%"),
+            ("2026-01-02T03:30:00+00:00", "stress_score", 70, "score"),
+            ("2026-01-02T04:00:00+00:00", "hrv_ms", 99, "ms"),
+            ("2026-01-02T04:30:00+00:00", "hrv_ms", 45, "ms"),
+            ("2026-01-02T23:59:59+00:00", "body_battery", 63, "score"),
+            ("2026-01-03T00:00:00+00:00", "body_battery", 2, "score"),
+        ]
+        for index, (observed_at, metric, value, unit) in enumerate(observations):
+            self.state.upsert_health_observation(
+                observed_at=observed_at,
+                metric=metric,
+                value=value,
+                unit=unit,
+                source_label="test",
+                fingerprint=f"activity-health-{index}",
+            )
+
+        context = summarize_health_for_activity(
+            self.state,
+            "2026-01-02T11:00:00+08:00",
+            "2026-01-02T12:00:00+08:00",
+        )
+
+        self.assertEqual(context["before_activity"]["weight_kg"]["value"], 70)
+        self.assertEqual(context["before_activity"]["hrv_ms"]["value"], 42)
+        self.assertNotIn("spo2_percent", context["before_activity"])
+        self.assertNotIn("stress_score", context["before_activity"])
+        self.assertEqual(context["after_activity"]["hrv_ms"]["value"], 45)
+        self.assertEqual(context["after_activity"]["body_battery"]["value"], 63)
+        self.assertNotIn("stress_score", context["after_activity"])
+        self.assertEqual(
+            summarize_health_for_activity(self.state, None, None),
+            {"before_activity": {}, "after_activity": {}},
+        )
+
     def test_ai_prompt_uses_summary_data_without_track_coordinates(self) -> None:
         activity = read_activity_file(create_gpx(self.root / "ride.gpx"))
         summary = summarize_activity(activity)
@@ -240,6 +279,19 @@ class GarSyncLocalFeatureTests(unittest.TestCase):
     def test_cli_ai_analysis_saves_result_and_history_without_resending(self) -> None:
         activity_path = create_gpx(self.root / "ai-ride.gpx")
         imported = self.library.import_paths([activity_path])[0]
+        for observed_at, metric, value, unit, fingerprint in (
+            ("2026-01-02T02:45:00+00:00", "sleep_hours", 7.2, "h", "cli-health-before"),
+            ("2026-01-02T03:06:00+00:00", "body_battery", 59, "score", "cli-health-after"),
+            ("2026-01-03T00:00:00+00:00", "steps", 98765, "count", "cli-health-future"),
+        ):
+            self.state.upsert_health_observation(
+                observed_at=observed_at,
+                metric=metric,
+                value=value,
+                unit=unit,
+                source_label="test",
+                fingerprint=fingerprint,
+            )
         config = SimpleNamespace(
             data_dir=self.root / ".data",
             db_path=self.state.path,
@@ -279,6 +331,9 @@ class GarSyncLocalFeatureTests(unittest.TestCase):
             self.assertIn("必须使用语言代码 en-US", output.getvalue())
             self.assertIn("重点评估恢复状态", output.getvalue())
             self.assertIn("训练分析覆盖 3-5 个维度", output.getvalue())
+            self.assertIn("sleep_hours: 7.2 h (2026-01-02T02:45:00+00:00)", output.getvalue())
+            self.assertIn("body_battery: 59.0 score (2026-01-02T03:06:00+00:00)", output.getvalue())
+            self.assertNotIn("98765", output.getvalue())
             self.assertEqual(self.state.list_ai_analysis_results(imported.fingerprint), [])
             self.assertEqual(main(["ai-analysis", imported.fingerprint]), 0)
             self.assertEqual(main(["ai-analysis", imported.fingerprint]), 0)

@@ -77,6 +77,8 @@ class StateDB:
             );
             CREATE INDEX IF NOT EXISTS idx_health_metric_time
                 ON health_observations(metric, observed_at);
+            CREATE INDEX IF NOT EXISTS idx_health_time
+                ON health_observations(observed_at);
 
             CREATE TABLE IF NOT EXISTS ai_analysis (
                 id TEXT PRIMARY KEY,
@@ -349,14 +351,28 @@ class StateDB:
         )
         self.connection.commit()
 
-    def list_health_observations(self, metric: str | None = None) -> list[sqlite3.Row]:
-        if metric is None:
-            return self.connection.execute(
-                "SELECT * FROM health_observations ORDER BY observed_at DESC, metric"
-            ).fetchall()
+    def list_health_observations(
+        self,
+        metric: str | None = None,
+        *,
+        observed_after: str | None = None,
+        observed_before: str | None = None,
+    ) -> list[sqlite3.Row]:
+        conditions: list[str] = []
+        values: list[str] = []
+        if metric is not None:
+            conditions.append("metric = ?")
+            values.append(metric)
+        if observed_after is not None:
+            conditions.append("observed_at > ?")
+            values.append(observed_after)
+        if observed_before is not None:
+            conditions.append("observed_at < ?")
+            values.append(observed_before)
+        where = f" WHERE {' AND '.join(conditions)}" if conditions else ""
         return self.connection.execute(
-            "SELECT * FROM health_observations WHERE metric = ? ORDER BY observed_at DESC",
-            (metric,),
+            f"SELECT * FROM health_observations{where} ORDER BY observed_at DESC, metric, id DESC",
+            values,
         ).fetchall()
 
     def save_ai_analysis_result(

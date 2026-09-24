@@ -18,7 +18,7 @@ from .config import AppConfig
 from .engine import SyncEngine
 from .fit_tools import normalize_fit_coordinates
 from .formats import SUPPORTED_FORMATS, convert_activity_file
-from .health import import_health_csv, summarize_health
+from .health import import_health_csv, summarize_health, summarize_health_for_activity
 from .period_summary import calculate_period_summary, format_period_summary
 from .state import StateDB
 from .training_balance import calculate_training_balance, format_training_balance
@@ -695,12 +695,13 @@ def _run_local_command(args: argparse.Namespace, config: AppConfig) -> int:
                 print(json.dumps([dict(result) for result in results], ensure_ascii=False, indent=2))
                 return 0
             summary = json.loads(row["summary_json"])
-            summary.update({"name": row["name"], "sport_type": row["sport_type"], "start_time": row["start_time"]})
+            summary.update({"name": row["name"], "sport_type": row["sport_type"]})
+            summary["start_time"] = row["start_time"] or summary.get("start_time")
             prompt = build_ai_analysis_prompt(
                 summary,
                 state.list_local_activities(),
                 args.question,
-                summarize_health(state),
+                summarize_health_for_activity(state, summary.get("start_time"), summary.get("end_time")),
                 language=args.language,
                 focus=args.focus,
                 detail=args.detail,
