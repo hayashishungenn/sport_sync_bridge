@@ -166,6 +166,7 @@ python sync.py library report --format pdf --output .\activities.pdf
 python sync.py library poster <活动ID前缀> --output .\activity.jpg --layout classic --ratio portrait --show-title
 python sync.py library poster <活动ID前缀> --output .\activity.jpg --photo .\background.jpg --user 张三 --metric power --power-curve
 python sync.py library route <活动ID前缀> --to gpx --output .\route.gpx
+python sync.py library map <活动ID前缀> --output .\route-map.html
 python sync.py library merge .\part-1.fit .\part-2.fit --output .\merged.fit --name "合并骑行"
 python sync.py weather --lat 30.5728 --lon 104.0668
 python sync.py weather --lat 30.5728 --lon 104.0668 --format json --refresh
@@ -177,6 +178,8 @@ python sync.py sync --source local --target strava --format strava=tcx
 `library merge` 按输入顺序合并至少两个同运动类型的 FIT 活动。时间重叠的后续片段会平移到前一段结束后一秒，超过两秒的原有停顿会写成休息圈。输出最多保留 50,000 个记录点，抽稀时保留首尾点和可用指标的全局极值。合并会重新生成 FIT，因此来源设备身份、开发者字段和非记录消息不会复制；其他解析损失会随命令结果列出。该行为依据 APK AOT 静态线索实现，尚未用 GarSync 运行时样例逐字段对照。
 
 `library poster` 从本地 FIT、GPX 或 TCX 生成 JPEG 分享海报，显示运动类型、时间、轨迹、距离、用时和一个统计指标；标题可用 `--show-title` 显示。统计指标为累计爬升、平均速度、平均配速或平均功率，默认选择随布局预设变化。`indoor` 布局默认隐藏 GPS 轨迹并显示功率曲线。海报可叠加背景照片、自选水印、字体、文字色和轨迹色。布局使用 APK 中确认的 `classic`、`track_top`、`side_by_side`、`data_below`、`bottom_corner`、`data_above`、`full_info`、`classic_orange` 和 `indoor` 标识；比例为 `portrait`（3:4）或 `square`（1:1）。
+
+`library map` 将本地活动 GPS 轨迹生成可缩放、平移的 HTML 地图，并标出起点和终点。建议在 HTML 所在目录运行 `python -m http.server 8765 --bind 127.0.0.1`，再访问 `http://127.0.0.1:8765/route-map.html`；按 `Ctrl+C` 停止服务。页面使用 OpenStreetMap 在线地图瓦片并显示版权归属，不下载离线地图；浏览地图时，浏览器会向地图服务请求当前视窗的瓦片坐标，活动轨迹数据仍保存在本地 HTML 文件中。
 
 `weather` 按指定的十进制度坐标读取当前天气、可用时的 AQI 和城市名称，并按 AOT 中恢复的阈值生成户外运动建议。结果缓存在 `.data/weather_cache.json` 15 分钟；`--refresh` 可强制更新。坐标会发送到 APK 中发现的 `api.unicgames.com` 天气接口。请求需要在本机 `.env` 设置 `GARSYNC_WEATHER_TOKEN`；示例配置不包含令牌。天气接口属于 GarSync 服务端接口，服务策略或响应格式变化时此功能可能失效。
 
@@ -227,7 +230,7 @@ python sync.py receive --host 0.0.0.0 --port 8765
 
 接收页不设访问口令，只应在可信的本地网络中临时开启。
 
-未移植到 Python CLI 的 APK 功能包括其余云平台的私有认证/同步协议、Samba、手机 BLE 与传感器实时录制、路线地图、训练准备度/VO2Max/其他恢复指标（HR-TSS/CTL/ATL/TSB 已实现）、在线健康数据源、AI 聊天及 AI 计划/课表生成。当前天气功能需要显式坐标和 GarSync 天气服务令牌；AI 活动分析使用本地汇总和可配置模型接口。静态 AOT 索引不足以确认这些云端接口的运行期请求、服务端校验或设备交互行为。
+未移植到 Python CLI 的 APK 功能包括其余云平台的私有认证/同步协议、Samba、手机 BLE 与传感器实时录制、训练准备度/VO2Max/其他恢复指标（HR-TSS/CTL/ATL/TSB 已实现）、在线健康数据源、AI 聊天及 AI 计划/课表生成。当前天气功能需要显式坐标和 GarSync 天气服务令牌；AI 活动分析使用本地汇总和可配置模型接口。静态 AOT 索引不足以确认这些云端接口的运行期请求、服务端校验或设备交互行为。
 
 常用参数:
 
