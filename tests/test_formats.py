@@ -115,6 +115,67 @@ class FormatConversionTests(unittest.TestCase):
                 )
                 self.assertTrue(any("training stress score" in loss for loss in result.losses))
 
+    def test_fit_session_keeps_power_and_training_effect_metrics(self) -> None:
+        source_path = create_fit(
+            self.root / "training-metrics.fit",
+            average_power=210,
+            maximum_power=620,
+            normalized_power=245,
+            intensity_factor=0.82,
+            aerobic_training_effect=3.7,
+            anaerobic_training_effect=2.1,
+            training_stress_score=72.5,
+        )
+        activity = _read_fit(source_path)
+
+        self.assertEqual(activity.average_power_w, 210)
+        self.assertEqual(activity.maximum_power_w, 620)
+        self.assertEqual(activity.normalized_power_w, 245)
+        self.assertAlmostEqual(activity.intensity_factor or 0, 0.82)
+        self.assertAlmostEqual(activity.aerobic_training_effect or 0, 3.7)
+        self.assertAlmostEqual(activity.anaerobic_training_effect or 0, 2.1)
+
+        for target_format in ("gpx", "tcx"):
+            with self.subTest(target=target_format):
+                result = convert_activity_file(
+                    source_path,
+                    self.root / f"training-metrics.{target_format}",
+                    target_format,
+                )
+                for label in (
+                    "activity-level average power",
+                    "activity-level maximum power",
+                    "normalized power",
+                    "intensity factor",
+                    "aerobic training effect",
+                    "anaerobic training effect",
+                    "training stress score",
+                ):
+                    self.assertTrue(any(label in loss for loss in result.losses), label)
+
+    def test_fit_writer_preserves_activity_summary_metrics(self) -> None:
+        from sport_sync_bridge.formats import _write_fit
+
+        activity = _read_gpx(self.gpx_path)
+        activity.average_power_w = 205
+        activity.maximum_power_w = 410
+        activity.normalized_power_w = 220
+        activity.intensity_factor = 0.74
+        activity.aerobic_training_effect = 3.2
+        activity.anaerobic_training_effect = 1.8
+        activity.training_stress_score = 64.0
+        output_path = self.root / "written-summary.fit"
+        output_path.write_bytes(_write_fit(activity))
+
+        converted = _read_fit(output_path)
+        self.assertEqual(converted.average_power_w, 205)
+        self.assertEqual(converted.maximum_power_w, 410)
+        self.assertEqual(converted.normalized_power_w, 220)
+        self.assertAlmostEqual(converted.intensity_factor or 0, 0.74)
+        self.assertAlmostEqual(converted.aerobic_training_effect or 0, 3.2)
+        self.assertAlmostEqual(converted.anaerobic_training_effect or 0, 1.8)
+        self.assertEqual(converted.training_stress_score, 64.0)
+
     def test_tcx_uses_activity_heart_rate_summary_for_one_lap(self) -> None:
         source_path = create_fit(
             self.root / "summary-only-hr.fit",

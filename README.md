@@ -171,6 +171,8 @@ python sync.py sync --source local --target strava --format strava=tcx
 
 `library balance` 优先使用 FIT 活动中的 TSS。没有 TSS 时，只有提供 `--threshold-hr` 且存在平均心率和活动时长，才按 GarSync 的 HR-TSS 公式估算。默认静息心率为 60 bpm。每日负荷按 42 天 CTL 和 7 天 ATL 指数平滑，TSB 为 CTL 减 ATL。指定 `--from` 时仍会用此前活动预热负荷，但只输出所选日期范围；默认输出 JSON，也支持 CSV 和 TXT。该算法来自 AOT 静态伪代码并已与 Blutter ARM64 汇编交叉核对。
 
+AI 活动分析还会读取 FIT session 中的平均/最大功率、标准化功率、强度因子、有氧/无氧训练效果和 TSS，并将这些值放进活动报告与提示词。GPX、TCX 不包含这组 FIT 活动级汇总字段，导出时会在转换结果中列明损失。
+
 GarSync 内置的六种语言训练计划和 33 个 FIT 课表作为本地模板随项目提供，不包含购买目录、数独或音频资源。计划开始日期必须是周一，安装后可导出到日历：
 
 ```powershell

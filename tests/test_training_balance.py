@@ -135,6 +135,12 @@ class TrainingBalanceTests(unittest.TestCase):
             activity = read_activity_file(
                 create_fit(
                     Path(temporary) / "ai-training-load.fit",
+                    average_power=210,
+                    maximum_power=620,
+                    normalized_power=245,
+                    intensity_factor=0.82,
+                    aerobic_training_effect=3.7,
+                    anaerobic_training_effect=2.1,
                     training_stress_score=72.5,
                 )
             )
@@ -142,7 +148,12 @@ class TrainingBalanceTests(unittest.TestCase):
             prompt = build_ai_analysis_prompt(summary, [], "今天的训练负荷如何？")
 
             self.assertEqual(summary["training_stress_score"], 72.5)
+            self.assertEqual(summary["normalized_power_w"], 245)
             self.assertIn("训练压力分（TSS）：72.5", prompt)
+            self.assertIn("标准化功率（瓦）：245", prompt)
+            self.assertIn("强度因子（IF）：0.82", prompt)
+            self.assertIn("有氧训练效果：3.7", prompt)
+            self.assertIn("无氧训练效果：2.1", prompt)
 
     def test_library_balance_cli_reads_sqlite_rows_and_runs_without_accounts(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

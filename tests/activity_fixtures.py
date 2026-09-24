@@ -29,6 +29,12 @@ def create_fit(
     sport: int = Sport.CYCLING.value,
     average_heart_rate: int | None = None,
     maximum_heart_rate: int | None = None,
+    average_power: int | None = None,
+    maximum_power: int | None = None,
+    normalized_power: int | None = None,
+    intensity_factor: float | None = None,
+    aerobic_training_effect: float | None = None,
+    anaerobic_training_effect: float | None = None,
     training_stress_score: float | None = None,
 ) -> Path:
     builder = FitFileBuilder(auto_define=True)
@@ -89,6 +95,18 @@ def create_fit(
             _set(session, "avg_heart_rate", average_heart_rate)
         if maximum_heart_rate is not None:
             _set(session, "max_heart_rate", maximum_heart_rate)
+        if average_power is not None:
+            _set(session, "avg_power", average_power)
+        if maximum_power is not None:
+            _set(session, "max_power", maximum_power)
+        if normalized_power is not None:
+            _set(session, "normalized_power", normalized_power)
+        if intensity_factor is not None:
+            _set(session, "intensity_factor", intensity_factor)
+        if aerobic_training_effect is not None:
+            _set(session, "total_training_effect", aerobic_training_effect)
+        if anaerobic_training_effect is not None:
+            _set(session, "total_anaerobic_training_effect", anaerobic_training_effect)
         if training_stress_score is not None:
             _set(session, "training_stress_score", training_stress_score)
         builder.add(session)

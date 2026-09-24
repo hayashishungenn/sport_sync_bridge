@@ -70,8 +70,14 @@ _FIT_SESSION_FIELDS = {
     "total_distance",
     "sport",
     "num_laps",
+    "avg_power",
+    "max_power",
     "avg_heart_rate",
     "max_heart_rate",
+    "total_training_effect",
+    "total_anaerobic_training_effect",
+    "normalized_power",
+    "intensity_factor",
     "training_stress_score",
 }
 _KNOWN_FIT_MESSAGES = {
@@ -139,6 +145,12 @@ class ActivityFile:
     average_heart_rate_bpm: float | None = None
     maximum_heart_rate_bpm: float | None = None
     training_stress_score: float | None = None
+    average_power_w: float | None = None
+    maximum_power_w: float | None = None
+    normalized_power_w: float | None = None
+    intensity_factor: float | None = None
+    aerobic_training_effect: float | None = None
+    anaerobic_training_effect: float | None = None
 
     @property
     def track_points(self) -> list[TrackPoint]:
@@ -243,10 +255,23 @@ def _target_format_losses(activity: ActivityFile, target_format: str) -> list[st
                 losses.append("GPX does not preserve an activity start time before the first track point")
         if activity.end_time is not None and point_times and activity.end_time != max(point_times):
             losses.append("Activity end time after the last track point is not represented in this format")
+        target_name = target_format.upper()
+        summary_values = (
+            ("activity-level average power", activity.average_power_w),
+            ("activity-level maximum power", activity.maximum_power_w),
+            ("normalized power", activity.normalized_power_w),
+            ("intensity factor", activity.intensity_factor),
+            ("aerobic training effect", activity.aerobic_training_effect),
+            ("anaerobic training effect", activity.anaerobic_training_effect),
+            ("training stress score", activity.training_stress_score),
+        )
+        losses.extend(
+            f"{target_name} does not preserve FIT {label}"
+            for label, value in summary_values
+            if value is not None
+        )
 
     if target_format == "gpx":
-        if activity.training_stress_score is not None:
-            losses.append("GPX does not preserve FIT training stress score")
         if activity.elapsed_time_s is not None or activity.timer_time_s is not None:
             losses.append("GPX does not preserve activity-level elapsed or timer time")
         if activity.distance_m is not None:
@@ -279,8 +304,6 @@ def _target_format_losses(activity: ActivityFile, target_format: str) -> list[st
         ):
             losses.append("GPX does not preserve activity-level maximum heart rate")
     elif target_format == "tcx":
-        if activity.training_stress_score is not None:
-            losses.append("TCX does not preserve FIT training stress score")
         tcx_laps = [lap for lap in activity.laps if any(_has_position(point) for point in lap.track_points)]
         if len(tcx_laps) != 1:
             if (
@@ -438,6 +461,12 @@ def _read_fit(path: Path) -> ActivityFile:
                 activity.distance_m = distance
             activity.average_heart_rate_bpm = _optional_float(values.get("avg_heart_rate"))
             activity.maximum_heart_rate_bpm = _optional_float(values.get("max_heart_rate"))
+            activity.average_power_w = _optional_float(values.get("avg_power"))
+            activity.maximum_power_w = _optional_float(values.get("max_power"))
+            activity.normalized_power_w = _optional_float(values.get("normalized_power"))
+            activity.intensity_factor = _optional_float(values.get("intensity_factor"))
+            activity.aerobic_training_effect = _optional_float(values.get("total_training_effect"))
+            activity.anaerobic_training_effect = _optional_float(values.get("total_anaerobic_training_effect"))
             activity.training_stress_score = _optional_float(values.get("training_stress_score"))
             sport_value = _optional_int(values.get("sport"))
             if sport_value is not None:
@@ -1041,6 +1070,15 @@ def _write_fit(activity: ActivityFile, *, allow_trackless_records: bool = False)
     _set_field(session, "total_distance", total_distance)
     _set_field(session, "sport", _sport_fit_value(activity.sport_type))
     _set_field(session, "num_laps", written_lap_count)
+    power_values = [point.power_w for point in activity.track_points if point.power_w is not None]
+    average_power = activity.average_power_w
+    if average_power is None and power_values:
+        average_power = sum(power_values) / len(power_values)
+    maximum_power = activity.maximum_power_w
+    if maximum_power is None and power_values:
+        maximum_power = max(power_values)
+    _set_field(session, "avg_power", _rounded(average_power))
+    _set_field(session, "max_power", _rounded(maximum_power))
     average_hr = activity.average_heart_rate_bpm
     if average_hr is None:
         average_hr = _average_hr(activity.track_points)
@@ -1049,6 +1087,10 @@ def _write_fit(activity: ActivityFile, *, allow_trackless_records: bool = False)
         maximum_hr = _maximum_hr(activity.track_points)
     _set_field(session, "avg_heart_rate", _rounded(average_hr))
     _set_field(session, "max_heart_rate", _rounded(maximum_hr))
+    _set_field(session, "total_training_effect", activity.aerobic_training_effect)
+    _set_field(session, "total_anaerobic_training_effect", activity.anaerobic_training_effect)
+    _set_field(session, "normalized_power", _rounded(activity.normalized_power_w))
+    _set_field(session, "intensity_factor", activity.intensity_factor)
     _set_field(session, "training_stress_score", activity.training_stress_score)
     builder.add(session)
 

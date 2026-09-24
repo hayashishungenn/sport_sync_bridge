@@ -44,6 +44,12 @@ def summarize_activity(activity: ActivityFile) -> dict[str, object]:
     maximum_hr = activity.maximum_heart_rate_bpm
     if maximum_hr is None:
         maximum_hr = max(heart_rates) if heart_rates else _lap_hr(activity, "maximum_heart_rate", maximum=True)
+    average_power = activity.average_power_w
+    if average_power is None and powers:
+        average_power = statistics.fmean(powers)
+    maximum_power = activity.maximum_power_w
+    if maximum_power is None and powers:
+        maximum_power = max(powers)
     return {
         "name": activity.name,
         "sport_type": activity.sport_type,
@@ -58,7 +64,12 @@ def summarize_activity(activity: ActivityFile) -> dict[str, object]:
         "maximum_heart_rate_bpm": maximum_hr,
         "training_stress_score": activity.training_stress_score,
         "average_cadence_rpm": statistics.fmean(cadences) if cadences else None,
-        "average_power_w": statistics.fmean(powers) if powers else None,
+        "average_power_w": average_power,
+        "maximum_power_w": maximum_power,
+        "normalized_power_w": activity.normalized_power_w,
+        "intensity_factor": activity.intensity_factor,
+        "aerobic_training_effect": activity.aerobic_training_effect,
+        "anaerobic_training_effect": activity.anaerobic_training_effect,
         "total_ascent_m": ascent if altitudes else None,
         "lap_count": len(activity.laps),
         "track_point_count": len(points),
@@ -120,6 +131,11 @@ def format_activity_report(rows: Iterable[object], output_format: str) -> str:
         "maximum_heart_rate_bpm",
         "average_cadence_rpm",
         "average_power_w",
+        "maximum_power_w",
+        "normalized_power_w",
+        "intensity_factor",
+        "aerobic_training_effect",
+        "anaerobic_training_effect",
         "training_stress_score",
         "total_ascent_m",
         "lap_count",
@@ -188,6 +204,11 @@ def build_ai_analysis_prompt(
         f"最高心率：{_display(activity_summary.get('maximum_heart_rate_bpm'))}",
         f"平均踏频：{_display(activity_summary.get('average_cadence_rpm'))}",
         f"平均功率（瓦）：{_display(activity_summary.get('average_power_w'))}",
+        f"最大功率（瓦）：{_display(activity_summary.get('maximum_power_w'))}",
+        f"标准化功率（瓦）：{_display(activity_summary.get('normalized_power_w'))}",
+        f"强度因子（IF）：{_display(activity_summary.get('intensity_factor'))}",
+        f"有氧训练效果：{_display(activity_summary.get('aerobic_training_effect'))}",
+        f"无氧训练效果：{_display(activity_summary.get('anaerobic_training_effect'))}",
         f"训练压力分（TSS）：{_display(activity_summary.get('training_stress_score'))}",
         f"爬升（米）：{_display(activity_summary.get('total_ascent_m'))}",
         f"轨迹点数：{_display(activity_summary.get('track_point_count'))}",
