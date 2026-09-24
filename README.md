@@ -179,7 +179,7 @@ python sync.py sync --source local --target strava --format strava=tcx
 
 AI 活动分析还会读取 FIT session 中的平均/最大功率、标准化功率、强度因子、有氧/无氧训练效果和 TSS，并将这些值放进活动报告与提示词。FIT `time_in_zone` 消息中的心率、速度、踏频、功率分区用时及其边界和计算参数也会保留在本地活动摘要；心率和功率分区会提供给 AI 分析。GPX、TCX 不包含这些 FIT 活动级汇总，导出时会列明损失；合并 FIT 时也会报告分区数据未复制。
 
-GarSync 内置的六种语言训练计划和 33 个 FIT 课表作为本地模板随项目提供，不包含购买目录、数独或音频资源。计划开始日期必须是周一，安装后可导出到日历：
+训练计划和课表命令从 `sport_sync_bridge/data/training_plans/` 与 `sport_sync_bridge/data/workouts/` 读取本地模板。模板文件保留在本机并由 Git 忽略；其他副本需自行放入模板文件。计划开始日期必须是周一，安装后可导出到日历：
 
 ```powershell
 python sync.py plans list --locale zh

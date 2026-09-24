@@ -7,3 +7,6 @@ __pycache__/
 # Keep the user-provided APK and local reverse-engineering output out of Git.
 /base.apk
 /.data/apk_reverse/
+/GARSYNC_APK_REVERSE.md
+/sport_sync_bridge/data/training_plans/
+/sport_sync_bridge/data/workouts/
