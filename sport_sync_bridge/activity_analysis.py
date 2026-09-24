@@ -7,7 +7,7 @@ import json
 import re
 import statistics
 from datetime import datetime, timedelta, timezone
-from typing import Iterable
+from typing import Callable, Iterable
 
 from .formats import ActivityFile, ActivityTimeInZone, ActivityZoneTime, TrackPoint
 
@@ -306,15 +306,21 @@ def request_ai_analysis(
     api_key: str | None,
     prompt: str,
     timeout_seconds: int = 90,
+    on_delta: Callable[[str], None] | None = None,
 ) -> str:
     import requests
 
     endpoint = base_url.rstrip("/")
     if not endpoint.endswith("/chat/completions"):
         endpoint += "/chat/completions"
-    headers = {"Content-Type": "application/json"}
+    headers = {
+        "Content-Type": "application/json",
+        "Accept": "text/event-stream, application/json",
+        "Cache-Control": "no-cache",
+    }
     if api_key:
         headers["Authorization"] = f"Bearer {api_key}"
+    response = None
     try:
         response = requests.post(
             endpoint,
@@ -326,21 +332,137 @@ def request_ai_analysis(
                     {"role": "user", "content": prompt},
                 ],
                 "temperature": 0.3,
+                "stream": True,
             },
             timeout=timeout_seconds,
+            stream=True,
         )
+        if not response.ok:
+            raise RuntimeError(f"AI service returned HTTP {response.status_code}")
+        return _read_chat_completion_response(response, on_delta)
     except requests.RequestException as exc:
         raise RuntimeError(f"AI service request failed: {exc.__class__.__name__}") from exc
-    if not response.ok:
-        raise RuntimeError(f"AI service returned HTTP {response.status_code}")
-    try:
-        payload = response.json()
-        content = payload["choices"][0]["message"]["content"]
-    except (ValueError, KeyError, IndexError, TypeError) as exc:
-        raise RuntimeError("AI service response did not contain a chat completion") from exc
-    if not isinstance(content, str) or not content.strip():
+    finally:
+        if response is not None:
+            response.close()
+
+
+def _read_chat_completion_response(
+    response: object,
+    on_delta: Callable[[str], None] | None,
+) -> str:
+    chunks: list[str] = []
+    event_data: list[str] = []
+    raw_lines: list[str] = []
+    saw_sse_data = False
+    finished = False
+
+    def consume_event() -> bool:
+        nonlocal saw_sse_data
+        if not event_data:
+            return False
+        data = "\n".join(event_data)
+        event_data.clear()
+        saw_sse_data = True
+        if data.strip() == "[DONE]":
+            return True
+        try:
+            payload = json.loads(data)
+        except (TypeError, ValueError) as exc:
+            raise RuntimeError("AI service returned an invalid streaming event") from exc
+        if not isinstance(payload, dict):
+            raise RuntimeError("AI service returned an invalid streaming event")
+        if payload.get("error") is not None:
+            raise RuntimeError("AI service returned an error event")
+        choices = payload.get("choices")
+        if choices is None:
+            return False
+        if not isinstance(choices, list):
+            raise RuntimeError("AI service returned an invalid streaming event")
+        if not choices:
+            return False
+        choice = choices[0]
+        if not isinstance(choice, dict):
+            raise RuntimeError("AI service returned an invalid streaming event")
+        delta = choice.get("delta")
+        if not isinstance(delta, dict):
+            delta = choice.get("message")
+        if not isinstance(delta, dict):
+            return False
+        content = _completion_content_text(delta.get("content"))
+        if content:
+            chunks.append(content)
+            if on_delta is not None:
+                on_delta(content)
+        return False
+
+    iter_lines = getattr(response, "iter_lines", None)
+    if callable(iter_lines):
+        lines = iter_lines(decode_unicode=True)
+    else:
+        lines = str(getattr(response, "text", "")).splitlines()
+
+    for raw_line in lines:
+        if isinstance(raw_line, bytes):
+            line = raw_line.decode("utf-8")
+        else:
+            line = str(raw_line)
+        line = line.removesuffix("\r")
+        if not line:
+            if consume_event():
+                finished = True
+                break
+            continue
+        if line.startswith(":"):
+            continue
+        if line.startswith("data:"):
+            data = line[5:]
+            if data.startswith(" "):
+                data = data[1:]
+            event_data.append(data)
+            continue
+        if line.startswith(("event:", "id:", "retry:")):
+            continue
+        raw_lines.append(line)
+
+    if not finished and consume_event():
+        finished = True
+
+    if saw_sse_data:
+        result = "".join(chunks).strip()
+    else:
+        raw_response = "\n".join(raw_lines).strip()
+        try:
+            if raw_response:
+                payload = json.loads(raw_response)
+            else:
+                payload = response.json()
+            choices = payload["choices"]
+            choice = choices[0]
+            message = choice.get("message") or choice.get("delta")
+            result = _completion_content_text(message.get("content")) if isinstance(message, dict) else None
+        except (AttributeError, ValueError, KeyError, IndexError, TypeError) as exc:
+            raise RuntimeError("AI service response did not contain a chat completion") from exc
+        if result and on_delta is not None:
+            on_delta(result)
+        result = result.strip() if result else ""
+
+    if not result:
         raise RuntimeError("AI service returned an empty analysis")
-    return content.strip()
+    return result
+
+
+def _completion_content_text(content: object) -> str | None:
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        parts = [
+            item["text"]
+            for item in content
+            if isinstance(item, dict) and isinstance(item.get("text"), str)
+        ]
+        return "".join(parts) if parts else None
+    return None
 
 
 def _row_summary(row: object) -> dict[str, object]:

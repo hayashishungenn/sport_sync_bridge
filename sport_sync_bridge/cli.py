@@ -713,18 +713,29 @@ def _run_local_command(args: argparse.Namespace, config: AppConfig) -> int:
                 raise ValueError("Set AI_API_BASE_URL and AI_MODEL before requesting AI analysis")
             from .activity_analysis import request_ai_analysis
 
+            streamed = False
+
+            def show_delta(content: str) -> None:
+                nonlocal streamed
+                streamed = True
+                print(content, end="", flush=True)
+
             result = request_ai_analysis(
                 base_url=config.ai_api_base_url,
                 model=config.ai_model,
                 api_key=config.ai_api_key,
                 prompt=prompt,
+                on_delta=show_delta,
             )
             state.save_ai_analysis_result(
                 activity_id=row["fingerprint"],
                 model_name=config.ai_model,
                 content=result,
             )
-            print(result)
+            if streamed:
+                print()
+            else:
+                print(result)
             return 0
         finally:
             state.close()

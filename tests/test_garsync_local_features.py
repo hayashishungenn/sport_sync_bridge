@@ -302,13 +302,22 @@ class GarSyncLocalFeatureTests(unittest.TestCase):
             ai_api_key=None,
         )
         output = io.StringIO()
+        analysis_results = iter(("本次训练节奏稳定。", "第二次分析已保存。"))
+
+        def fake_analysis_request(**kwargs: object) -> str:
+            result = next(analysis_results)
+            on_delta = kwargs.get("on_delta")
+            if callable(on_delta):
+                on_delta(result)
+            return result
+
         with (
             patch("sport_sync_bridge.cli.AppConfig.load", return_value=config),
             patch("sport_sync_bridge.cli.configure_logging"),
             patch("sport_sync_bridge.cli.SyncEngine", side_effect=AssertionError("sync engine is not needed")),
             patch(
                 "sport_sync_bridge.activity_analysis.request_ai_analysis",
-                side_effect=["本次训练节奏稳定。", "第二次分析已保存。"],
+                side_effect=fake_analysis_request,
             ) as request,
             contextlib.redirect_stdout(output),
         ):
