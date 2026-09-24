@@ -32,6 +32,40 @@ _METRIC_ALIASES = {
     "stress": "stress_score",
     "stress_score": "stress_score",
     "body_battery": "body_battery",
+    "vo2_max_run": "vo2_max_run",
+    "vo2max_run": "vo2_max_run",
+    "vo2_max_running": "vo2_max_run",
+    "vo2_max_ride": "vo2_max_ride",
+    "vo2max_ride": "vo2_max_ride",
+    "vo2_max_cycling": "vo2_max_ride",
+    "sleep_score": "sleep_score",
+    "lt_hr": "lactate_threshold_hr_bpm",
+    "lt_hr_bpm": "lactate_threshold_hr_bpm",
+    "lactate_threshold_hr": "lactate_threshold_hr_bpm",
+    "lactate_threshold_hr_bpm": "lactate_threshold_hr_bpm",
+    "lt_speed": "lactate_threshold_speed_kmh",
+    "lt_speed_kmh": "lactate_threshold_speed_kmh",
+    "lactate_threshold_speed": "lactate_threshold_speed_kmh",
+    "lactate_threshold_speed_kmh": "lactate_threshold_speed_kmh",
+    "calories": "calories_kcal",
+    "calories_kcal": "calories_kcal",
+    "active_calories": "calories_kcal",
+    "floors": "floors",
+    "floor_count": "floors",
+    "respiration": "respiration_bpm",
+    "respiration_rate": "respiration_bpm",
+    "respiration_bpm": "respiration_bpm",
+    "hydration": "hydration_l",
+    "hydration_l": "hydration_l",
+    "hydration_liters": "hydration_l",
+    "recovery": "recovery_hours",
+    "recovery_hours": "recovery_hours",
+    "recovery_time_hours": "recovery_hours",
+    "hrv_status": "hrv_status",
+    "ready_to_train": "ready_to_train_status",
+    "readiness": "ready_to_train_status",
+    "ready_to_train_status": "ready_to_train_status",
+    "fully_recovered": "fully_recovered",
     "systolic": "systolic_bp_mmhg",
     "systolic_bp": "systolic_bp_mmhg",
     "systolic_bp_mmhg": "systolic_bp_mmhg",
@@ -48,9 +82,36 @@ _DEFAULT_UNITS = {
     "sleep_hours": "h",
     "steps": "count",
     "stress_score": "score",
-    "body_battery": "score",
+    "body_battery": "%",
+    "vo2_max_run": "mL/kg/min",
+    "vo2_max_ride": "mL/kg/min",
+    "sleep_score": "score",
+    "lactate_threshold_hr_bpm": "bpm",
+    "lactate_threshold_speed_kmh": "km/h",
+    "calories_kcal": "kcal",
+    "floors": "count",
+    "respiration_bpm": "brpm",
+    "hydration_l": "L",
+    "recovery_hours": "h",
+    "hrv_status": "status",
+    "ready_to_train_status": "status",
+    "fully_recovered": "status",
     "systolic_bp_mmhg": "mmHg",
     "diastolic_bp_mmhg": "mmHg",
+}
+_STATUS_VALUES = {
+    "hrv_status": {
+        "invalid", "very good", "good", "moderate", "poor", "very poor", "none",
+        "无效", "很好", "好", "中等", "差", "非常差", "无",
+    },
+    "ready_to_train_status": {
+        "high", "moderate", "medium", "low", "ready", "not ready",
+        "高", "中", "中等", "低", "准备就绪", "未准备",
+    },
+    "fully_recovered": {
+        "true", "false", "yes", "no", "recovered", "not recovered",
+        "fully recovered", "not fully recovered", "是", "否", "完全恢复", "未恢复",
+    },
 }
 
 
@@ -106,7 +167,7 @@ def summarize_health(state_db: StateDB) -> dict[str, object]:
         grouped.setdefault(str(row["metric"]), []).append(row)
     latest = {
         metric: {
-            "value": float(rows[0]["value"]),
+            "value": _health_value(rows[0]["value"]),
             "unit": str(rows[0]["unit"]),
             "observed_at": str(rows[0]["observed_at"]),
             "count": len(rows),
@@ -167,25 +228,31 @@ def _latest_health_by_metric(rows: list[object]) -> dict[str, dict[str, object]]
         if metric in latest:
             continue
         latest[metric] = {
-            "value": float(row["value"]),
+            "value": _health_value(row["value"]),
             "unit": str(row["unit"]),
             "observed_at": str(row["observed_at"]),
         }
     return latest
 
 
-def _normalize_metric(name: object, raw_value: object, raw_unit: object) -> tuple[str, float, str] | None:
+def _normalize_metric(name: object, raw_value: object, raw_unit: object) -> tuple[str, float | str, str] | None:
     key = str(name).strip().lower().replace(" ", "_").replace("-", "_")
     metric = _METRIC_ALIASES.get(key)
     if metric is None or raw_value is None or not str(raw_value).strip():
         return None
+    unit = str(raw_unit or _DEFAULT_UNITS[metric]).strip()
+    if metric in _STATUS_VALUES:
+        text_value = " ".join(str(raw_value).strip().split())
+        normalized_status = " ".join(text_value.casefold().replace("_", " ").split())
+        if normalized_status not in _STATUS_VALUES[metric]:
+            raise ValueError(f"Invalid status for health metric {name}: {raw_value}")
+        return metric, text_value, unit
     try:
         value = float(str(raw_value).strip().replace(",", "."))
     except ValueError as exc:
         raise ValueError(f"Invalid value for health metric {name}: {raw_value}") from exc
     if not math.isfinite(value) or value < 0:
         raise ValueError(f"Invalid value for health metric {name}: {raw_value}")
-    unit = str(raw_unit or _DEFAULT_UNITS[metric]).strip()
     lowered_unit = unit.lower()
     if metric == "weight_kg" and lowered_unit in {"lb", "lbs", "pound", "pounds"}:
         value *= 0.45359237
@@ -196,10 +263,25 @@ def _normalize_metric(name: object, raw_value: object, raw_unit: object) -> tupl
     elif metric == "sleep_hours" and lowered_unit in {"min", "minute", "minutes"}:
         value /= 60
         unit = "h"
+    elif metric == "hydration_l" and lowered_unit in {"ml", "milliliter", "milliliters"}:
+        value /= 1000
+        unit = "L"
+    elif metric == "lactate_threshold_speed_kmh" and lowered_unit in {"mph", "mi/h"}:
+        value *= 1.609344
+        unit = "km/h"
     elif metric == "steps":
         value = int(value)
         unit = "count"
     return metric, value, unit
+
+
+def _health_value(value: object) -> float | str:
+    if isinstance(value, str):
+        try:
+            return float(value)
+        except ValueError:
+            return value
+    return float(value)
 
 
 def _parse_observed_at(value: object) -> str | None:

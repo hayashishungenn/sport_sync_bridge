@@ -363,7 +363,7 @@ class StateDB:
         *,
         observed_at: str,
         metric: str,
-        value: float,
+        value: float | str,
         unit: str,
         source_label: str,
         fingerprint: str,

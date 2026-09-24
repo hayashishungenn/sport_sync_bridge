@@ -204,7 +204,7 @@ python sync.py workouts show <课表ID>
 python sync.py workouts export <课表ID> --output .\workout.fit
 ```
 
-健康指标可从 UTF-8 CSV 导入，支持 `date,metric,value,unit` 长表格式及带日期列的宽表。指标包括体重、身高、静息心率、HRV、血氧、睡眠、步数、压力、身体电量和血压；体重与身高齐全时会计算 BMI。
+健康指标可从 UTF-8 CSV 导入，支持 `date,metric,value,unit` 长表格式及带日期列的宽表。指标包括体重、身高、静息心率、HRV、血氧、睡眠、步数、压力、身体电量、血压，以及 AOT 中确认的跑步/骑行 VO₂max、睡眠分数、阈值心率/速度、卡路里、楼层、呼吸率、饮水量、恢复时长、HRV 状态、训练准备状态和完全恢复状态；体重与身高齐全时会计算 BMI。数值指标可用于本地汇总和 AI 活动分析；状态字段只保存 CSV 提供的标签，不计算设备侧准备度或恢复算法。
 
 ```powershell
 python sync.py health import .\health.csv
@@ -230,7 +230,7 @@ python sync.py receive --host 0.0.0.0 --port 8765
 
 接收页不设访问口令，只应在可信的本地网络中临时开启。
 
-未移植到 Python CLI 的 APK 功能包括其余云平台的私有认证/同步协议、Samba、手机 BLE 与传感器实时录制、训练准备度/VO2Max/其他恢复指标（HR-TSS/CTL/ATL/TSB 已实现）、在线健康数据源、AI 聊天及 AI 计划/课表生成。当前天气功能需要显式坐标和 GarSync 天气服务令牌；AI 活动分析使用本地汇总和可配置模型接口。静态 AOT 索引不足以确认这些云端接口的运行期请求、服务端校验或设备交互行为。
+未移植到 Python CLI 的 APK 功能包括其余云平台的私有认证/同步协议、Samba、手机 BLE 与传感器实时录制、设备侧训练准备度和恢复算法（HR-TSS/CTL/ATL/TSB 已实现）、在线健康数据源、AI 聊天及 AI 计划/课表生成。GarSync 健康状态数值可从本地 CSV 导入，但项目不从手表或云端读取这些数据。当前天气功能需要显式坐标和 GarSync 天气服务令牌；AI 活动分析使用本地汇总和可配置模型接口。静态 AOT 索引不足以确认这些云端接口的运行期请求、服务端校验或设备交互行为。
 
 常用参数:
 

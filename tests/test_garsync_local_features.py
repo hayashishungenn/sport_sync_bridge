@@ -195,6 +195,50 @@ class GarSyncLocalFeatureTests(unittest.TestCase):
         self.assertEqual(summary["measurement_count"], 3)
         self.assertEqual(summary["latest"]["bmi"]["value"], 22.9)
 
+    def test_health_csv_imports_garsync_indicators_and_statuses(self) -> None:
+        health_csv = self.root / "health-indicators.csv"
+        health_csv.write_text(
+            "date,metric,value,unit\n"
+            "2026-01-02,vo2_max_run,48,mL/kg/min\n"
+            "2026-01-02,vo2_max_ride,45,mL/kg/min\n"
+            "2026-01-02,sleep_score,85,score\n"
+            "2026-01-02,lt_hr,165,bpm\n"
+            "2026-01-02,lt_speed,14.1,km/h\n"
+            "2026-01-02,calories,450,kcal\n"
+            "2026-01-02,floors,12,count\n"
+            "2026-01-02,respiration,14,brpm\n"
+            "2026-01-02,hydration,1500,ml\n"
+            "2026-01-02,recovery,12,h\n"
+            "2026-01-02,hrv_status,Moderate,status\n"
+            "2026-01-02,ready_to_train,High,status\n"
+            "2026-01-02,fully_recovered,True,status\n",
+            encoding="utf-8",
+        )
+
+        self.assertEqual(import_health_csv(self.state, health_csv), 13)
+        summary = summarize_health(self.state)
+        latest = summary["latest"]
+        self.assertEqual(latest["vo2_max_run"]["value"], 48)
+        self.assertEqual(latest["vo2_max_ride"]["unit"], "mL/kg/min")
+        self.assertEqual(latest["sleep_score"]["value"], 85)
+        self.assertEqual(latest["lactate_threshold_hr_bpm"]["value"], 165)
+        self.assertEqual(latest["lactate_threshold_speed_kmh"]["value"], 14.1)
+        self.assertEqual(latest["hydration_l"]["value"], 1.5)
+        self.assertEqual(latest["recovery_hours"]["value"], 12)
+        self.assertEqual(latest["hrv_status"]["value"], "Moderate")
+        self.assertEqual(latest["ready_to_train_status"]["value"], "High")
+        self.assertEqual(latest["fully_recovered"]["value"], "True")
+
+        context = summarize_health_for_activity(
+            self.state,
+            "2026-01-02T03:00:00Z",
+            "2026-01-02T04:00:00Z",
+        )
+        self.assertEqual(context["before_activity"]["hrv_status"]["value"], "Moderate")
+        activity = read_activity_file(create_gpx(self.root / "health-context.gpx"))
+        prompt = build_ai_analysis_prompt(summarize_activity(activity), [], health_summary=context)
+        self.assertIn("hrv_status: Moderate status", prompt)
+
     def test_activity_health_context_respects_activity_and_utc_day_boundaries(self) -> None:
         observations = [
             ("2025-12-01T08:00:00+00:00", "weight_kg", 70, "kg"),
