@@ -30,7 +30,7 @@ from sport_sync_bridge.training import (
     list_workout_templates,
 )
 from sport_sync_bridge.wifi_transfer import _make_handler
-from tests.activity_fixtures import create_gpx
+from tests.activity_fixtures import create_fit, create_gpx, create_tcx
 
 
 class GarSyncLocalFeatureTests(unittest.TestCase):
@@ -66,11 +66,35 @@ class GarSyncLocalFeatureTests(unittest.TestCase):
         archive_path = self.root / "activities.zip"
         with zipfile.ZipFile(archive_path, "w") as archive:
             archive.writestr("../../outside/route.gpx", activity_path.read_bytes())
+        previews = self.library.preview_paths([archive_path])
+
+        self.assertEqual(len(previews), 1)
+        self.assertFalse(previews[0].duplicate)
+        self.assertIn("activities.zip!/../../outside/route.gpx", previews[0].source_label)
+        self.assertEqual(self.state.list_local_activities(), [])
+        self.assertFalse(self.library.file_dir.exists())
+
         results = self.library.import_paths([archive_path])
 
         self.assertEqual(len(results), 1)
         self.assertEqual(Path(self.state.get_local_activity(results[0].fingerprint)["file_path"]).parent, self.root / ".data" / "local_imports")
         self.assertFalse((self.root / "outside").exists())
+        duplicate_preview = self.library.preview_paths([archive_path])
+        self.assertTrue(duplicate_preview[0].duplicate)
+
+    def test_preview_parses_fit_gpx_and_tcx_without_importing(self) -> None:
+        paths = [
+            create_fit(self.root / "preview.fit"),
+            create_gpx(self.root / "preview.gpx"),
+            create_tcx(self.root / "preview.tcx"),
+        ]
+
+        previews = self.library.preview_paths(paths)
+
+        self.assertEqual([preview.file_format for preview in previews], ["fit", "gpx", "tcx"])
+        self.assertTrue(all(preview.summary["track_point_count"] > 0 for preview in previews))
+        self.assertEqual(self.state.list_local_activities(), [])
+        self.assertFalse(self.library.file_dir.exists())
 
     def test_json_and_track_csv_are_normalized_to_gpx(self) -> None:
         json_path = self.root / "activity.json"
@@ -94,6 +118,10 @@ class GarSyncLocalFeatureTests(unittest.TestCase):
             "2026-01-02T03:05:00Z,31.231,121.471,11,151\n",
             encoding="utf-8",
         )
+
+        previews = self.library.preview_paths([json_path, csv_path])
+        self.assertEqual([preview.file_format for preview in previews], ["gpx", "gpx"])
+        self.assertEqual(self.state.list_local_activities(), [])
 
         json_result = self.library.import_paths([json_path])[0]
         csv_result = self.library.import_paths([csv_path])[0]
@@ -535,9 +563,12 @@ class GarSyncLocalFeatureTests(unittest.TestCase):
             patch("sport_sync_bridge.cli.SyncEngine", side_effect=AssertionError("sync engine is not needed")),
             contextlib.redirect_stdout(output),
         ):
+            self.assertEqual(main(["library", "preview", str(activity_path)]), 0)
             self.assertEqual(main(["library", "import", str(activity_path)]), 0)
             self.assertEqual(main(["library", "list", "--json"]), 0)
         self.assertIn('"format": "gpx"', output.getvalue())
+        self.assertIn('"summary":', output.getvalue())
+        self.assertIn("previewed=1", output.getvalue())
 
 
 if __name__ == "__main__":

@@ -153,6 +153,7 @@ python sync.py convert ride.gpx --to fit --output ride.fit
 从本地文件或目录导入活动。目录需要显式指定 `--recursive`；ZIP 会在内存中读取，不会按压缩包路径解压到磁盘。加密 ZIP 可通过 `ACTIVITY_ARCHIVE_PASSWORD` 提供密码。
 
 ```powershell
+python sync.py library preview .\activities.zip
 python sync.py library import .\activities.zip
 python sync.py library import .\activities --recursive
 python sync.py library list --from 2026-01-01 --sport cycling
@@ -216,7 +217,7 @@ python sync.py ble remove <设备地址>
 
 `library period` 默认汇总截至今天的近 90 天，也可指定日期范围和运动类型。报告提供周期总距离/时长/TSS、周一开周的周切片、跑步 VDOT 起止与最高值、活动日志，以及 APK 周期总结中可恢复的最长距离、最高 TSS、最快配速、最高 NP、最高爬升、最长时长和最高均速亮点。`avg_norm_power_w` 是各活动正值 NP 的等权平均，`avg_norm_power_activity_count` 表示参与平均的活动数；无有效值时平均值为空。`avg_cadence` 对已识别的跑步和骑行活动，按活动等权平均非空的活动踏频摘要，`avg_cadence_activity_count` 是参与活动数；零值计入，空值和其他运动类型不计入。GarSync 按跑步步频（步/分钟）和骑行踏频（转/分钟）分别取活动字段，本地 FIT 摘要目前根据轨迹 `cadence` 记录求均值，且运动细分类型映射尚未完全覆盖。`recorded_zone_time_s` 按区间编号累加本地 FIT `time_in_zone` 中已有的心率、速度、踏频和功率秒数，不从轨迹采样点重算；无原始区间数据时对应结果为空。`power_curve_w` 从原始 FIT、GPX、TCX 轨迹点按 AOT 恢复的 10 秒至 6 小时窗口计算均功率，并跨活动保留每个时长的最大整数瓦数。缺少可读取轨迹文件的活动计入 `power_curve_unavailable_activity_count`；有效文件没有足够时长或功率样本时，该活动不会生成曲线值。FIT 内已有的 TSS 优先；未带 TSS 时，提供 `--threshold-hr` 才按 HR-TSS 公式估算。训练类型分布、轨迹重算的区间分布和 PR 变化仍在分析中，日期按 UTC 日界线分组。NP 与踏频平均算法已从 AOT 汇编确认；功率曲线尚未与 GarSync 运行输出逐项比对。
 
-AI 活动分析还会读取 FIT session 中的平均/最大功率、标准化功率、强度因子、有氧/无氧训练效果和 TSS，并将这些值放进活动报告与提示词。FIT `time_in_zone` 消息中的心率、速度、踏频、功率分区用时及其边界和计算参数也会保留在本地活动摘要；心率、功率和速度分区会分别生成训练强度参考并提供给 AI。GarSync 主分类器如何合并多种分区结果，以及基于速度序列的完整选择逻辑尚未完全恢复，因此提示词不会把这些参考合成为单一训练类型。GPX、TCX 不包含这些 FIT 活动级汇总，导出时会列明损失；合并 FIT 时也会报告分区数据未复制。
+AI 活动分析还会读取 FIT session 中的平均/最大功率、标准化功率、强度因子、有氧/无氧训练效果和 TSS，并将这些值放进活动报告与提示词。FIT `time_in_zone` 消息中的心率、速度、踏频、功率分区用时及其边界和计算参数也会保留在本地活动摘要；各分区结果和 GarSync 主分类会分别提供给 AI。主分类器依据恢复到的 AOT 规则选择心率、功率或速度结果，并处理骑行强度因子。速度区间从活动轨迹和活动前乳酸阈速度推导，采用五点中值、线性插值和 30 秒最大采样间隔。速度分支的 AOT 条件比较乳酸阈速度数值与活动计时秒数，存在跨单位比较；移植保留了该条件，具体字段语义仍不确定。静态恢复的区间时间计算和分类选择尚未与 GarSync 运行时样例逐项校验。GPX、TCX 不包含这些 FIT 活动级汇总，导出时会列明损失；合并 FIT 时也会报告分区数据未复制。
 
 训练计划和课表命令从 `sport_sync_bridge/data/training_plans/` 与 `sport_sync_bridge/data/workouts/` 读取本地模板。模板文件保留在本机并由 Git 忽略；其他副本需自行放入模板文件。计划开始日期必须是周一，安装后可导出到日历：
 

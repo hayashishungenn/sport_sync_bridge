@@ -10,7 +10,7 @@ import zipfile
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
-from typing import Iterable
+from typing import Iterable, Iterator
 
 from .activity_analysis import summarize_activity
 from .formats import ActivityFile, ActivityLap, TrackPoint, _write_gpx, read_activity_file
@@ -36,6 +36,18 @@ class ImportResult:
     duplicate: bool
 
 
+@dataclass(frozen=True, slots=True)
+class ImportPreview:
+    fingerprint: str
+    name: str
+    sport_type: str | None
+    start_time: str | None
+    file_format: str
+    source_label: str
+    duplicate: bool
+    summary: dict[str, object]
+
+
 class LocalActivityLibrary:
     def __init__(self, state_db: StateDB, data_dir: Path):
         self.state_db = state_db
@@ -49,22 +61,7 @@ class LocalActivityLibrary:
         recursive: bool = False,
         zip_password: bytes | None = None,
     ) -> list[ImportResult]:
-        candidates: list[Path] = []
-        seen: set[Path] = set()
-        for input_path in paths:
-            resolved = input_path.expanduser().resolve()
-            if resolved.is_dir():
-                if not recursive:
-                    raise ValueError(f"Directory import requires --recursive: {resolved}")
-                entries = sorted(path for path in resolved.rglob("*") if path.is_file())
-            else:
-                entries = [resolved]
-            for entry in entries:
-                if entry not in seen:
-                    seen.add(entry)
-                    candidates.append(entry)
-        if not candidates:
-            raise ValueError("No files found to import")
+        candidates = _collect_candidate_paths(paths, recursive=recursive, operation="import")
         results: list[ImportResult] = []
         for path in candidates:
             if not path.is_file():
@@ -78,6 +75,105 @@ class LocalActivityLibrary:
                     raise ValueError(f"Activity file is too large: {path}")
                 results.append(self.import_payload(path.name, path.read_bytes(), source_label=str(path)))
         return results
+
+    def preview_paths(
+        self,
+        paths: Iterable[Path],
+        *,
+        recursive: bool = False,
+        zip_password: bytes | None = None,
+    ) -> list[ImportPreview]:
+        candidates = _collect_candidate_paths(paths, recursive=recursive, operation="preview")
+        previews: list[ImportPreview] = []
+        for path in candidates:
+            if not path.is_file():
+                raise ValueError(f"Input file does not exist: {path}")
+            if path.stat().st_size > MAX_ARCHIVE_BYTES:
+                raise ValueError(f"Input file is too large: {path}")
+            if path.suffix.lower() == ".zip":
+                previews.extend(
+                    self.preview_archive_payload(
+                        path.name,
+                        path.read_bytes(),
+                        source_label=str(path),
+                        password=zip_password,
+                    )
+                )
+            else:
+                if path.stat().st_size > MAX_FILE_BYTES:
+                    raise ValueError(f"Activity file is too large: {path}")
+                previews.append(
+                    self.preview_payload(path.name, path.read_bytes(), source_label=str(path))
+                )
+        return previews
+
+    def preview_payload(
+        self,
+        filename: str,
+        payload: bytes,
+        *,
+        source_label: str | None = None,
+    ) -> ImportPreview:
+        if len(payload) > MAX_FILE_BYTES:
+            raise ValueError(f"Activity file is too large: {filename}")
+        suffix = Path(filename).suffix.lower().lstrip(".")
+        if suffix not in ACTIVITY_FORMATS:
+            raise ValueError(f"Unsupported activity file type: .{suffix or '(none)'}")
+
+        file_format = suffix
+        if suffix in CONVERTIBLE_FORMATS:
+            with tempfile.TemporaryDirectory(prefix="sport-sync-preview-") as temporary_dir:
+                activity_path = Path(temporary_dir) / f"preview.{suffix}"
+                activity_path.write_bytes(payload)
+                activity = read_activity_file(activity_path)
+        elif suffix == "json":
+            activity, has_track = _read_json_activity(payload, Path(filename).stem)
+            if has_track:
+                file_format = "gpx"
+        else:
+            activity = _read_csv_activity(payload, Path(filename).stem)
+            file_format = "gpx"
+
+        _validate_coordinates(activity, filename)
+        if not activity.name:
+            activity.name = Path(filename).stem
+        summary = summarize_activity(activity)
+        start_time = summary.get("start_time")
+        if isinstance(start_time, str):
+            parsed_start = parse_datetime(start_time)
+            if parsed_start is not None:
+                start_time = parsed_start.isoformat()
+                summary["start_time"] = start_time
+        fingerprint = hashlib.sha256(payload).hexdigest()
+        return ImportPreview(
+            fingerprint=fingerprint,
+            name=activity.name,
+            sport_type=activity.sport_type,
+            start_time=str(start_time) if start_time else None,
+            file_format=file_format,
+            source_label=source_label or filename,
+            duplicate=self.state_db.get_local_activity(fingerprint) is not None,
+            summary=summary,
+        )
+
+    def preview_archive_payload(
+        self,
+        filename: str,
+        payload: bytes,
+        *,
+        source_label: str | None = None,
+        password: bytes | None = None,
+    ) -> list[ImportPreview]:
+        return [
+            self.preview_payload(
+                member_name,
+                member_payload,
+                source_label=f"{source_label or filename}!/{member_path}",
+            )
+            for member_name, member_path, member_payload in _iter_archive_activity_payloads(
+                filename, payload, password, action="preview"
+            )
+        ]
 
     def import_payload(
         self,
@@ -175,38 +271,16 @@ class LocalActivityLibrary:
         source_label: str | None = None,
         password: bytes | None = None,
     ) -> list[ImportResult]:
-        if len(payload) > MAX_ARCHIVE_BYTES:
-            raise ValueError(f"ZIP file is too large: {filename}")
-        try:
-            with zipfile.ZipFile(io.BytesIO(payload)) as archive:
-                entries = [info for info in archive.infolist() if not info.is_dir()]
-                if len(entries) > MAX_ARCHIVE_ENTRIES:
-                    raise ValueError(f"ZIP contains too many entries: {filename}")
-                if sum(info.file_size for info in entries) > MAX_ARCHIVE_BYTES:
-                    raise ValueError(f"ZIP expands beyond the allowed size: {filename}")
-                results: list[ImportResult] = []
-                for info in entries:
-                    member_name = PurePosixPath(info.filename).name
-                    suffix = Path(member_name).suffix.lower().lstrip(".")
-                    if suffix not in ACTIVITY_FORMATS:
-                        continue
-                    if info.file_size > MAX_FILE_BYTES:
-                        raise ValueError(f"ZIP member is too large: {member_name}")
-                    try:
-                        member_payload = archive.read(info, pwd=password)
-                    except RuntimeError as exc:
-                        if "password" in str(exc).lower() or "encrypted" in str(exc).lower():
-                            raise ValueError(
-                                f"ZIP member is encrypted; set ACTIVITY_ARCHIVE_PASSWORD to import {filename}"
-                            ) from exc
-                        raise ValueError(f"Could not read ZIP member {member_name}: {exc}") from exc
-                    label = f"{filename}!/{info.filename}"
-                    results.append(self.import_payload(member_name, member_payload, source_label=label))
-                if not results:
-                    raise ValueError(f"ZIP contains no supported activity files: {filename}")
-                return results
-        except zipfile.BadZipFile as exc:
-            raise ValueError(f"Invalid ZIP archive: {filename}") from exc
+        return [
+            self.import_payload(
+                member_name,
+                member_payload,
+                source_label=f"{filename}!/{member_path}",
+            )
+            for member_name, member_path, member_payload in _iter_archive_activity_payloads(
+                filename, payload, password
+            )
+        ]
 
     def get_activity(self, identifier: str):
         row = self.state_db.get_local_activity(identifier)
@@ -223,6 +297,69 @@ class LocalActivityLibrary:
             source_label=str(archive_path),
             password=password,
         )
+
+
+def _collect_candidate_paths(
+    paths: Iterable[Path], *, recursive: bool, operation: str
+) -> list[Path]:
+    candidates: list[Path] = []
+    seen: set[Path] = set()
+    for input_path in paths:
+        resolved = input_path.expanduser().resolve()
+        if resolved.is_dir():
+            if not recursive:
+                raise ValueError(f"Directory {operation} requires --recursive: {resolved}")
+            entries = sorted(path for path in resolved.rglob("*") if path.is_file())
+        else:
+            entries = [resolved]
+        for entry in entries:
+            if entry not in seen:
+                seen.add(entry)
+                candidates.append(entry)
+    if not candidates:
+        raise ValueError(f"No files found to {operation}")
+    return candidates
+
+
+def _iter_archive_activity_payloads(
+    filename: str,
+    payload: bytes,
+    password: bytes | None,
+    *,
+    action: str = "import",
+) -> Iterator[tuple[str, str, bytes]]:
+    if len(payload) > MAX_ARCHIVE_BYTES:
+        raise ValueError(f"ZIP file is too large: {filename}")
+    try:
+        with zipfile.ZipFile(io.BytesIO(payload)) as archive:
+            entries = [info for info in archive.infolist() if not info.is_dir()]
+            if len(entries) > MAX_ARCHIVE_ENTRIES:
+                raise ValueError(f"ZIP contains too many entries: {filename}")
+            if sum(info.file_size for info in entries) > MAX_ARCHIVE_BYTES:
+                raise ValueError(f"ZIP expands beyond the allowed size: {filename}")
+            supported_entries = [
+                info
+                for info in entries
+                if Path(PurePosixPath(info.filename).name).suffix.lower().lstrip(".")
+                in ACTIVITY_FORMATS
+            ]
+            if not supported_entries:
+                raise ValueError(f"ZIP contains no supported activity files: {filename}")
+            for info in supported_entries:
+                member_name = PurePosixPath(info.filename).name
+                if info.file_size > MAX_FILE_BYTES:
+                    raise ValueError(f"ZIP member is too large: {member_name}")
+                try:
+                    member_payload = archive.read(info, pwd=password)
+                except RuntimeError as exc:
+                    if "password" in str(exc).lower() or "encrypted" in str(exc).lower():
+                        raise ValueError(
+                            f"ZIP member is encrypted; set ACTIVITY_ARCHIVE_PASSWORD to {action} {filename}"
+                        ) from exc
+                    raise ValueError(f"Could not read ZIP member {member_name}: {exc}") from exc
+                yield member_name, info.filename, member_payload
+    except zipfile.BadZipFile as exc:
+        raise ValueError(f"Invalid ZIP archive: {filename}") from exc
 
 
 def _read_json_activity(payload: bytes, default_name: str) -> tuple[ActivityFile, bool]:

@@ -109,6 +109,16 @@ def build_parser() -> argparse.ArgumentParser:
         default="ACTIVITY_ARCHIVE_PASSWORD",
         help="Environment variable for encrypted ZIP passwords (default: ACTIVITY_ARCHIVE_PASSWORD)",
     )
+    library_preview = library_actions.add_parser(
+        "preview", help="Inspect supported activity files without importing them"
+    )
+    library_preview.add_argument("paths", nargs="+", type=Path, help="Files or directories to preview")
+    library_preview.add_argument("--recursive", action="store_true", help="Scan directories recursively")
+    library_preview.add_argument(
+        "--password-env",
+        default="ACTIVITY_ARCHIVE_PASSWORD",
+        help="Environment variable for encrypted ZIP passwords",
+    )
     library_list = library_actions.add_parser("list", help="List imported activities")
     library_list.add_argument("--from", dest="date_from", help="Filter start date")
     library_list.add_argument("--to", dest="date_to", help="Filter end date")
@@ -614,6 +624,32 @@ def _run_local_command(args: argparse.Namespace, config: AppConfig) -> int:
                         )
                     )
                 print(f"imported={len(results)}")
+                return 0
+
+            if args.library_action == "preview":
+                password_value = os.getenv(args.password_env) if args.password_env else None
+                previews = library.preview_paths(
+                    args.paths,
+                    recursive=args.recursive,
+                    zip_password=password_value.encode("utf-8") if password_value else None,
+                )
+                for preview in previews:
+                    print(
+                        json.dumps(
+                            {
+                                "id": preview.fingerprint[:12],
+                                "name": preview.name,
+                                "sport_type": preview.sport_type,
+                                "start_time": preview.start_time,
+                                "format": preview.file_format,
+                                "duplicate": preview.duplicate,
+                                "source": preview.source_label,
+                                "summary": preview.summary,
+                            },
+                            ensure_ascii=False,
+                        )
+                    )
+                print(f"previewed={len(previews)}")
                 return 0
 
             if args.library_action == "list":
