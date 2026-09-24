@@ -253,9 +253,12 @@ AI 运动分析保留为可选功能。它把单次活动摘要、最近活动�
 python sync.py ai-analysis <活动ID前缀> --prompt-only
 python sync.py ai-analysis <活动ID前缀> --prompt-only --language en-US --focus recovery --detail detailed
 python sync.py ai-analysis <骑行活动ID前缀> --force-vector-json .\force-vector.json --force-vector-focus stability --prompt-only
+python sync.py ai-settings show
+python sync.py ai-settings set --focus recovery --detail brief
+python sync.py ai-settings reset
 ```
 
-`--language` 接受语言代码，默认 `zh-CN`；`--focus` 可选 `performance`、`health` 或 `recovery`，默认 `performance`；`--detail` 可选 `brief`、`normal` 或 `detailed`，默认 `normal`。提示词会要求模型准确引用已有数值，并避免医疗诊断。健康指标按活动时间筛选：活动开始前各指标最近一次记录，以及活动结束后至结束日 UTC 日末的记录；不把活动之后其他日期的数据带入历史活动分析，所有指标都保留时间戳。
+`--language` 接受语言代码，默认 `zh-CN`；`--focus` 可选 `performance`、`health` 或 `recovery`，`--detail` 可选 `brief`、`normal` 或 `detailed`。两项默认读取本地 SQLite 中保存的偏好，初始值分别为 `performance` 和 `normal`；命令行显式参数只覆盖本次分析。使用 `ai-settings show|set|reset` 管理偏好。提示词会要求模型准确引用已有数值，并避免医疗诊断。健康指标按活动时间筛选：活动开始前各指标最近一次记录，以及活动结束后至结束日 UTC 日末的记录；不把活动之后其他日期的数据带入历史活动分析，所有指标都保留时间戳。
 
 `ai-analysis --force-vector-json` 使用 GarSync 骑行 AI 教练的功率矢量提示词，并复用当前模型配置、活动分析历史和 Markdown 结果保存。输入使用本项目约定的 JSON 结构，最多包含 12 个左/右脚 30° 节点数组，以及左右脚的力矩有效性（TE）和踩踏平顺度（PS）百分比；缺少字段会留空，不从缺失测量推算。节点数值单位由来源设备决定，项目不擅自换算。`--force-vector-focus` 支持 `comprehensive`、`stability` 和 `peak_power`；`--detail`、`--language` 与 `--question` 继续生效。`--prompt-only` 可在不请求 AI 服务的情况下查看发送内容。
 

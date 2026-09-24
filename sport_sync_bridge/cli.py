@@ -24,6 +24,13 @@ from .activity_map import write_route_map
 from .activity_poster import POSTER_LAYOUTS, POSTER_METRICS, POSTER_RATIOS, write_activity_poster
 from .activity_library import LocalActivityLibrary
 from .activity_merge import merge_fit_files
+from .ai_preferences import (
+    AI_ANALYSIS_DETAILS,
+    AI_ANALYSIS_FOCI,
+    load_ai_analysis_preferences,
+    reset_ai_analysis_preferences,
+    save_ai_analysis_preferences,
+)
 from .ble_sensors import (
     BLE_TYPES,
     BleDeviceRegistry,
@@ -372,15 +379,13 @@ def build_parser() -> argparse.ArgumentParser:
     )
     ai_parser.add_argument(
         "--focus",
-        choices=["performance", "health", "recovery"],
-        default="performance",
-        help="Analysis focus (default: performance)",
+        choices=list(AI_ANALYSIS_FOCI),
+        help="Analysis focus (default: saved preference or performance)",
     )
     ai_parser.add_argument(
         "--detail",
-        choices=["brief", "normal", "detailed"],
-        default="normal",
-        help="Response detail level (default: normal)",
+        choices=list(AI_ANALYSIS_DETAILS),
+        help="Response detail level (default: saved preference or normal)",
     )
     ai_parser.add_argument(
         "--force-vector-json",
@@ -395,6 +400,16 @@ def build_parser() -> argparse.ArgumentParser:
     )
     ai_parser.add_argument("--prompt-only", action="store_true", help="Print the analysis prompt without sending data")
     ai_parser.add_argument("--history", action="store_true", help="Show saved analyses without contacting the AI service")
+
+    ai_settings_parser = subparsers.add_parser(
+        "ai-settings", help="Show or change saved AI analysis preferences"
+    )
+    ai_settings_actions = ai_settings_parser.add_subparsers(dest="ai_settings_action", required=True)
+    ai_settings_actions.add_parser("show", help="Show saved AI analysis preferences")
+    ai_settings_set = ai_settings_actions.add_parser("set", help="Save AI analysis preferences")
+    ai_settings_set.add_argument("--focus", choices=list(AI_ANALYSIS_FOCI))
+    ai_settings_set.add_argument("--detail", choices=list(AI_ANALYSIS_DETAILS))
+    ai_settings_actions.add_parser("reset", help="Reset preferences to performance and normal")
 
     receive_parser = subparsers.add_parser("receive", help="Start a local Wi-Fi file import page")
     receive_parser.add_argument("--host", default="127.0.0.1", help="Bind address; use 0.0.0.0 for LAN access")
@@ -452,7 +467,16 @@ def main(argv: list[str] | None = None) -> int:
         return _convert_file(args, config)
     if args.command == "weather":
         return _run_weather(args, config)
-    if args.command in {"library", "plans", "workouts", "health", "ai-analysis", "receive", "ble"}:
+    if args.command in {
+        "library",
+        "plans",
+        "workouts",
+        "health",
+        "ai-analysis",
+        "ai-settings",
+        "receive",
+        "ble",
+    }:
         return _run_local_command(args, config)
 
     engine = SyncEngine(config)
@@ -1048,6 +1072,24 @@ def _run_local_command(args: argparse.Namespace, config: AppConfig) -> int:
         finally:
             state.close()
 
+    if args.command == "ai-settings":
+        state = StateDB(config.db_path)
+        try:
+            if args.ai_settings_action == "show":
+                preferences = load_ai_analysis_preferences(state)
+            elif args.ai_settings_action == "set":
+                preferences = save_ai_analysis_preferences(
+                    state,
+                    focus=args.focus,
+                    detail=args.detail,
+                )
+            else:
+                preferences = reset_ai_analysis_preferences(state)
+            print(json.dumps(preferences, ensure_ascii=False, indent=2))
+            return 0
+        finally:
+            state.close()
+
     if args.command == "ai-analysis":
         state = StateDB(config.db_path)
         try:
@@ -1060,6 +1102,9 @@ def _run_local_command(args: argparse.Namespace, config: AppConfig) -> int:
                 results = state.list_ai_analysis_results(row["fingerprint"])
                 print(json.dumps([dict(result) for result in results], ensure_ascii=False, indent=2))
                 return 0
+            preferences = load_ai_analysis_preferences(state)
+            focus = args.focus or preferences["focus"]
+            detail = args.detail or preferences["detail"]
             summary = json.loads(row["summary_json"])
             summary.update({"name": row["name"], "sport_type": row["sport_type"]})
             summary["start_time"] = row["start_time"] or summary.get("start_time")
@@ -1068,13 +1113,13 @@ def _run_local_command(args: argparse.Namespace, config: AppConfig) -> int:
                 cycling_terms = ("cycl", "bike", "ride", "骑行")
                 if sport_type and not any(token in sport_type for token in cycling_terms):
                     raise ValueError("Force Vector analysis requires a cycling activity")
-                if args.focus != "performance":
+                if args.focus is not None and args.focus != "performance":
                     raise ValueError("Use --force-vector-focus instead of --focus with Force Vector JSON")
                 snapshot = load_force_vector_snapshot(args.force_vector_json)
                 prompt = build_force_vector_analysis_prompt(
                     snapshot,
                     language=args.language,
-                    detail=args.detail,
+                    detail=detail,
                     focus=args.force_vector_focus,
                     question=args.question,
                 )
@@ -1115,8 +1160,8 @@ def _run_local_command(args: argparse.Namespace, config: AppConfig) -> int:
                     args.question,
                     health_context,
                     language=args.language,
-                    focus=args.focus,
-                    detail=args.detail,
+                    focus=focus,
+                    detail=detail,
                     speed_samples=speed_samples,
                 )
             if args.prompt_only:
