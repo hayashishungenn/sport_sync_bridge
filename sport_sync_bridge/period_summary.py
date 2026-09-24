@@ -344,13 +344,13 @@ def _aggregate_power_curves(
             for point in parsed.track_points
         ):
             sample_activity_count += 1
-        samples = _activity_power_samples(parsed.track_points)
+        samples = calculate_activity_power_curve(parsed.track_points)
         for duration, watts in samples.items():
             curve[duration] = max(curve.get(duration, watts), watts)
     return dict(sorted(curve.items())), sample_activity_count, unavailable_activity_count
 
 
-def _activity_power_samples(points: Iterable[object]) -> dict[int, int]:
+def calculate_activity_power_curve(points: Iterable[object]) -> dict[int, int]:
     samples: list[tuple[datetime, float | None]] = []
     for point in points:
         timestamp = getattr(point, "timestamp", None)
@@ -391,6 +391,10 @@ def _activity_power_samples(points: Iterable[object]) -> dict[int, int]:
         if best_average is not None:
             curve[duration] = int(best_average)
     return curve
+
+
+def _activity_power_samples(points: Iterable[object]) -> dict[int, int]:
+    return calculate_activity_power_curve(points)
 
 
 def _aggregate_recorded_zone_time(activities: list[dict[str, object]]) -> dict[str, dict[int, float]]:

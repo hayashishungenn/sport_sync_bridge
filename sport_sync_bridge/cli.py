@@ -14,12 +14,13 @@ from .activity_analysis import (
     write_activity_report_pdf,
     write_ai_analysis_markdown,
 )
+from .activity_poster import POSTER_LAYOUTS, POSTER_METRICS, POSTER_RATIOS, write_activity_poster
 from .activity_library import LocalActivityLibrary
 from .activity_merge import merge_fit_files
 from .config import AppConfig
 from .engine import SyncEngine
 from .fit_tools import normalize_fit_coordinates
-from .formats import SUPPORTED_FORMATS, convert_activity_file
+from .formats import SUPPORTED_FORMATS, convert_activity_file, read_activity_file
 from .health import import_health_csv, summarize_health, summarize_health_for_activity
 from .period_summary import calculate_period_summary, format_period_summary
 from .state import StateDB
@@ -122,6 +123,32 @@ def build_parser() -> argparse.ArgumentParser:
     library_report = library_actions.add_parser("report", help="Export local activity summaries")
     library_report.add_argument("--format", choices=["txt", "json", "csv", "html", "pdf"], default="txt")
     library_report.add_argument("--output", type=Path, help="Output path; omit to print text reports to stdout")
+    library_poster = library_actions.add_parser("poster", help="Create a share poster for one local activity")
+    library_poster.add_argument("activity_id", help="Activity fingerprint or its unique prefix")
+    library_poster.add_argument("--output", type=Path, required=True, help="JPEG output path")
+    library_poster.add_argument("--layout", choices=POSTER_LAYOUTS, default="classic")
+    library_poster.add_argument("--ratio", choices=sorted(POSTER_RATIOS), default="portrait")
+    library_poster.add_argument("--photo", type=Path, help="Optional background photo")
+    library_poster.add_argument("--title", help="Override the activity title")
+    library_poster.add_argument("--user", help="Display name shown below the title")
+    track_visibility = library_poster.add_mutually_exclusive_group()
+    track_visibility.add_argument("--show-track", dest="show_track", action="store_true", help="Show the GPS track")
+    track_visibility.add_argument("--no-track", dest="show_track", action="store_false", help="Hide the GPS track")
+    title_visibility = library_poster.add_mutually_exclusive_group()
+    title_visibility.add_argument("--show-title", dest="show_title", action="store_true", help="Show the activity title")
+    title_visibility.add_argument("--no-title", dest="show_title", action="store_false", help="Hide the activity title")
+    power_visibility = library_poster.add_mutually_exclusive_group()
+    power_visibility.add_argument("--power-curve", dest="power_curve", action="store_true", help="Show the duration power curve")
+    power_visibility.add_argument("--no-power-curve", dest="power_curve", action="store_false", help="Hide the power curve")
+    library_poster.add_argument("--metric", dest="poster_metric", choices=POSTER_METRICS, help="Choose ascent, speed, pace, or average power")
+    library_poster.add_argument("--text-color", default="#F5F7FA", help="Poster text color in #RRGGBB form")
+    library_poster.add_argument("--track-color", default="#51E2B7", help="Track color in #RRGGBB form")
+    library_poster.add_argument("--accent-color", help="Accent color in #RRGGBB form")
+    library_poster.add_argument("--font", type=Path, help="Font file for poster text")
+    watermark = library_poster.add_mutually_exclusive_group()
+    watermark.add_argument("--watermark", metavar="TEXT", help="Set watermark text")
+    watermark.add_argument("--no-watermark", dest="watermark", action="store_const", const=None)
+    library_poster.set_defaults(show_track=None, show_title=None, power_curve=None, watermark="SPORT SYNC BRIDGE")
     library_route = library_actions.add_parser("route", help="Export one activity track")
     library_route.add_argument("activity_id", help="Activity fingerprint or its unique prefix")
     library_route.add_argument("--to", choices=sorted(SUPPORTED_FORMATS), required=True)
@@ -563,6 +590,33 @@ def _run_local_command(args: argparse.Namespace, config: AppConfig) -> int:
                         print(f"written={output_path}")
                     else:
                         print(report, end="")
+                return 0
+
+            if args.library_action == "poster":
+                row = library.get_activity(args.activity_id)
+                activity = read_activity_file(Path(row["file_path"]))
+                result = write_activity_poster(
+                    activity,
+                    args.output,
+                    layout=args.layout,
+                    ratio=args.ratio,
+                    photo_path=args.photo,
+                    title=args.title,
+                    user=args.user,
+                    watermark=args.watermark,
+                    show_track=args.show_track,
+                    show_title=args.show_title,
+                    show_power_curve=args.power_curve,
+                    metric=args.poster_metric,
+                    text_color=args.text_color,
+                    track_color=args.track_color,
+                    accent_color=args.accent_color,
+                    font_path=args.font,
+                )
+                print(f"written={result.output_path}")
+                print(f"size={result.width}x{result.height}")
+                for warning in result.warnings:
+                    print(f"warning={warning}")
                 return 0
 
             if args.library_action == "route":

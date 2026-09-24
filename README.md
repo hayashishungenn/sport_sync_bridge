@@ -163,6 +163,8 @@ python sync.py library balance --threshold-hr 180 --resting-hr 60 --from 2026-01
 python sync.py library vdot --from 2026-01-01 --format json
 python sync.py library report --format html --output .\activities.html
 python sync.py library report --format pdf --output .\activities.pdf
+python sync.py library poster <活动ID前缀> --output .\activity.jpg --layout classic --ratio portrait --show-title
+python sync.py library poster <活动ID前缀> --output .\activity.jpg --photo .\background.jpg --user 张三 --metric power --power-curve
 python sync.py library route <活动ID前缀> --to gpx --output .\route.gpx
 python sync.py library merge .\part-1.fit .\part-2.fit --output .\merged.fit --name "合并骑行"
 python sync.py sync --source local --target strava --format strava=tcx
@@ -172,9 +174,11 @@ python sync.py sync --source local --target strava --format strava=tcx
 
 `library merge` 按输入顺序合并至少两个同运动类型的 FIT 活动。时间重叠的后续片段会平移到前一段结束后一秒，超过两秒的原有停顿会写成休息圈。输出最多保留 50,000 个记录点，抽稀时保留首尾点和可用指标的全局极值。合并会重新生成 FIT，因此来源设备身份、开发者字段和非记录消息不会复制；其他解析损失会随命令结果列出。该行为依据 APK AOT 静态线索实现，尚未用 GarSync 运行时样例逐字段对照。
 
+`library poster` 从本地 FIT、GPX 或 TCX 生成 JPEG 分享海报，显示运动类型、时间、轨迹、距离、用时和一个统计指标；标题可用 `--show-title` 显示。统计指标为累计爬升、平均速度、平均配速或平均功率，默认选择随布局预设变化。`indoor` 布局默认隐藏 GPS 轨迹并显示功率曲线。海报可叠加背景照片、自选水印、字体、文字色和轨迹色。布局使用 APK 中确认的 `classic`、`track_top`、`side_by_side`、`data_below`、`bottom_corner`、`data_above`、`full_info`、`classic_orange` 和 `indoor` 标识；比例为 `portrait`（3:4）或 `square`（1:1）。
+
 `library balance` 优先使用 FIT 活动中的 TSS。没有 TSS 时，只有提供 `--threshold-hr` 且存在平均心率和活动时长，才按 GarSync 的 HR-TSS 公式估算。默认静息心率为 60 bpm。每日负荷按 42 天 CTL 和 7 天 ATL 指数平滑，TSB 为 CTL 减 ATL。指定 `--from` 时仍会用此前活动预热负荷，但只输出所选日期范围；默认输出 JSON，也支持 CSV 和 TXT。该算法来自 AOT 静态伪代码并已与 Blutter ARM64 汇编交叉核对。
 
-`library vdot` 只读取本地跑步活动，按天取最高 VDOT 形成趋势，并计算最新趋势点和历史最佳的 1 英里、3K、5K、10K、半马、全马等效成绩，以及 Easy、Marathon、Threshold、Interval、Repetition 配速范围。GarSync 的活动筛选门槛是距离超过 200 米、计时超过 60 秒；命令默认使用全部本地历史，也可通过 `--from`、`--to` 限定日期。筛选门槛、五档配速系数和 50 次二分反算结构来自 APK AOT 伪代码/汇编；VDOT 方程的截距恢复存在差异，具体证据和采用依据见逆向报告。APK 没有运行时对照，本地结果尚未和 GarSync 页面逐项比对。
+`library vdot` 只读取本地跑步活动，按天取最高 VDOT 形成趋势，并计算最新趋势点和历史最佳的 1 英里、3K、5K、10K、半马、全马等效成绩，以及 Easy、Marathon、Threshold、Interval、Repetition 配速范围。GarSync 的活动筛选门槛是距离超过 200 米、计时超过 60 秒；命令默认使用全部本地历史，也可通过 `--from`、`--to` 限定日期。筛选门槛、五档配速系数和 50 次二分反算结构来自 APK AOT 伪代码/汇编；VDOT 方程的截距恢复存在差异。APK 没有运行时对照，本地结果尚未和 GarSync 页面逐项比对。
 
 `library period` 默认汇总截至今天的近 90 天，也可指定日期范围和运动类型。报告提供周期总距离/时长/TSS、周一开周的周切片、跑步 VDOT 起止与最高值、活动日志，以及 APK 周期总结中可恢复的最长距离、最高 TSS、最快配速、最高 NP、最高爬升、最长时长和最高均速亮点。`avg_norm_power_w` 是各活动正值 NP 的等权平均，`avg_norm_power_activity_count` 表示参与平均的活动数；无有效值时平均值为空。`avg_cadence` 对已识别的跑步和骑行活动，按活动等权平均非空的活动踏频摘要，`avg_cadence_activity_count` 是参与活动数；零值计入，空值和其他运动类型不计入。GarSync 按跑步步频（步/分钟）和骑行踏频（转/分钟）分别取活动字段，本地 FIT 摘要目前根据轨迹 `cadence` 记录求均值，且运动细分类型映射尚未完全覆盖。`recorded_zone_time_s` 按区间编号累加本地 FIT `time_in_zone` 中已有的心率、速度、踏频和功率秒数，不从轨迹采样点重算；无原始区间数据时对应结果为空。`power_curve_w` 从原始 FIT、GPX、TCX 轨迹点按 AOT 恢复的 10 秒至 6 小时窗口计算均功率，并跨活动保留每个时长的最大整数瓦数。缺少可读取轨迹文件的活动计入 `power_curve_unavailable_activity_count`；有效文件没有足够时长或功率样本时，该活动不会生成曲线值。FIT 内已有的 TSS 优先；未带 TSS 时，提供 `--threshold-hr` 才按 HR-TSS 公式估算。训练类型分布、轨迹重算的区间分布和 PR 变化仍在分析中，日期按 UTC 日界线分组。NP 与踏频平均算法已从 AOT 汇编确认；功率曲线尚未与 GarSync 运行输出逐项比对。
 
@@ -219,7 +223,7 @@ python sync.py receive --host 0.0.0.0 --port 8765
 
 接收页不设访问口令，只应在可信的本地网络中临时开启。
 
-未移植到 Python CLI 的 APK 功能包括其余云平台的私有认证/同步协议、Samba、手机 BLE 与传感器实时录制、路线地图/分享海报/PDF 报告、训练准备度/VO2Max/其他恢复指标（HR-TSS/CTL/ATL/TSB 已实现）、在线健康数据源、天气、AI 聊天及 AI 计划/课表生成。当前 AI 活动分析使用本地汇总和可配置模型接口。静态 AOT 索引不足以确认这些云端接口的运行期请求、服务端校验或设备交互行为；完整静态盘点见 `GARSYNC_APK_REVERSE.md`。
+未移植到 Python CLI 的 APK 功能包括其余云平台的私有认证/同步协议、Samba、手机 BLE 与传感器实时录制、路线地图、训练准备度/VO2Max/其他恢复指标（HR-TSS/CTL/ATL/TSB 已实现）、在线健康数据源、天气、AI 聊天及 AI 计划/课表生成。当前 AI 活动分析使用本地汇总和可配置模型接口。静态 AOT 索引不足以确认这些云端接口的运行期请求、服务端校验或设备交互行为。
 
 常用参数:
 
