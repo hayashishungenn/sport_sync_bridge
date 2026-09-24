@@ -3,3 +3,7 @@
 .data/
 __pycache__/
 *.pyc
+
+# Keep the user-provided APK and local reverse-engineering output out of Git.
+/base.apk
+/.data/apk_reverse/
