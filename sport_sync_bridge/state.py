@@ -10,18 +10,33 @@ from .models import Activity
 from .utils import ensure_directory, utcnow
 
 
+DATABASE_SCHEMA_VERSION = 1
+
+
 class StateDB:
     def __init__(self, path: Path):
         ensure_directory(path.parent)
         self.path = path
-        self.connection = sqlite3.connect(path)
+        self.connection = sqlite3.connect(path, timeout=5.0)
         self.connection.row_factory = sqlite3.Row
-        self._init_schema()
+        self.connection.execute("PRAGMA busy_timeout = 5000")
+        self.connection.execute("PRAGMA foreign_keys = ON")
+        self.connection.execute("PRAGMA journal_mode = WAL")
+        self.connection.execute("PRAGMA synchronous = NORMAL")
+        try:
+            self._init_schema()
+        except Exception:
+            self.connection.close()
+            raise
 
     def _init_schema(self) -> None:
-        cursor = self.connection.cursor()
-        cursor.executescript(
-            """
+        current_version = int(self.connection.execute("PRAGMA user_version").fetchone()[0])
+        if current_version > DATABASE_SCHEMA_VERSION:
+            raise RuntimeError(
+                f"State database version {current_version} is newer than supported version "
+                f"{DATABASE_SCHEMA_VERSION}"
+            )
+        schema_sql = """
             CREATE TABLE IF NOT EXISTS activities (
                 source TEXT NOT NULL,
                 source_id TEXT NOT NULL,
@@ -118,8 +133,20 @@ class StateDB:
             CREATE INDEX IF NOT EXISTS idx_schedule_plan_date
                 ON schedule_items(training_plan_id, scheduled_date);
             """
-        )
-        self.connection.commit()
+        try:
+            self.connection.executescript(
+                "BEGIN IMMEDIATE;\n"
+                + schema_sql
+                + f"\nPRAGMA user_version = {max(current_version, DATABASE_SCHEMA_VERSION)};\nCOMMIT;"
+            )
+        except sqlite3.Error:
+            if self.connection.in_transaction:
+                self.connection.rollback()
+            raise
+        integrity = self.connection.execute("PRAGMA integrity_check").fetchone()
+        if integrity is None or integrity[0] != "ok":
+            detail = str(integrity[0]) if integrity else "no integrity result"
+            raise sqlite3.DatabaseError(f"State database integrity check failed: {detail}")
 
     def close(self) -> None:
         self.connection.close()
