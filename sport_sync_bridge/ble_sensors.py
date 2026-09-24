@@ -24,6 +24,7 @@ from .ble_measurements import (
 
 
 BLE_TYPES = {
+    "bigrun_ecg",
     "heart_rate",
     "running_speed_cadence",
     "cycling_speed_cadence",
@@ -33,6 +34,7 @@ BLE_TYPES = {
 }
 
 _SERVICE_TYPES = {
+    "f000efe004514000000000000000b000": "bigrun_ecg",
     "180d": "heart_rate",
     "1814": "running_speed_cadence",
     "1816": "cycling_speed_cadence",

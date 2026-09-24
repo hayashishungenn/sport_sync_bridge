@@ -33,6 +33,7 @@ from .ble_sensors import (
     stream_sensor_data,
     validate_sensor_recording_options,
 )
+from .ble_bigrun_ecg import stream_bigrun_ecg, validate_bigrun_ecg_options
 from .config import AppConfig
 from .engine import SyncEngine
 from .fit_tools import normalize_fit_coordinates
@@ -224,6 +225,14 @@ def build_parser() -> argparse.ArgumentParser:
         help="Wheel circumference in meters for deriving wheel-sensor speed and distance",
     )
     ble_record.add_argument("--output", type=Path, help="Optional JSON Lines output path")
+    ble_bigrun_ecg = ble_actions.add_parser(
+        "bigrun-ecg",
+        help="Record raw BigRun ECG sensor notifications",
+    )
+    ble_bigrun_ecg.add_argument("address", help="BigRun BLE device address or platform identifier")
+    ble_bigrun_ecg.add_argument("--duration", type=float, default=60.0, help="Recording duration in seconds")
+    ble_bigrun_ecg.add_argument("--timeout", type=float, default=15.0, help="Connection timeout in seconds")
+    ble_bigrun_ecg.add_argument("--output", type=Path, help="Optional JSON Lines output path")
     ble_rename = ble_actions.add_parser("rename", help="Rename a saved BLE sensor")
     ble_rename.add_argument("address", help="Saved BLE device address")
     ble_rename.add_argument("name", help="Local display name")
@@ -1028,6 +1037,41 @@ def _run_ble_command(args: argparse.Namespace, config: AppConfig) -> int:
                     output_stream.close()
             registry.update_last_connected(args.address)
             print(f"samples={sample_count}")
+            if output_path is not None:
+                print(f"output={output_path}")
+            return 0
+
+        if args.ble_action == "bigrun-ecg":
+            validate_bigrun_ecg_options(args.duration, args.timeout)
+            output_path = args.output.expanduser().resolve() if args.output else None
+            output_stream = None
+            if output_path is not None:
+                output_path.parent.mkdir(parents=True, exist_ok=True)
+                output_stream = output_path.open("w", encoding="utf-8", newline="")
+            frame_count = 0
+
+            async def _record_bigrun_ecg() -> None:
+                nonlocal frame_count
+                async for frame in stream_bigrun_ecg(
+                    args.address,
+                    args.duration,
+                    args.timeout,
+                ):
+                    line = json.dumps(asdict(frame), ensure_ascii=False, sort_keys=True)
+                    if output_stream is not None:
+                        output_stream.write(line + "\n")
+                        output_stream.flush()
+                    else:
+                        print(line)
+                    frame_count += 1
+
+            try:
+                asyncio.run(_record_bigrun_ecg())
+            finally:
+                if output_stream is not None:
+                    output_stream.close()
+            registry.update_last_connected(args.address)
+            print(f"frames={frame_count}")
             if output_path is not None:
                 print(f"output={output_path}")
             return 0
