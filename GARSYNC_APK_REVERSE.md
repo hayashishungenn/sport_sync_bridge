@@ -128,7 +128,13 @@ AOT 伪代码与 Blutter ARM64 汇编交叉确认了 GarSync 的计算步骤：H
 
 本地活动源已接入现有 Garmin / Strava 上传流程；原始文件存入 `.data/local_imports/`，数据库记录摘要和指纹。42 份训练计划模板覆盖六种语言，33 个 FIT 课表模板也随项目提供。健康数据通过用户提供的 CSV 导入；该实现不登录或抓取 APK 内的健康平台账号。已将 HR-TSS、CTL、ATL、TSB 计算加入本地活动库。FIT session 的平均/最大功率、标准化功率、强度因子、有氧/无氧训练效果和 TSS 会保留到活动摘要及 AI 分析上下文；FIT `time_in_zone` 的心率、速度、踏频和功率数组、区间上界、心率/FTP 计算参数、消息引用信息也会保留。AI 提示词带入心率和功率分区结果。GPX/TCX 导出和 FIT 合并会报告无法保留的分区统计。
 
-本轮已把活动合并和训练平衡接入本地命令，但它们依据静态可确认行为重写，尚未与 GarSync 运行结果逐项校准。仍未移植其余云平台的私有认证与同步协议、GarSync 账号系统、Samba 连接、手机 BLE 与传感器实时录制、路线地图与分享海报、PDF 报告、训练准备度/VO2Max/其他恢复指标、在线健康数据源、天气服务、AI 聊天及 AI 计划/课表生成。当前 AI 活动分析保留为本地活动汇总和可配置的兼容模型接口。AOT 静态索引无法单独证明运行时签名、认证交换、服务器校验和硬件交互；这些功能不能仅从类名或端点字符串推断完成。
+本轮已把活动合并、训练平衡和跑步 VDOT 接入本地命令；它们依据静态结果重写，尚未与 GarSync 运行结果逐项校准。仍未移植其余云平台的私有认证与同步协议、GarSync 账号系统、Samba 连接、手机 BLE 与传感器实时录制、路线地图与分享海报、PDF 报告、训练准备度/其他恢复指标、在线健康数据源、天气服务、AI 聊天及 AI 计划/课表生成。当前 AI 活动分析保留为本地活动汇总和可配置的兼容模型接口。AOT 静态索引无法单独证明运行时签名、认证交换、服务器校验和硬件交互；这些功能不能仅从类名或端点字符串推断完成。
+
+### 跑步 VDOT
+
+本轮继续用 AOTopsy 的 AArch64 汇编和全量伪代码复核 `VDOTCalculator.calculate`、`trainingPaces`、`VDOTTable._predictTimeBinary`、`VDOTService._getScatterPoints` 与 `_computeEvalCurve`。散点路径只纳入 FIT 运动类型为 running 的活动，距离需大于 200 米，计时需大于 60 秒；曲线按日期分组并取当天最高值。`calculate` 将距离除以计时分钟得到米/分钟，再计算 Daniels/Gilbert 氧耗和持续比例。AOTopsy 伪代码恢复出的截距位模式与训练配速反算中的 `VDOT + 4.6` 不一致；本地实现依据 APK 同一计算器的反算和 [GoldenCheetah VDOT 实现](https://sources.debian.org/src/goldencheetah/4.0.0~DEV1607-2%2Bdeb9u1/src/Metrics/VDOTCalculator.cpp)，采用 `-4.6` 截距。GarSync 运行时尚未验证这处恢复歧义。
+
+训练配速档位及系数为 Easy 59–74%、Marathon 75–84%、Threshold 83–88%、Interval 95–100%、Repetition 105–110%。预测反算有 50 次迭代，速度搜索边界为 60–500 米/分钟。页面明确展示 1mi、3k、5k、10k、half_marathon、full_marathon 六个距离键；本项目采用对应标准公制距离，其中 1mi 转为 1,609.344 米，半马/全马为 21,097.5/42,195 米。`library vdot` 对本地已导入的跑步活动生成逐日最高 VDOT 趋势、最新值和历史最佳预测。该实现不读取 Garmin VO2max；日期边界和数值舍入尚未与 GarSync 页面逐项比对。
 
 ## 证据文件与限制
 

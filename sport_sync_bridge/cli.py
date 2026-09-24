@@ -17,6 +17,7 @@ from .formats import SUPPORTED_FORMATS, convert_activity_file
 from .health import import_health_csv, summarize_health
 from .state import StateDB
 from .training_balance import calculate_training_balance, format_training_balance
+from .vdot import analyze_running_activities, format_vdot_report
 from .training import (
     export_training_plan_ics,
     export_workout_template,
@@ -89,6 +90,10 @@ def build_parser() -> argparse.ArgumentParser:
     library_balance.add_argument("--from", dest="date_from", help="First date to show; earlier activities still seed CTL/ATL")
     library_balance.add_argument("--to", dest="date_to", help="Last date to show (inclusive)")
     library_balance.add_argument("--format", choices=["json", "csv", "txt"], default="json")
+    library_vdot = library_actions.add_parser("vdot", help="Calculate local running VDOT and training paces")
+    library_vdot.add_argument("--from", dest="date_from", help="First activity date to include")
+    library_vdot.add_argument("--to", dest="date_to", help="Last activity date to include (inclusive)")
+    library_vdot.add_argument("--format", choices=["json", "txt"], default="json")
     library_report = library_actions.add_parser("report", help="Export local activity summaries")
     library_report.add_argument("--format", choices=["txt", "json", "csv", "html"], default="txt")
     library_report.add_argument("--output", type=Path, help="Output path; omit to print to stdout")
@@ -459,6 +464,17 @@ def _run_local_command(args: argparse.Namespace, config: AppConfig) -> int:
                     date_to=date_to.date() if date_to else None,
                 )
                 print(format_training_balance(result, args.format), end="")
+                return 0
+
+            if args.library_action == "vdot":
+                date_from = _parse_cli_datetime(args.date_from)
+                date_to = _parse_cli_datetime(args.date_to, inclusive_end=True)
+                result = analyze_running_activities(
+                    state.list_local_activities(),
+                    date_from=date_from.date() if date_from else None,
+                    date_to=date_to.date() if date_to else None,
+                )
+                print(format_vdot_report(result, args.format), end="")
                 return 0
 
             if args.library_action == "report":

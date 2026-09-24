@@ -159,6 +159,7 @@ python sync.py library list --from 2026-01-01 --sport cycling
 python sync.py library show <活动ID前缀>
 python sync.py library stats
 python sync.py library balance --threshold-hr 180 --resting-hr 60 --from 2026-01-01
+python sync.py library vdot --from 2026-01-01 --format json
 python sync.py library report --format html --output .\activities.html
 python sync.py library route <活动ID前缀> --to gpx --output .\route.gpx
 python sync.py library merge .\part-1.fit .\part-2.fit --output .\merged.fit --name "合并骑行"
@@ -170,6 +171,8 @@ python sync.py sync --source local --target strava --format strava=tcx
 `library merge` 按输入顺序合并至少两个同运动类型的 FIT 活动。时间重叠的后续片段会平移到前一段结束后一秒，超过两秒的原有停顿会写成休息圈。输出最多保留 50,000 个记录点，抽稀时保留首尾点和可用指标的全局极值。合并会重新生成 FIT，因此来源设备身份、开发者字段和非记录消息不会复制；其他解析损失会随命令结果列出。该行为依据 APK AOT 静态线索实现，尚未用 GarSync 运行时样例逐字段对照。
 
 `library balance` 优先使用 FIT 活动中的 TSS。没有 TSS 时，只有提供 `--threshold-hr` 且存在平均心率和活动时长，才按 GarSync 的 HR-TSS 公式估算。默认静息心率为 60 bpm。每日负荷按 42 天 CTL 和 7 天 ATL 指数平滑，TSB 为 CTL 减 ATL。指定 `--from` 时仍会用此前活动预热负荷，但只输出所选日期范围；默认输出 JSON，也支持 CSV 和 TXT。该算法来自 AOT 静态伪代码并已与 Blutter ARM64 汇编交叉核对。
+
+`library vdot` 只读取本地跑步活动，按天取最高 VDOT 形成趋势，并计算最新趋势点和历史最佳的 1 英里、3K、5K、10K、半马、全马等效成绩，以及 Easy、Marathon、Threshold、Interval、Repetition 配速范围。GarSync 的活动筛选门槛是距离超过 200 米、计时超过 60 秒；命令默认使用全部本地历史，也可通过 `--from`、`--to` 限定日期。筛选门槛、五档配速系数和 50 次二分反算结构来自 APK AOT 伪代码/汇编；VDOT 方程的截距恢复存在差异，具体证据和采用依据见逆向报告。APK 没有运行时对照，本地结果尚未和 GarSync 页面逐项比对。
 
 AI 活动分析还会读取 FIT session 中的平均/最大功率、标准化功率、强度因子、有氧/无氧训练效果和 TSS，并将这些值放进活动报告与提示词。FIT `time_in_zone` 消息中的心率、速度、踏频、功率分区用时及其边界和计算参数也会保留在本地活动摘要；心率和功率分区会提供给 AI 分析。GPX、TCX 不包含这些 FIT 活动级汇总，导出时会列明损失；合并 FIT 时也会报告分区数据未复制。
 
