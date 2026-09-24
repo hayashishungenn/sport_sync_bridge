@@ -15,6 +15,7 @@ from .engine import SyncEngine
 from .fit_tools import normalize_fit_coordinates
 from .formats import SUPPORTED_FORMATS, convert_activity_file
 from .health import import_health_csv, summarize_health
+from .period_summary import calculate_period_summary, format_period_summary
 from .state import StateDB
 from .training_balance import calculate_training_balance, format_training_balance
 from .vdot import analyze_running_activities, format_vdot_report
@@ -84,6 +85,24 @@ def build_parser() -> argparse.ArgumentParser:
     library_show = library_actions.add_parser("show", help="Show a local activity summary")
     library_show.add_argument("activity_id", help="Activity fingerprint or its unique prefix")
     library_actions.add_parser("stats", help="Summarize local activity volume by sport and week")
+    library_period = library_actions.add_parser("period", help="Summarize a local training period")
+    library_period.add_argument("--days", type=int, default=90, help="Trailing period length in days (default: 90)")
+    library_period.add_argument(
+        "--from",
+        dest="date_from",
+        type=_parse_period_datetime,
+        help="First activity date to include",
+    )
+    library_period.add_argument(
+        "--to",
+        dest="date_to",
+        type=_parse_period_datetime,
+        help="Last activity date to include (inclusive)",
+    )
+    library_period.add_argument("--sport", help="Include only this sport type")
+    library_period.add_argument("--resting-hr", type=float, default=60.0, help="Resting heart rate for HR-TSS (default: 60)")
+    library_period.add_argument("--threshold-hr", type=float, help="Lactate threshold heart rate for HR-TSS")
+    library_period.add_argument("--format", choices=["json", "txt"], default="json")
     library_balance = library_actions.add_parser("balance", help="Calculate local HR-TSS, CTL, ATL, and TSB")
     library_balance.add_argument("--resting-hr", type=float, default=60.0, help="Resting heart rate in bpm (default: 60)")
     library_balance.add_argument("--threshold-hr", type=float, help="Lactate threshold heart rate in bpm for HR-TSS")
@@ -281,6 +300,13 @@ def _parse_cli_datetime(value: str | None, inclusive_end: bool = False) -> datet
     return parsed.astimezone(timezone.utc)
 
 
+def _parse_period_datetime(value: str) -> str:
+    parsed = parse_datetime(value)
+    if parsed is None:
+        raise argparse.ArgumentTypeError(f"invalid date/time: {value}")
+    return parsed.astimezone(timezone.utc).isoformat()
+
+
 def _validate_selection(selected: list[str], available: object, kind: str) -> None:
     available_set = set(available)
     if not available_set:
@@ -451,6 +477,21 @@ def _run_local_command(args: argparse.Namespace, config: AppConfig) -> int:
                 from .activity_analysis import summarize_rows
 
                 print(json.dumps(summarize_rows(state.list_local_activities()), ensure_ascii=False, indent=2))
+                return 0
+
+            if args.library_action == "period":
+                date_from = _parse_cli_datetime(args.date_from)
+                date_to = _parse_cli_datetime(args.date_to, inclusive_end=True)
+                result = calculate_period_summary(
+                    state.list_local_activities(),
+                    date_from=date_from.date() if date_from else None,
+                    date_to=date_to.date() if date_to else None,
+                    days=args.days,
+                    sport=args.sport,
+                    resting_hr=args.resting_hr,
+                    threshold_hr=args.threshold_hr,
+                )
+                print(format_period_summary(result, args.format), end="")
                 return 0
 
             if args.library_action == "balance":
