@@ -160,7 +160,9 @@ AOT 伪代码与 Blutter ARM64 汇编交叉确认了 GarSync 的计算步骤：H
 
 AOT class 表确认 `TrainingType` 是六值枚举；活动详情页构造的本地化键为 `training_intensity_{sport}_{type}`，sport 分支包括 `running`、`cycling`、`swimming`。字符串引用表列出六种 type：`recovery`、`base`、`tempo`、`threshold`、`vo2max`、`anaerobic`。周期 `_classifyTrainingTypes` 遍历活动，调用 `_classifySingleActivity`，再将活动 `duration` 累加到对应 `TrainingType`。这些事实分别来自 `classes.jsonl`、`string_refs.jsonl` 和 `PeriodSummaryService` 的 AArch64 汇编；该流程仍是静态恢复，未在 GarSync 运行时验证。
 
-`_detectIntensityModel` 对分类后的时长做总和与比例计算；总时长为零时返回空值，非零时模型字符串包括 `pyramidal`、`polarized`、`mixed`。函数使用的阈值常量包括 `0.6`、`0.4` 和约 `0.14`。目前未能把两个比例对应的匿名 `TrainingType` 单例可靠映射到上述六个名称；`_classifySingleActivity` 的指标来源及六档边界也没有足够证据复原，因此这两处暂不移植，避免生成貌似精确但无法验证的分类结果。
+`_detectIntensityModel` 对分类后的时长做总和与比例计算；总时长为零时返回空值，非零时模型字符串包括 `pyramidal`、`polarized`、`mixed`。函数使用的阈值常量包括 `0.6`、`0.4` 和约 `0.14`。目前未能把两个比例对应的匿名 `TrainingType` 单例可靠映射到上述六个名称。
+
+继续对照 `_classifySingleActivity` 与 `Activity.toJson` 汇编后，已确认该分类器先读取 `Activity.hrZone`（字段偏移 272）；字段非空时会对它执行动态调用，并将返回值与 `6` 比较。汇编未能可靠恢复这个动态调用对应的 Dart 方法。该分支与六个 `TrainingType` 名称的映射仍不明确。若 `hrZone` 为空或该返回值小于 `6`，代码会检查 `sport` 字段（偏移 52）的数值 `1`、`11`、`17`；这些分支读取 `distance`（偏移 76），遍历四个双精度阈值，并按距离与候选值的相对差进行比较，汇编中的容差常量为 `0.03`。四个阈值的具体数值及其对应训练类型尚未恢复，因此分类器仍不移植。
 
 ### 周期功率曲线补充复核
 
