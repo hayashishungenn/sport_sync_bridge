@@ -13,6 +13,11 @@ from pathlib import Path
 from typing import Callable, Iterable
 
 from .formats import ActivityFile, ActivityTimeInZone, ActivityZoneTime, TrackPoint
+from .training_intensity import (
+    classify_heart_rate_intensity,
+    classify_power_intensity,
+    classify_speed_intensity,
+)
 from .utils import ensure_directory, safe_filename
 
 
@@ -551,6 +556,7 @@ def build_ai_analysis_prompt(
             "power_calculation",
             "W",
         ),
+        "FIT 分区训练强度参考：" + _format_training_intensity(activity_summary),
         "",
         f"已导入活动：{recent['activity_count']} 次",
         f"活动总距离（米）：{recent['distance_m']:.1f}",
@@ -841,6 +847,37 @@ def _time_in_zone_summary(message: ActivityTimeInZone) -> dict[str, object]:
 
 def _zone_summary(zone: ActivityZoneTime) -> dict[str, float | int | None]:
     return {"zone": zone.zone, "seconds": zone.seconds, "high_boundary": zone.high_boundary}
+
+
+def _format_training_intensity(activity_summary: dict[str, object]) -> str:
+    messages = activity_summary.get("time_in_zone_messages")
+    if not isinstance(messages, list):
+        return "未知（无分区记录）"
+
+    duration = activity_summary.get("timer_time_s")
+    if duration is None:
+        duration = activity_summary.get("elapsed_time_s")
+    sport_type = activity_summary.get("sport_type")
+    labels: list[str] = []
+    for index, message in enumerate(messages, start=1):
+        if not isinstance(message, dict):
+            continue
+        heart_rate = classify_heart_rate_intensity(
+            message.get("heart_rate_zones"), duration, sport_type
+        )
+        power = classify_power_intensity(message.get("power_zones"), duration, sport_type)
+        speed = classify_speed_intensity(message.get("speed_zones"))
+        group_labels = []
+        if heart_rate is not None:
+            group_labels.append(f"心率={heart_rate}")
+        if power is not None:
+            group_labels.append(f"功率={power}")
+        if speed is not None:
+            group_labels.append(f"速度={speed}")
+        if group_labels:
+            prefix = f"分区记录{index}：" if len(messages) > 1 else ""
+            labels.append(prefix + "，".join(group_labels))
+    return "；".join(labels) if labels else "未知（无有效分区时间）"
 
 
 def _encode_nested_report_fields(records: list[dict[str, object]], field_name: str) -> None:
