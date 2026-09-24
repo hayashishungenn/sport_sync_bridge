@@ -7,7 +7,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from sport_sync_bridge.cli import main
 from sport_sync_bridge.state import StateDB
@@ -93,6 +93,55 @@ class TrainingReadinessTests(unittest.TestCase):
             self.assertEqual(main(["health", "readiness", "--format", "json"]), 0)
         result = json.loads(output.getvalue())
         self.assertEqual(result["records"][0]["data"]["score"], 74.5)
+
+    def test_cli_fetches_garmin_readiness_into_the_local_history(self) -> None:
+        config = SimpleNamespace(
+            data_dir=self.root / ".data",
+            db_path=self.root / "garmin-state.db",
+            log_level="INFO",
+            log_path=self.root / "sync.log",
+        )
+        client = SimpleNamespace(
+            get_training_readiness=lambda cdate: [
+                {**self._sample_record(), "calendarDate": cdate}
+            ]
+        )
+        authenticate = Mock()
+        target = SimpleNamespace(client=client, authenticate=authenticate)
+        output = io.StringIO()
+        with (
+            patch("sport_sync_bridge.cli.AppConfig.load", return_value=config),
+            patch("sport_sync_bridge.cli.configure_logging"),
+            patch("sport_sync_bridge.cli.GarminTarget", return_value=target) as target_factory,
+            contextlib.redirect_stdout(output),
+        ):
+            self.assertEqual(
+                main(
+                    [
+                        "health",
+                        "fetch-readiness",
+                        "--start-date",
+                        "2026-08-03",
+                        "--end-date",
+                        "2026-08-03",
+                    ]
+                ),
+                0,
+            )
+
+        target_factory.assert_called_once_with(config)
+        authenticate.assert_called_once_with()
+        self.assertIn("records_fetched=1", output.getvalue())
+        self.assertIn("records_added=1", output.getvalue())
+        imported_state = StateDB(config.db_path)
+        try:
+            summary = summarize_training_readiness(imported_state)
+        finally:
+            imported_state.close()
+        record = summary["records"][0]
+        self.assertEqual(record["calendar_date"], "2026-08-03")
+        self.assertEqual(record["source_id"], "garmin-local")
+        self.assertEqual(record["source_label"], "Garmin Connect training readiness")
 
     def _sample_record(self) -> dict[str, object]:
         return {

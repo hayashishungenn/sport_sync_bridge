@@ -53,6 +53,11 @@ from .ble_trainer import set_trainer_target_power
 from .config import AppConfig
 from .ecg_signal import EcgSignalNormalizer, analyze_bigrun_ecg_signal
 from .engine import SyncEngine
+from .health_sources import (
+    fetch_garmin_training_readiness,
+    validate_training_readiness_date_range,
+)
+from .targets import GarminTarget
 from .fit_tools import normalize_fit_coordinates
 from .formats import SUPPORTED_FORMATS, convert_activity_file, read_activity_file
 from .force_vector_analysis import (
@@ -69,6 +74,7 @@ from .health import (
 from .training_readiness import (
     format_training_readiness_text,
     import_training_readiness_json,
+    import_training_readiness_records,
     summarize_training_readiness,
 )
 from .period_summary import calculate_period_summary, format_period_summary
@@ -367,6 +373,11 @@ def build_parser() -> argparse.ArgumentParser:
         "import-readiness", help="Import GarSync training readiness JSON records"
     )
     health_readiness_import.add_argument("input", type=Path)
+    health_readiness_fetch = health_actions.add_parser(
+        "fetch-readiness", help="Fetch Garmin training readiness for an inclusive date range"
+    )
+    health_readiness_fetch.add_argument("--start-date", required=True, help="Start date, YYYY-MM-DD")
+    health_readiness_fetch.add_argument("--end-date", required=True, help="End date, YYYY-MM-DD")
     health_summary = health_actions.add_parser("summary", help="Show latest health measurements")
     health_summary.add_argument("--format", choices=["json", "text"], default="json")
     health_readiness = health_actions.add_parser("readiness", help="Show imported training readiness history")
@@ -716,6 +727,30 @@ def _convert_file(args: argparse.Namespace, config: AppConfig) -> int:
     print(f"output={result.output_path}")
     for loss in result.losses:
         print(f"loss={loss}")
+    return 0
+
+
+def _run_garmin_readiness_fetch(args: argparse.Namespace, config: AppConfig) -> int:
+    start_date, end_date = validate_training_readiness_date_range(args.start_date, args.end_date)
+    target = GarminTarget(config)
+    target.authenticate()
+    records = fetch_garmin_training_readiness(
+        target.client,
+        start_date.isoformat(),
+        end_date.isoformat(),
+    )
+
+    state = StateDB(config.db_path)
+    try:
+        added = import_training_readiness_records(
+            state,
+            records,
+            source_label="Garmin Connect training readiness",
+        )
+    finally:
+        state.close()
+    print(f"records_fetched={len(records)}")
+    print(f"records_added={added}")
     return 0
 
 
@@ -1069,6 +1104,8 @@ def _run_local_command(args: argparse.Namespace, config: AppConfig) -> int:
         return 0
 
     if args.command == "health":
+        if args.health_action == "fetch-readiness":
+            return _run_garmin_readiness_fetch(args, config)
         state = StateDB(config.db_path)
         try:
             if args.health_action == "import":

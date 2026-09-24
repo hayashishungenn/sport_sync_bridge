@@ -85,8 +85,23 @@ def import_training_readiness_json(state_db: StateDB, input_path: Path) -> int:
     if not source_records:
         raise ValueError("Training readiness JSON contains no records")
 
+    return import_training_readiness_records(
+        state_db,
+        source_records,
+        source_label=str(input_path),
+    )
+
+
+def import_training_readiness_records(
+    state_db: StateDB,
+    source_records: list[object],
+    *,
+    source_label: str,
+) -> int:
+    if not source_label.strip():
+        raise ValueError("Training readiness source label must not be empty")
     records = [
-        _normalize_record(record, input_path, index)
+        _normalize_record(record, source_label, index)
         for index, record in enumerate(source_records, 1)
     ]
     return state_db.save_training_readiness_records(records)
@@ -135,7 +150,7 @@ def format_training_readiness_text(summary: dict[str, object]) -> str:
     return "\n".join(lines)
 
 
-def _normalize_record(record: object, input_path: Path, index: int) -> dict[str, object]:
+def _normalize_record(record: object, source_label: str, index: int) -> dict[str, object]:
     if not isinstance(record, dict):
         raise ValueError(f"Training readiness record {index} must be a JSON object")
     _validate_scalar_fields(record, index)
@@ -177,7 +192,7 @@ def _normalize_record(record: object, input_path: Path, index: int) -> dict[str,
         "score": score,
         "level": record.get("level"),
         "payload_json": canonical,
-        "source_label": str(input_path),
+        "source_label": source_label,
     }
 
 
