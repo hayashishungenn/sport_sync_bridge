@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import sys
 import tempfile
 from datetime import date, datetime, timezone
 from pathlib import Path
@@ -36,6 +37,7 @@ from .training import (
     list_workout_templates,
 )
 from .utils import configure_logging, ensure_directory, pack_directory_to_base64_zip, parse_datetime
+from .weather import WeatherError, format_weather_report, get_weather
 from .wifi_transfer import serve_transfer
 
 
@@ -191,6 +193,13 @@ def build_parser() -> argparse.ArgumentParser:
     health_import.add_argument("input", type=Path)
     health_actions.add_parser("summary", help="Show latest health measurements")
 
+    weather_parser = subparsers.add_parser("weather", help="Show current weather and outdoor exercise advice")
+    weather_parser.add_argument("--lat", required=True, type=float, help="Latitude in decimal degrees")
+    weather_parser.add_argument("--lon", required=True, type=float, help="Longitude in decimal degrees")
+    weather_parser.add_argument("--lang", default="zh", choices=["zh", "en"], help="Weather language")
+    weather_parser.add_argument("--format", choices=["text", "json"], default="text")
+    weather_parser.add_argument("--refresh", action="store_true", help="Ignore the 15-minute local cache")
+
     ai_parser = subparsers.add_parser("ai-analysis", help="Analyze an imported activity with a configured chat API")
     ai_parser.add_argument("activity_id", help="Activity fingerprint or its unique prefix")
     ai_parser.add_argument("--question", help="Optional analysis question")
@@ -269,6 +278,8 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "convert":
         return _convert_file(args, config)
+    if args.command == "weather":
+        return _run_weather(args, config)
     if args.command in {"library", "plans", "workouts", "health", "ai-analysis", "receive"}:
         return _run_local_command(args, config)
 
@@ -394,6 +405,23 @@ def _target_format_map(values: list[tuple[str, str]] | None) -> dict[str, str]:
             raise ValueError(f"Target format was specified more than once: {target}")
         formats[target] = activity_format
     return formats
+
+
+def _run_weather(args: argparse.Namespace, config: AppConfig) -> int:
+    try:
+        info = get_weather(
+            args.lat,
+            args.lon,
+            os.getenv("GARSYNC_WEATHER_TOKEN"),
+            config.data_dir / "weather_cache.json",
+            language=args.lang,
+            force_refresh=args.refresh,
+        )
+    except WeatherError as exc:
+        print(f"weather_error={exc}", file=sys.stderr)
+        return 2
+    print(format_weather_report(info, language=args.lang, output_format=args.format))
+    return 0
 
 
 def _convert_file(args: argparse.Namespace, config: AppConfig) -> int:
