@@ -44,7 +44,7 @@ from .ble_bigrun_ecg import (
 )
 from .ble_trainer import set_trainer_target_power
 from .config import AppConfig
-from .ecg_signal import EcgSignalNormalizer
+from .ecg_signal import EcgSignalNormalizer, analyze_bigrun_ecg_signal
 from .engine import SyncEngine
 from .fit_tools import normalize_fit_coordinates
 from .formats import SUPPORTED_FORMATS, convert_activity_file, read_activity_file
@@ -269,6 +269,21 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Add the APK-style -5..5 normalized waveform to the decoded JSON",
     )
+    ble_bigrun_ecg_analyze = ble_actions.add_parser(
+        "bigrun-ecg-analyze",
+        help="Calculate non-diagnostic metrics from decoded BigRun ECG samples",
+    )
+    ble_bigrun_ecg_analyze.add_argument(
+        "input",
+        type=Path,
+        help="Decoded JSON output from bigrun-ecg-decode",
+    )
+    ble_bigrun_ecg_analyze.add_argument(
+        "--sample-rate",
+        type=float,
+        help="Override the sample rate stored in the decoded JSON",
+    )
+    ble_bigrun_ecg_analyze.add_argument("--output", type=Path, help="Optional JSON report path")
     ble_bigrun_ecg_mode = ble_actions.add_parser(
         "bigrun-ecg-mode",
         help="Set a BigRun ECG sensor work mode",
@@ -555,6 +570,22 @@ def _iter_bigrun_ecg_capture(
             ):
                 raise ValueError(f"ECG capture line {line_number} has a mismatched payload_length")
             yield line_number, record, decode_bigrun_ecg_payload(payload)
+
+
+def _read_bigrun_ecg_decoded(input_path: Path) -> tuple[tuple[object, ...], object | None]:
+    try:
+        decoded = json.loads(input_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"Invalid decoded ECG JSON: {input_path}") from exc
+    if not isinstance(decoded, dict) or not isinstance(decoded.get("frames"), list):
+        raise ValueError("Decoded ECG JSON must contain a frames array")
+
+    samples: list[object] = []
+    for frame_number, frame in enumerate(decoded["frames"], start=1):
+        if not isinstance(frame, dict) or not isinstance(frame.get("samples"), list):
+            raise ValueError(f"Decoded ECG frame {frame_number} has no samples array")
+        samples.extend(frame["samples"])
+    return tuple(samples), decoded.get("sample_rate_hz")
 
 
 def _target_format_map(values: list[tuple[str, str]] | None) -> dict[str, str]:
@@ -1216,6 +1247,43 @@ def _run_ble_command(args: argparse.Namespace, config: AppConfig) -> int:
             asyncio.run(set_bigrun_ecg_work_mode(args.address, args.mode, args.timeout))
             registry.update_last_connected(args.address)
             print(f"mode={args.mode}")
+            return 0
+
+        if args.ble_action == "bigrun-ecg-analyze":
+            input_path = args.input.expanduser().resolve()
+            samples, stored_sample_rate = _read_bigrun_ecg_decoded(input_path)
+            sample_rate = args.sample_rate if args.sample_rate is not None else stored_sample_rate
+            if sample_rate is None:
+                raise ValueError("Decoded ECG JSON has no sample_rate_hz; provide --sample-rate")
+            metrics = analyze_bigrun_ecg_signal(samples, sample_rate)
+            report = json.dumps(asdict(metrics), ensure_ascii=False, allow_nan=False, indent=2)
+            if args.output is None:
+                print(report)
+                return 0
+
+            output_path = args.output.expanduser().resolve()
+            if input_path == output_path:
+                raise ValueError("ECG analysis output must not overwrite decoded samples")
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            descriptor, temporary_name = tempfile.mkstemp(
+                prefix=f".{output_path.name}.",
+                suffix=".tmp",
+                dir=output_path.parent,
+            )
+            temporary_path = Path(temporary_name)
+            try:
+                with os.fdopen(descriptor, "w", encoding="utf-8", newline="") as output_stream:
+                    output_stream.write(report + "\n")
+                    output_stream.flush()
+                    os.fsync(output_stream.fileno())
+                os.replace(temporary_path, output_path)
+            finally:
+                if temporary_path.exists():
+                    temporary_path.unlink()
+            print(f"r_peaks={len(metrics.r_peak_indices)} rr_intervals={len(metrics.rr_intervals_ms)}")
+            if metrics.heart_rate_bpm is not None:
+                print(f"heart_rate_bpm={metrics.heart_rate_bpm:.2f}")
+            print(f"output={output_path}")
             return 0
 
         if args.ble_action == "bigrun-ecg-decode":

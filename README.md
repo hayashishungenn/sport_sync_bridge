@@ -202,6 +202,7 @@ python sync.py ble heart-rate <设备地址> --duration 3600 --output .\heart-ra
 python sync.py ble record <设备地址> --duration 3600 --wheel-circumference-m 2.105 --output .\sensor-data.jsonl
 python sync.py ble bigrun-ecg <设备地址> --duration 300 --output .\bigrun-ecg.jsonl
 python sync.py ble bigrun-ecg-decode .\bigrun-ecg.jsonl --output .\bigrun-ecg-samples.json
+python sync.py ble bigrun-ecg-analyze .\bigrun-ecg-samples.json --output .\bigrun-ecg-report.json
 python sync.py ble bigrun-ecg-decode .\bigrun-ecg.jsonl --normalize --output .\bigrun-ecg-normalized.json
 python sync.py ble bigrun-ecg-mode <设备地址> hrv
 python sync.py ble trainer set-power <训练台地址> --watts 180
@@ -209,6 +210,8 @@ python sync.py ble rename <设备地址> "胸带"
 python sync.py ble prefer <设备地址> --type heart_rate
 python sync.py ble remove <设备地址>
 ```
+
+`bigrun-ecg-analyze` 读取 `bigrun-ecg-decode` 生成的 JSON，要求采样率为 100–2000 Hz 且至少有 5 秒样本。它复现 APK 中的 100 ms 移动平均、0.5 Hz 高通、12 Hz 低通、R 峰检测和 R-R 间期计算，只输出心率与间期指标，不给出疾病分类；报告包含非医疗声明。
 
 已保存设备信息位于 `.data/ble_devices.json`。BLE 扫描和连接需要本机蓝牙适配器及操作系统授予的权限；命令必须运行在能够访问该适配器的环境中。WSL 的 NAT 代理警告只说明代理配置未传入 WSL，不能据此判断 BLE 是否可用。
 
@@ -262,7 +265,7 @@ python sync.py receive --host 0.0.0.0 --port 8765
 
 接收页不设访问口令，只应在可信的本地网络中临时开启。
 
-未移植到 Python CLI 的 APK 功能包括其余云平台的私有认证/同步协议、手机 BLE 配对引导界面、训练台其他控制命令、BigRun ECG 分析算法、设备侧训练准备度和恢复算法（HR-TSS/CTL/ATL/TSB 已实现）、在线健康数据源、AI 聊天及 AI 计划/课表生成。标准 FTMS 目标功率控制已实现；BLE 测量通知也支持心率、跑步步频、骑行速度/踏频、功率计测量与功率向量、室内单车数据。BigRun ECG 已支持原始通知采集、波形解码、工作模式切换和可选波形归一化；诊断规则尚未移植。Samba 导入支持 SMB2/3 的目录浏览和只读文件导入，SMB1/NetBIOS 139 回退尚未移植。GarSync 健康状态数值可从本地 CSV 导入，但项目不从手表或云端读取这些数据。当前天气功能需要显式坐标和 GarSync 天气服务令牌；AI 活动分析使用本地汇总和可配置模型接口。静态 AOT 索引不足以确认这些云端接口的运行期请求、服务端校验或设备交互行为。
+未移植到 Python CLI 的 APK 功能包括其余云平台的私有认证/同步协议、手机 BLE 配对引导界面、训练台其他控制命令、BigRun ECG 诊断分类规则、设备侧训练准备度和恢复算法（HR-TSS/CTL/ATL/TSB 已实现）、在线健康数据源、AI 聊天及 AI 计划/课表生成。标准 FTMS 目标功率控制已实现；BLE 测量通知也支持心率、跑步步频、骑行速度/踏频、功率计测量与功率向量、室内单车数据。BigRun ECG 已支持原始通知采集、波形解码、工作模式切换、波形归一化及非诊断性 R 峰、R-R 间期和心率指标计算；诊断分类规则尚未移植。Samba 导入支持 SMB2/3 的目录浏览和只读文件导入，SMB1/NetBIOS 139 回退尚未移植。GarSync 健康状态数值可从本地 CSV 导入，但项目不从手表或云端读取这些数据。当前天气功能需要显式坐标和 GarSync 天气服务令牌；AI 活动分析使用本地汇总和可配置模型接口。静态 AOT 索引不足以确认这些云端接口的运行期请求、服务端校验或设备交互行为。
 
 常用参数:
 
