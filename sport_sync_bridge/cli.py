@@ -42,6 +42,7 @@ from .ble_bigrun_ecg import (
     stream_bigrun_ecg,
     validate_bigrun_ecg_options,
 )
+from .ble_trainer import set_trainer_target_power
 from .config import AppConfig
 from .ecg_signal import EcgSignalNormalizer
 from .engine import SyncEngine
@@ -283,6 +284,12 @@ def build_parser() -> argparse.ArgumentParser:
     ble_prefer = ble_actions.add_parser("prefer", help="Set a preferred device for a sensor type")
     ble_prefer.add_argument("address", help="Saved BLE device address")
     ble_prefer.add_argument("--type", required=True, choices=sorted(BLE_TYPES))
+    ble_trainer = ble_actions.add_parser("trainer", help="Control an FTMS smart trainer")
+    trainer_actions = ble_trainer.add_subparsers(dest="trainer_action", required=True)
+    trainer_power = trainer_actions.add_parser("set-power", help="Set the trainer's target power")
+    trainer_power.add_argument("address", help="FTMS trainer BLE address")
+    trainer_power.add_argument("--watts", type=int, required=True, help="Target power in watts")
+    trainer_power.add_argument("--timeout", type=float, default=15.0, help="Connection timeout in seconds")
 
     plans_parser = subparsers.add_parser("plans", help="Use bundled training plan templates")
     plans_actions = plans_parser.add_subparsers(dest="plans_action", required=True)
@@ -1326,6 +1333,13 @@ def _run_ble_command(args: argparse.Namespace, config: AppConfig) -> int:
             print(f"samples={sample_count}")
             if output_path is not None:
                 print(f"output={output_path}")
+            return 0
+
+        if args.ble_action == "trainer":
+            asyncio.run(set_trainer_target_power(args.address, args.watts, args.timeout))
+            registry.update_last_connected(args.address)
+            print(f"address={args.address}")
+            print(f"target_power_w={args.watts}")
             return 0
 
         if args.ble_action == "rename":

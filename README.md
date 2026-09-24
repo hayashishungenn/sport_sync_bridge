@@ -192,6 +192,7 @@ python sync.py sync --source local --target strava --format strava=tcx
 ### BLE 运动传感器
 
 BLE 命令可扫描附近设备、保存设备名称和首选类型、读取标准电量服务，并记录心率、跑步步频、骑行速度/踏频、功率计测量与功率向量、室内单车的标准通知。`heart-rate` 命令输出 CSV；`record` 可将发现的标准测量通知输出到终端或 JSON Lines 文件。CSC 和功率计的轮速传感数据只有在提供轮周长时才会推算速度和距离；设备只提供计数器时仍保留原始计数。普通测量采集只订阅并读取测量数据。BigRun ECG 命令会启动心电带并将原始通知字节以十六进制写入 JSON Lines；`bigrun-ecg-decode` 可将其中的 `0x41` 波形帧解码为 125 Hz 样本，并保留每帧采集时间；`bigrun-ecg-mode` 可设置 `standard`、`hrv` 或 `ecg` 工作模式。波形解码命令可加 --normalize，将整段样本按全局振幅范围映射至 -5 到 5；幅度范围小于 1e-9 时输出零值。该步骤仅处理波形显示尺度，不生成诊断结论。
+BLE 命令可扫描附近设备、保存设备名称和首选类型、读取标准电量服务，并记录心率、跑步步频、骑行速度/踏频、功率计测量与功率向量、室内单车的标准通知。`heart-rate` 命令输出 CSV；`record` 可将发现的标准测量通知输出到终端或 JSON Lines 文件。CSC 和功率计的轮速传感数据只有在提供轮周长时才会推算速度和距离；设备只提供计数器时仍保留原始计数。`trainer set-power` 会连接支持 FTMS 的训练台、请求控制权、写入目标功率并等待设备响应。普通测量采集只订阅并读取测量数据。BigRun ECG 命令会启动心电带并将原始通知字节以十六进制写入 JSON Lines；`bigrun-ecg-decode` 可将其中的 `0x41` 波形帧解码为 125 Hz 样本，并保留每帧采集时间；`bigrun-ecg-mode` 可设置 `standard`、`hrv` 或 `ecg` 工作模式。波形解码命令可加 --normalize，将整段样本按全局振幅范围映射至 -5 到 5；幅度范围小于 1e-9 时输出零值。该步骤仅处理波形显示尺度，不生成诊断结论。
 
 ```powershell
 python sync.py ble scan --save
@@ -203,6 +204,7 @@ python sync.py ble bigrun-ecg <设备地址> --duration 300 --output .\bigrun-ec
 python sync.py ble bigrun-ecg-decode .\bigrun-ecg.jsonl --output .\bigrun-ecg-samples.json
 python sync.py ble bigrun-ecg-decode .\bigrun-ecg.jsonl --normalize --output .\bigrun-ecg-normalized.json
 python sync.py ble bigrun-ecg-mode <设备地址> hrv
+python sync.py ble trainer set-power <训练台地址> --watts 180
 python sync.py ble rename <设备地址> "胸带"
 python sync.py ble prefer <设备地址> --type heart_rate
 python sync.py ble remove <设备地址>
@@ -260,7 +262,7 @@ python sync.py receive --host 0.0.0.0 --port 8765
 
 接收页不设访问口令，只应在可信的本地网络中临时开启。
 
-未移植到 Python CLI 的 APK 功能包括其余云平台的私有认证/同步协议、手机 BLE 配对引导界面、健身器械控制命令、BigRun ECG 分析算法、设备侧训练准备度和恢复算法（HR-TSS/CTL/ATL/TSB 已实现）、在线健康数据源、AI 聊天及 AI 计划/课表生成。标准 BLE 测量通知已支持心率、跑步步频、骑行速度/踏频、功率计测量与功率向量、室内单车数据；BigRun ECG 已支持原始通知采集、波形解码、工作模式切换和可选波形归一化；诊断规则尚未移植。Samba 导入支持 SMB2/3 的目录浏览和只读文件导入，SMB1/NetBIOS 139 回退尚未移植。GarSync 健康状态数值可从本地 CSV 导入，但项目不从手表或云端读取这些数据。当前天气功能需要显式坐标和 GarSync 天气服务令牌；AI 活动分析使用本地汇总和可配置模型接口。静态 AOT 索引不足以确认这些云端接口的运行期请求、服务端校验或设备交互行为。
+未移植到 Python CLI 的 APK 功能包括其余云平台的私有认证/同步协议、手机 BLE 配对引导界面、训练台其他控制命令、BigRun ECG 分析算法、设备侧训练准备度和恢复算法（HR-TSS/CTL/ATL/TSB 已实现）、在线健康数据源、AI 聊天及 AI 计划/课表生成。标准 FTMS 目标功率控制已实现；BLE 测量通知也支持心率、跑步步频、骑行速度/踏频、功率计测量与功率向量、室内单车数据。BigRun ECG 已支持原始通知采集、波形解码、工作模式切换和可选波形归一化；诊断规则尚未移植。Samba 导入支持 SMB2/3 的目录浏览和只读文件导入，SMB1/NetBIOS 139 回退尚未移植。GarSync 健康状态数值可从本地 CSV 导入，但项目不从手表或云端读取这些数据。当前天气功能需要显式坐标和 GarSync 天气服务令牌；AI 活动分析使用本地汇总和可配置模型接口。静态 AOT 索引不足以确认这些云端接口的运行期请求、服务端校验或设备交互行为。
 
 常用参数:
 
