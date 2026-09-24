@@ -167,6 +167,7 @@ python sync.py library poster <活动ID前缀> --output .\activity.jpg --layout 
 python sync.py library poster <活动ID前缀> --output .\activity.jpg --photo .\background.jpg --user 张三 --metric power --power-curve
 python sync.py library route <活动ID前缀> --to gpx --output .\route.gpx
 python sync.py library map <活动ID前缀> --output .\route-map.html
+python sync.py library chart <活动ID前缀> --output .\activity-chart.html
 python sync.py library merge .\part-1.fit .\part-2.fit --output .\merged.fit --name "合并骑行"
 python sync.py weather --lat 30.5728 --lon 104.0668
 python sync.py weather --lat 30.5728 --lon 104.0668 --format json --refresh
@@ -180,6 +181,8 @@ python sync.py sync --source local --target strava --format strava=tcx
 `library poster` 从本地 FIT、GPX 或 TCX 生成 JPEG 分享海报，显示运动类型、时间、轨迹、距离、用时和一个统计指标；标题可用 `--show-title` 显示。统计指标为累计爬升、平均速度、平均配速或平均功率，默认选择随布局预设变化。`indoor` 布局默认隐藏 GPS 轨迹并显示功率曲线。海报可叠加背景照片、自选水印、字体、文字色和轨迹色。布局使用 APK 中确认的 `classic`、`track_top`、`side_by_side`、`data_below`、`bottom_corner`、`data_above`、`full_info`、`classic_orange` 和 `indoor` 标识；比例为 `portrait`（3:4）或 `square`（1:1）。
 
 `library map` 将本地活动 GPS 轨迹生成可缩放、平移的 HTML 地图，并标出起点和终点。建议在 HTML 所在目录运行 `python -m http.server 8765 --bind 127.0.0.1`，再访问 `http://127.0.0.1:8765/route-map.html`；按 `Ctrl+C` 停止服务。页面使用 OpenStreetMap 在线地图瓦片并显示版权归属，不下载离线地图；浏览地图时，浏览器会向地图服务请求当前视窗的瓦片坐标，活动轨迹数据仍保存在本地 HTML 文件中。
+
+`library chart` 为单次活动导出离线 HTML 时间序列图，自动显示有数据的心率、速度、海拔、功率和踏频。横轴优先使用经过时间，其次使用累计距离，缺少两者时使用采样序号；页面只保存图表数据，不包含 GPS 坐标，也不请求外部资源。
 
 `weather` 按指定的十进制度坐标读取当前天气、可用时的 AQI 和城市名称，并按 AOT 中恢复的阈值生成户外运动建议。结果缓存在 `.data/weather_cache.json` 15 分钟；`--refresh` 可强制更新。坐标会发送到 APK 中发现的 `api.unicgames.com` 天气接口。请求需要在本机 `.env` 设置 `GARSYNC_WEATHER_TOKEN`；示例配置不包含令牌。天气接口属于 GarSync 服务端接口，服务策略或响应格式变化时此功能可能失效。
 

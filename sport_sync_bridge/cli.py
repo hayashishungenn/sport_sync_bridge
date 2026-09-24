@@ -15,6 +15,7 @@ from .activity_analysis import (
     write_activity_report_pdf,
     write_ai_analysis_markdown,
 )
+from .activity_charts import write_activity_charts
 from .activity_map import write_route_map
 from .activity_poster import POSTER_LAYOUTS, POSTER_METRICS, POSTER_RATIOS, write_activity_poster
 from .activity_library import LocalActivityLibrary
@@ -159,6 +160,9 @@ def build_parser() -> argparse.ArgumentParser:
     library_map = library_actions.add_parser("map", help="Create an interactive HTML map for one activity")
     library_map.add_argument("activity_id", help="Activity fingerprint or its unique prefix")
     library_map.add_argument("--output", type=Path, required=True, help="HTML output path")
+    library_chart = library_actions.add_parser("chart", help="Export time-series charts for one activity")
+    library_chart.add_argument("activity_id", help="Activity fingerprint or its unique prefix")
+    library_chart.add_argument("--output", type=Path, required=True, help="HTML output path")
     library_merge = library_actions.add_parser("merge", help="Merge FIT activities into one FIT file")
     library_merge.add_argument("paths", nargs="+", type=Path, help="FIT files in the desired activity order")
     library_merge.add_argument("--output", type=Path, required=True, help="Merged FIT output path")
@@ -665,6 +669,16 @@ def _run_local_command(args: argparse.Namespace, config: AppConfig) -> int:
                 result = write_route_map(activity, args.output)
                 print(f"output={result.output_path}")
                 print(f"track_points={result.point_count}")
+                return 0
+
+            if args.library_action == "chart":
+                row = library.get_activity(args.activity_id)
+                activity = read_activity_file(Path(row["file_path"]))
+                result = write_activity_charts(activity, args.output)
+                print(f"output={result.output_path}")
+                print(f"track_points={result.point_count}")
+                print(f"charts={result.chart_count}")
+                print(f"x_axis={result.x_axis}")
                 return 0
         finally:
             state.close()
