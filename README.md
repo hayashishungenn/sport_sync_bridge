@@ -172,6 +172,7 @@ python sync.py library chart <活动ID前缀> --output .\activity-chart.html
 python sync.py library merge .\part-1.fit .\part-2.fit --output .\merged.fit --name "合并骑行"
 python sync.py library samba list smb://nas.local/activities --username athlete --password-env SAMBA_PASSWORD
 python sync.py library samba import smb://nas.local/activities/ride.fit --username athlete --password-env SAMBA_PASSWORD
+python sync.py library samba list smb://nas.local:139/activities --legacy-smb --server-name NAS
 python sync.py weather --lat 30.5728 --lon 104.0668
 python sync.py weather --lat 30.5728 --lon 104.0668 --format json --refresh
 python sync.py sync --source local --target strava --format strava=tcx
@@ -187,7 +188,7 @@ python sync.py sync --source local --target strava --format strava=tcx
 
 `library chart` 为单次活动导出离线 HTML 时间序列图，自动显示有数据的心率、速度、海拔、功率和踏频。横轴优先使用经过时间，其次使用累计距离，缺少两者时使用采样序号；页面只保存图表数据，不包含 GPS 坐标，也不请求外部资源。
 
-`library samba list` 浏览 SMB 共享中的单层目录，`library samba import` 将指定 FIT、GPX、TCX、JSON、CSV 或 ZIP 文件导入本地活动库。SMB 密码只从 `SAMBA_PASSWORD`（或 `--password-env` 指定的变量）读取；加密 ZIP 密码使用 `ACTIVITY_ARCHIVE_PASSWORD`（或 `--archive-password-env` 指定的变量）。当前后端支持 SMB2/3 直连 TCP，不支持 APK 中的 SMB1/NetBIOS 139 回退；导入是只读的，不会修改或删除共享上的文件。
+`library samba list` 浏览 SMB 共享中的单层目录，`library samba import` 将指定 FIT、GPX、TCX、JSON、CSV 或 ZIP 文件导入本地活动库。SMB 密码只从 `SAMBA_PASSWORD`（或 `--password-env` 指定的变量）读取；加密 ZIP 密码使用 `ACTIVITY_ARCHIVE_PASSWORD`（或 `--archive-password-env` 指定的变量）。默认后端使用 SMB2/3 直连 TCP。显式添加 `--legacy-smb` 会改用 PySMB，优先协商 SMB2，并在服务器不支持时兼容 SMB1；指定 `:139` 可使用 NetBIOS over TCP，`--server-name` 可覆盖从主机名推导的 NetBIOS 名称。旧协议只在显式选择时启用。两种后端都只浏览和读取，不会修改或删除共享文件。
 
 ### BLE 运动传感器
 
@@ -279,7 +280,7 @@ python sync.py receive --host 0.0.0.0 --port 8765
 
 接收页不设访问口令，只应在可信的本地网络中临时开启。
 
-未移植到 Python CLI 的 APK 功能包括其余云平台的私有认证/同步协议、手机 BLE 配对引导界面、训练台其他控制命令、BigRun ECG 诊断分类规则、设备侧训练准备度和恢复算法（HR-TSS/CTL/ATL/TSB 已实现）、在线健康数据源、AI 聊天及 AI 计划/课表生成。标准 FTMS 目标功率控制已实现；BLE 测量通知也支持心率、跑步步频、骑行速度/踏频、功率计测量与功率向量、室内单车数据。BigRun ECG 已支持原始通知采集、波形解码、工作模式切换、波形归一化及非诊断性 R 峰、R-R 间期和心率指标计算；诊断分类规则尚未移植。Samba 导入支持 SMB2/3 的目录浏览和只读文件导入，SMB1/NetBIOS 139 回退尚未移植。GarSync 健康状态数值可从本地 CSV 导入，但项目不从手表或云端读取这些数据。当前天气功能需要显式坐标和 GarSync 天气服务令牌；AI 活动分析使用本地汇总和可配置模型接口。静态 AOT 索引不足以确认这些云端接口的运行期请求、服务端校验或设备交互行为。
+未移植到 Python CLI 的 APK 功能包括其余云平台的私有认证/同步协议、手机 BLE 配对引导界面、训练台其他控制命令、BigRun ECG 诊断分类规则、设备侧训练准备度和恢复算法（HR-TSS/CTL/ATL/TSB 已实现）、在线健康数据源、AI 聊天及 AI 计划/课表生成。标准 FTMS 目标功率控制已实现；BLE 测量通知也支持心率、跑步步频、骑行速度/踏频、功率计测量与功率向量、室内单车数据。BigRun ECG 已支持原始通知采集、波形解码、工作模式切换、波形归一化及非诊断性 R 峰、R-R 间期和心率指标计算；诊断分类规则尚未移植。Samba 默认使用 SMB2/3；旧协议需要显式添加 `--legacy-smb`，导入始终只读。GarSync 健康状态数值可从本地 CSV 导入，但项目不从手表或云端读取这些数据。当前天气功能需要显式坐标和 GarSync 天气服务令牌；AI 活动分析使用本地汇总和可配置模型接口。静态 AOT 索引不足以确认这些云端接口的运行期请求、服务端校验或设备交互行为。
 
 常用参数:
 

@@ -225,6 +225,15 @@ def build_parser() -> argparse.ArgumentParser:
             help="Environment variable containing the SMB password (default: SAMBA_PASSWORD)",
         )
         samba_command.add_argument("--timeout", type=float, default=30.0, help="SMB connection timeout in seconds")
+        samba_command.add_argument(
+            "--legacy-smb",
+            action="store_true",
+            help="Use the explicit PySMB backend with SMB1 and NetBIOS compatibility",
+        )
+        samba_command.add_argument(
+            "--server-name",
+            help="Remote NetBIOS name for legacy SMB (defaults to the first hostname label)",
+        )
     samba_import.add_argument(
         "--archive-password-env",
         default="ACTIVITY_ARCHIVE_PASSWORD",
@@ -1473,6 +1482,8 @@ def _run_samba_command(args: argparse.Namespace, config: AppConfig) -> int:
                 username=args.username,
                 password=password_value,
                 timeout=args.timeout,
+                legacy_smb=args.legacy_smb,
+                server_name=args.server_name,
             )
             for entry in entries:
                 print(
@@ -1502,6 +1513,8 @@ def _run_samba_command(args: argparse.Namespace, config: AppConfig) -> int:
                 password=password_value,
                 archive_password=archive_password_value.encode("utf-8") if archive_password_value else None,
                 timeout=args.timeout,
+                legacy_smb=args.legacy_smb,
+                server_name=args.server_name,
             )
         finally:
             state.close()

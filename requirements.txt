@@ -6,4 +6,5 @@ fit-tool>=0.9.13
 reportlab>=5.0.1,<6
 Pillow>=10.1
 smbprotocol>=1.17.0,<2.0.0
+pysmb>=1.2.15,<2.0.0
 bleak>=3.0.2,<4.0.0
