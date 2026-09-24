@@ -53,6 +53,91 @@ class PeriodSummaryTests(unittest.TestCase):
         self.assertEqual(result["key_activities"][0]["title"], "最长距离")
         self.assertIn("最高 TSS", format_period_summary(result, "txt"))
 
+    def test_period_pr_changes_use_prior_history_and_include_three_percent_boundary(self) -> None:
+        rows = [
+            self._row("a" * 64, "running", "2025-12-31T08:00:00Z", "fit", 5000, 1700, 150),
+            self._row("b" * 64, "running", "2026-01-01T08:00:00Z", "fit", 5150, 1650, 150),
+            self._row("c" * 64, "running", "2026-01-02T08:00:00Z", "fit", 4850, 1800, 150),
+            self._row("d" * 64, "running", "2026-01-03T08:00:00Z", "fit", 5300, 900, 150),
+        ]
+
+        result = calculate_period_summary(
+            rows,
+            date_from=date(2026, 1, 1),
+            date_to=date(2026, 1, 31),
+        )
+
+        self.assertEqual(
+            result["pr_changes"],
+            [
+                {
+                    "prType": "5K",
+                    "oldValue": 1700.0,
+                    "newValue": 1650.0,
+                    "achievedAt": "2026-01-01T08:00:00+00:00",
+                    "activityId": "b" * 64,
+                    "improvementPct": (1700 - 1650) / 1700 * 100,
+                }
+            ],
+        )
+        self.assertIn("5K：27:30（提升 2.9%", format_period_summary(result, "txt"))
+
+    def test_period_pr_changes_cover_recovered_running_cycling_and_swimming_targets(self) -> None:
+        targets = (
+            ("running", "5K", 5000),
+            ("running", "10K", 10000),
+            ("running", "halfMarathon", 21097.5),
+            ("running", "marathon", 42195),
+            ("cycling", "40K", 40000),
+            ("swimming", "100m", 100),
+            ("swimming", "400m", 400),
+            ("swimming", "1500m", 1500),
+        )
+        rows: list[dict[str, object]] = []
+        for index, (sport, _, distance) in enumerate(targets):
+            previous = 2400 + index * 30
+            rows.append(
+                self._row(
+                    f"{index * 2 + 1:064x}",
+                    sport,
+                    "2025-12-31T08:00:00Z",
+                    "fit",
+                    distance,
+                    previous,
+                    150,
+                )
+            )
+            rows.append(
+                self._row(
+                    f"{index * 2 + 2:064x}",
+                    sport,
+                    "2026-01-01T08:00:00Z",
+                    "fit",
+                    distance,
+                    previous - 10,
+                    150,
+                )
+            )
+
+        result = calculate_period_summary(
+            rows,
+            date_from=date(2026, 1, 1),
+            date_to=date(2026, 1, 31),
+        )
+
+        self.assertCountEqual([item["prType"] for item in result["pr_changes"]], [item[1] for item in targets])
+
+    def test_period_first_personal_record_has_no_invented_baseline(self) -> None:
+        result = calculate_period_summary(
+            [self._row("a" * 64, "running", "2026-01-01T08:00:00Z", "fit", 5000, 1500, 150)],
+            date_from=date(2026, 1, 1),
+            date_to=date(2026, 1, 31),
+        )
+
+        self.assertEqual(result["pr_changes"][0]["oldValue"], None)
+        self.assertEqual(result["pr_changes"][0]["improvementPct"], None)
+        self.assertIn("首次本地记录", format_period_summary(result, "txt"))
+
     def test_period_averages_positive_normalized_power_per_activity(self) -> None:
         rows = [
             self._row(
@@ -350,6 +435,8 @@ class PeriodSummaryTests(unittest.TestCase):
             payload = json.loads(output.getvalue())
             self.assertEqual(payload["activity_count"], 1)
             self.assertAlmostEqual(payload["vdot_max"], 38.3, places=1)
+            self.assertEqual(payload["pr_changes"][0]["prType"], "5K")
+            self.assertEqual(payload["pr_changes"][0]["newValue"], 1500.0)
 
     def test_library_period_cli_rejects_invalid_dates(self) -> None:
         error = io.StringIO()

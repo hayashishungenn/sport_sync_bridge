@@ -29,6 +29,13 @@ RECORDED_ZONE_FIELDS = {
 POWER_CURVE_DURATIONS_S = (10, 60, 120, 360, 600, 2400, 3600, 7200, 14400, 21600)
 POWER_FILE_FORMATS = {"fit", "gpx", "tcx"}
 CADENCE_SPORTS = RUNNING_SPORTS | {"cycling"}
+CYCLING_SPORTS = {"cycling", "ride", "virtual_ride", "indoor_cycling", "mountain_biking"}
+PR_DISTANCE_TARGETS = {
+    "running": (("5K", 5_000.0), ("10K", 10_000.0), ("halfMarathon", 21_097.5), ("marathon", 42_195.0)),
+    "cycling": (("40K", 40_000.0),),
+    "swimming": (("100m", 100.0), ("400m", 400.0), ("1500m", 1_500.0)),
+}
+PR_DISTANCE_TOLERANCE = 0.03
 
 
 def calculate_period_summary(
@@ -55,19 +62,33 @@ def calculate_period_summary(
 
     selected_sport = _normalize_sport(sport) if sport else None
     activities: list[dict[str, object]] = []
+    pr_history: list[dict[str, object]] = []
     for row in rows:
         summary = _load_summary(_row_value(row, "summary_json"))
         activity_sport = _normalize_sport(_row_value(row, "sport_type") or summary.get("sport_type"))
         if selected_sport is not None and activity_sport != selected_sport:
             continue
         start_time = _activity_start_time(_row_value(row, "start_time") or summary.get("start_time"))
-        if start_time is None or not start_day <= start_time.date() <= end_day:
+        if start_time is None:
             continue
 
         distance = _optional_nonnegative(summary.get("distance_m"))
         duration = _optional_positive(summary.get("timer_time_s"))
         if duration is None:
             duration = _optional_positive(summary.get("elapsed_time_s"))
+        if distance is not None and duration is not None:
+            pr_history.append(
+                {
+                    "activity_id": str(_row_value(row, "fingerprint") or summary.get("activity_id") or ""),
+                    "sport_type": activity_sport,
+                    "start_time": start_time,
+                    "distance_m": distance,
+                    "duration_s": duration,
+                }
+            )
+        if not start_day <= start_time.date() <= end_day:
+            continue
+
         average_speed = _optional_positive(summary.get("average_speed_mps"))
         if average_speed is None and distance is not None and duration is not None:
             average_speed = distance / duration
@@ -138,6 +159,7 @@ def calculate_period_summary(
     total_tss = sum(float(item["training_stress_score"]) for item in scored)
     fit_count = sum(item["file_format"] == "fit" for item in activities)
     power_curve, power_sample_activity_count, power_curve_unavailable_count = _aggregate_power_curves(activities)
+    pr_changes = _find_pr_changes(pr_history, start_day, end_day)
 
     weekly_slices = _build_weekly_slices(activities)
     return {
@@ -162,6 +184,7 @@ def calculate_period_summary(
         "avg_norm_power_activity_count": len(normalized_power_values),
         "avg_cadence": sum(cadence_values) / len(cadence_values) if cadence_values else None,
         "avg_cadence_activity_count": len(cadence_values),
+        "pr_changes": pr_changes,
         "weekly_slices": weekly_slices,
         "recorded_zone_time_s": _aggregate_recorded_zone_time(activities),
         "power_curve_w": power_curve,
@@ -189,8 +212,22 @@ def format_period_summary(summary: dict[str, object], output_format: str) -> str
         f"VDOT：起始 {_format_optional(summary['vdot_start'])}，结束 {_format_optional(summary['vdot_end'])}，最高 {_format_optional(summary['vdot_max'])}",
         f"平均踏频：{_format_optional(summary['avg_cadence'])}（{summary['avg_cadence_activity_count']} 次有效活动）",
         f"平均 NP：{_format_optional(summary['avg_norm_power_w'])} W（{summary['avg_norm_power_activity_count']} 次有效活动）",
-        "周汇总：",
+        "个人纪录变化：",
     ]
+    pr_changes = summary.get("pr_changes")
+    if isinstance(pr_changes, list) and pr_changes:
+        for record in pr_changes:
+            if not isinstance(record, Mapping) or record.get("newValue") is None:
+                continue
+            previous = record.get("oldValue")
+            achievement = "首次本地记录" if previous is None else f"提升 {float(record['improvementPct']):.1f}%"
+            lines.append(
+                f"  {record['prType']}：{_format_duration(float(record['newValue']))}"
+                f"（{achievement}，{record['achievedAt']}）"
+            )
+    else:
+        lines.append("  无周期个人纪录变化")
+    lines.append("周汇总：")
     weekly = summary["weekly_slices"]
     if isinstance(weekly, list):
         lines.extend(
@@ -217,6 +254,66 @@ def format_period_summary(summary: dict[str, object], output_format: str) -> str
     if int(summary["power_curve_unavailable_activity_count"]):
         lines.append(f"功率曲线缺少可读取的运动文件：{summary['power_curve_unavailable_activity_count']} 项")
     return "\n".join(lines) + "\n"
+
+
+def _find_pr_changes(
+    history: list[dict[str, object]],
+    start_day: date,
+    end_day: date,
+) -> list[dict[str, object]]:
+    current_sports = {
+        str(item["sport_type"])
+        for item in history
+        if start_day <= item["start_time"].date() <= end_day
+    }
+    changes: list[dict[str, object]] = []
+    for sport in sorted(current_sports):
+        if sport in RUNNING_SPORTS:
+            targets = PR_DISTANCE_TARGETS["running"]
+        elif sport in CYCLING_SPORTS:
+            targets = PR_DISTANCE_TARGETS["cycling"]
+        elif sport in SWIMMING_SPORTS:
+            targets = PR_DISTANCE_TARGETS["swimming"]
+        else:
+            continue
+
+        for pr_type, target_distance in targets:
+            tolerance_m = target_distance * PR_DISTANCE_TOLERANCE
+            candidates = [
+                item
+                for item in history
+                if item["sport_type"] == sport
+                and abs(float(item["distance_m"]) - target_distance) <= tolerance_m
+            ]
+            previous = [item for item in candidates if item["start_time"].date() < start_day]
+            current = [item for item in candidates if start_day <= item["start_time"].date() <= end_day]
+            if not current:
+                continue
+
+            best_current = min(
+                current,
+                key=lambda item: (float(item["duration_s"]), item["start_time"], str(item["activity_id"])),
+            )
+            best_previous = min(
+                previous,
+                key=lambda item: (float(item["duration_s"]), item["start_time"], str(item["activity_id"])),
+                default=None,
+            )
+            old_value = float(best_previous["duration_s"]) if best_previous is not None else None
+            new_value = float(best_current["duration_s"])
+            if old_value is not None and new_value >= old_value:
+                continue
+            changes.append(
+                {
+                    "prType": pr_type,
+                    "oldValue": old_value,
+                    "newValue": new_value,
+                    "achievedAt": best_current["start_time"].isoformat(),
+                    "activityId": str(best_current["activity_id"]),
+                    "improvementPct": (old_value - new_value) / old_value * 100.0 if old_value else None,
+                }
+            )
+    return changes
 
 
 def _build_weekly_slices(activities: list[dict[str, object]]) -> list[dict[str, object]]:
