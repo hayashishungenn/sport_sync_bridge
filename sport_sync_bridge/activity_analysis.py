@@ -38,6 +38,12 @@ def summarize_activity(activity: ActivityFile) -> dict[str, object]:
     else:
         average_speed = None
     pace = 1000.0 / average_speed if average_speed and average_speed > 0 else None
+    average_hr = activity.average_heart_rate_bpm
+    if average_hr is None:
+        average_hr = statistics.fmean(heart_rates) if heart_rates else _lap_hr(activity, "average_heart_rate")
+    maximum_hr = activity.maximum_heart_rate_bpm
+    if maximum_hr is None:
+        maximum_hr = max(heart_rates) if heart_rates else _lap_hr(activity, "maximum_heart_rate", maximum=True)
     return {
         "name": activity.name,
         "sport_type": activity.sport_type,
@@ -48,8 +54,9 @@ def summarize_activity(activity: ActivityFile) -> dict[str, object]:
         "timer_time_s": timer,
         "average_speed_mps": average_speed,
         "pace_seconds_per_km": pace,
-        "average_heart_rate_bpm": statistics.fmean(heart_rates) if heart_rates else _lap_hr(activity, "average_heart_rate"),
-        "maximum_heart_rate_bpm": max(heart_rates) if heart_rates else _lap_hr(activity, "maximum_heart_rate", maximum=True),
+        "average_heart_rate_bpm": average_hr,
+        "maximum_heart_rate_bpm": maximum_hr,
+        "training_stress_score": activity.training_stress_score,
         "average_cadence_rpm": statistics.fmean(cadences) if cadences else None,
         "average_power_w": statistics.fmean(powers) if powers else None,
         "total_ascent_m": ascent if altitudes else None,
@@ -113,6 +120,7 @@ def format_activity_report(rows: Iterable[object], output_format: str) -> str:
         "maximum_heart_rate_bpm",
         "average_cadence_rpm",
         "average_power_w",
+        "training_stress_score",
         "total_ascent_m",
         "lap_count",
         "track_point_count",
@@ -180,6 +188,7 @@ def build_ai_analysis_prompt(
         f"最高心率：{_display(activity_summary.get('maximum_heart_rate_bpm'))}",
         f"平均踏频：{_display(activity_summary.get('average_cadence_rpm'))}",
         f"平均功率（瓦）：{_display(activity_summary.get('average_power_w'))}",
+        f"训练压力分（TSS）：{_display(activity_summary.get('training_stress_score'))}",
         f"爬升（米）：{_display(activity_summary.get('total_ascent_m'))}",
         f"轨迹点数：{_display(activity_summary.get('track_point_count'))}",
         "",

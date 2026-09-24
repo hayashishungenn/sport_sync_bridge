@@ -25,7 +25,11 @@ def create_fit(
     with_track: bool = True,
     with_position: bool = True,
     with_timestamps: bool = True,
+    with_heart_rate: bool = True,
     sport: int = Sport.CYCLING.value,
+    average_heart_rate: int | None = None,
+    maximum_heart_rate: int | None = None,
+    training_stress_score: float | None = None,
 ) -> Path:
     builder = FitFileBuilder(auto_define=True)
     file_id = FileIdMessage()
@@ -53,7 +57,8 @@ def create_fit(
             _set(point, "altitude", 10.0 + index)
             _set(point, "distance", 100.0 * index)
             _set(point, "speed", 5.0 + index * 0.1)
-            _set(point, "heart_rate", 150 + index)
+            if with_heart_rate:
+                _set(point, "heart_rate", 150 + index)
             _set(point, "cadence", 80 + index)
             _set(point, "power", 200 + index)
             builder.add(point)
@@ -65,8 +70,9 @@ def create_fit(
         _set(lap, "total_timer_time", 60.0)
         _set(lap, "total_distance", 100.0)
         _set(lap, "total_calories", 30)
-        _set(lap, "avg_heart_rate", 150)
-        _set(lap, "max_heart_rate", 151)
+        if with_heart_rate:
+            _set(lap, "avg_heart_rate", 150)
+            _set(lap, "max_heart_rate", 151)
         _set(lap, "sport", sport)
         builder.add(lap)
 
@@ -79,6 +85,12 @@ def create_fit(
         _set(session, "total_timer_time", 59.0)
         _set(session, "avg_speed", 5.0)
         _set(session, "max_speed", 5.1)
+        if average_heart_rate is not None:
+            _set(session, "avg_heart_rate", average_heart_rate)
+        if maximum_heart_rate is not None:
+            _set(session, "max_heart_rate", maximum_heart_rate)
+        if training_stress_score is not None:
+            _set(session, "training_stress_score", training_stress_score)
         builder.add(session)
 
     path.parent.mkdir(parents=True, exist_ok=True)

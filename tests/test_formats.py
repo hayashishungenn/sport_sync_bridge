@@ -93,6 +93,42 @@ class FormatConversionTests(unittest.TestCase):
         self.assertEqual(activity.timer_time_s, 59.0)
         self.assertEqual(activity.distance_m, 100.0)
 
+    def test_fit_session_keeps_heart_rate_and_training_stress_score(self) -> None:
+        source_path = create_fit(
+            self.root / "training-load.fit",
+            average_heart_rate=150,
+            maximum_heart_rate=180,
+            training_stress_score=72.5,
+        )
+        activity = _read_fit(source_path)
+
+        self.assertEqual(activity.average_heart_rate_bpm, 150)
+        self.assertEqual(activity.maximum_heart_rate_bpm, 180)
+        self.assertEqual(activity.training_stress_score, 72.5)
+
+        for target_format in ("gpx", "tcx"):
+            with self.subTest(target=target_format):
+                result = convert_activity_file(
+                    source_path,
+                    self.root / f"training-load.{target_format}",
+                    target_format,
+                )
+                self.assertTrue(any("training stress score" in loss for loss in result.losses))
+
+    def test_tcx_uses_activity_heart_rate_summary_for_one_lap(self) -> None:
+        source_path = create_fit(
+            self.root / "summary-only-hr.fit",
+            with_heart_rate=False,
+            average_heart_rate=155,
+            maximum_heart_rate=177,
+        )
+        result = convert_activity_file(source_path, self.root / "summary-only-hr.tcx", "tcx")
+
+        self.assertFalse(any("activity-level average heart rate" in loss for loss in result.losses))
+        activity = _read_tcx(result.output_path)
+        self.assertEqual(activity.laps[0].average_heart_rate, 155)
+        self.assertEqual(activity.laps[0].maximum_heart_rate, 177)
+
     def test_gpx_fit_and_tcx_gpx_round_trips_keep_track_measurements(self) -> None:
         intermediate_fit = self.root / "round-trip.fit"
         intermediate_tcx = self.root / "round-trip.tcx"

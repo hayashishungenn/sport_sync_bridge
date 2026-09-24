@@ -16,6 +16,7 @@ from .fit_tools import normalize_fit_coordinates
 from .formats import SUPPORTED_FORMATS, convert_activity_file
 from .health import import_health_csv, summarize_health
 from .state import StateDB
+from .training_balance import calculate_training_balance, format_training_balance
 from .training import (
     export_training_plan_ics,
     export_workout_template,
@@ -82,6 +83,12 @@ def build_parser() -> argparse.ArgumentParser:
     library_show = library_actions.add_parser("show", help="Show a local activity summary")
     library_show.add_argument("activity_id", help="Activity fingerprint or its unique prefix")
     library_actions.add_parser("stats", help="Summarize local activity volume by sport and week")
+    library_balance = library_actions.add_parser("balance", help="Calculate local HR-TSS, CTL, ATL, and TSB")
+    library_balance.add_argument("--resting-hr", type=float, default=60.0, help="Resting heart rate in bpm (default: 60)")
+    library_balance.add_argument("--threshold-hr", type=float, help="Lactate threshold heart rate in bpm for HR-TSS")
+    library_balance.add_argument("--from", dest="date_from", help="First date to show; earlier activities still seed CTL/ATL")
+    library_balance.add_argument("--to", dest="date_to", help="Last date to show (inclusive)")
+    library_balance.add_argument("--format", choices=["json", "csv", "txt"], default="json")
     library_report = library_actions.add_parser("report", help="Export local activity summaries")
     library_report.add_argument("--format", choices=["txt", "json", "csv", "html"], default="txt")
     library_report.add_argument("--output", type=Path, help="Output path; omit to print to stdout")
@@ -439,6 +446,19 @@ def _run_local_command(args: argparse.Namespace, config: AppConfig) -> int:
                 from .activity_analysis import summarize_rows
 
                 print(json.dumps(summarize_rows(state.list_local_activities()), ensure_ascii=False, indent=2))
+                return 0
+
+            if args.library_action == "balance":
+                date_from = _parse_cli_datetime(args.date_from)
+                date_to = _parse_cli_datetime(args.date_to, inclusive_end=True)
+                result = calculate_training_balance(
+                    state.list_local_activities(),
+                    resting_hr=args.resting_hr,
+                    threshold_hr=args.threshold_hr,
+                    date_from=date_from.date() if date_from else None,
+                    date_to=date_to.date() if date_to else None,
+                )
+                print(format_training_balance(result, args.format), end="")
                 return 0
 
             if args.library_action == "report":

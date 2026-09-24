@@ -70,6 +70,9 @@ _FIT_SESSION_FIELDS = {
     "total_distance",
     "sport",
     "num_laps",
+    "avg_heart_rate",
+    "max_heart_rate",
+    "training_stress_score",
 }
 _KNOWN_FIT_MESSAGES = {
     "file_id",
@@ -133,6 +136,9 @@ class ActivityFile:
     laps: list[ActivityLap] = field(default_factory=list)
     creator: str | None = None
     losses: list[str] = field(default_factory=list)
+    average_heart_rate_bpm: float | None = None
+    maximum_heart_rate_bpm: float | None = None
+    training_stress_score: float | None = None
 
     @property
     def track_points(self) -> list[TrackPoint]:
@@ -239,6 +245,8 @@ def _target_format_losses(activity: ActivityFile, target_format: str) -> list[st
             losses.append("Activity end time after the last track point is not represented in this format")
 
     if target_format == "gpx":
+        if activity.training_stress_score is not None:
+            losses.append("GPX does not preserve FIT training stress score")
         if activity.elapsed_time_s is not None or activity.timer_time_s is not None:
             losses.append("GPX does not preserve activity-level elapsed or timer time")
         if activity.distance_m is not None:
@@ -258,7 +266,35 @@ def _target_format_losses(activity: ActivityFile, target_format: str) -> list[st
         ]
         if omitted:
             losses.append("GPX does not preserve lap summary fields: " + ", ".join(omitted))
+        if (
+            activity.average_heart_rate_bpm is not None
+            and not any(point.heart_rate_bpm is not None for point in activity.track_points)
+            and not any(lap.average_heart_rate is not None for lap in activity.laps)
+        ):
+            losses.append("GPX does not preserve activity-level average heart rate")
+        if (
+            activity.maximum_heart_rate_bpm is not None
+            and not any(point.heart_rate_bpm is not None for point in activity.track_points)
+            and not any(lap.maximum_heart_rate is not None for lap in activity.laps)
+        ):
+            losses.append("GPX does not preserve activity-level maximum heart rate")
     elif target_format == "tcx":
+        if activity.training_stress_score is not None:
+            losses.append("TCX does not preserve FIT training stress score")
+        tcx_laps = [lap for lap in activity.laps if any(_has_position(point) for point in lap.track_points)]
+        if len(tcx_laps) != 1:
+            if (
+                activity.average_heart_rate_bpm is not None
+                and not any(point.heart_rate_bpm is not None for point in activity.track_points)
+                and not any(lap.average_heart_rate is not None for lap in activity.laps)
+            ):
+                losses.append("TCX does not preserve activity-level average heart rate across multiple or missing laps")
+            if (
+                activity.maximum_heart_rate_bpm is not None
+                and not any(point.heart_rate_bpm is not None for point in activity.track_points)
+                and not any(lap.maximum_heart_rate is not None for lap in activity.laps)
+            ):
+                losses.append("TCX does not preserve activity-level maximum heart rate across multiple or missing laps")
         sport = (activity.sport_type or "").lower()
         if sport and sport not in _SPORT_TO_TCX:
             losses.append(f"Sport type {activity.sport_type!r} is represented as TCX Other")
@@ -400,6 +436,9 @@ def _read_fit(path: Path) -> ActivityFile:
             distance = _optional_float(values.get("total_distance"))
             if distance is not None:
                 activity.distance_m = distance
+            activity.average_heart_rate_bpm = _optional_float(values.get("avg_heart_rate"))
+            activity.maximum_heart_rate_bpm = _optional_float(values.get("max_heart_rate"))
+            activity.training_stress_score = _optional_float(values.get("training_stress_score"))
             sport_value = _optional_int(values.get("sport"))
             if sport_value is not None:
                 activity.sport_type = _fit_sport_name(sport_value)
@@ -781,6 +820,9 @@ def _write_tcx(activity: ActivityFile) -> bytes:
     _subtext(activity_element, TCX_NS, "Id", _format_datetime(start))
     if activity.name:
         _subtext(activity_element, TCX_NS, "Notes", activity.name)
+    has_single_position_lap = sum(
+        1 for lap in activity.laps if any(_has_position(point) for point in lap.track_points)
+    ) == 1
 
     for lap in activity.laps:
         points = [point for point in lap.track_points if _has_position(point)]
@@ -805,8 +847,16 @@ def _write_tcx(activity: ActivityFile) -> bytes:
         _subtext(lap_element, TCX_NS, "DistanceMeters", _format_number(distance))
         if lap.calories is not None:
             _subtext(lap_element, TCX_NS, "Calories", str(lap.calories))
-        average_hr = lap.average_heart_rate if lap.average_heart_rate is not None else _average_hr(points)
-        maximum_hr = lap.maximum_heart_rate if lap.maximum_heart_rate is not None else _maximum_hr(points)
+        average_hr = lap.average_heart_rate
+        if average_hr is None:
+            average_hr = _average_hr(points)
+        if average_hr is None and has_single_position_lap:
+            average_hr = activity.average_heart_rate_bpm
+        maximum_hr = lap.maximum_heart_rate
+        if maximum_hr is None:
+            maximum_hr = _maximum_hr(points)
+        if maximum_hr is None and has_single_position_lap:
+            maximum_hr = activity.maximum_heart_rate_bpm
         _write_tcx_heart_rate(lap_element, "AverageHeartRateBpm", average_hr)
         _write_tcx_heart_rate(lap_element, "MaximumHeartRateBpm", maximum_hr)
         _subtext(lap_element, TCX_NS, "Intensity", "Active")
@@ -951,8 +1001,16 @@ def _write_fit(activity: ActivityFile, *, allow_trackless_records: bool = False)
         lap_distance = lap.distance_m if lap.distance_m is not None else _lap_distance(lap_points)
         _set_field(lap_message, "total_distance", lap_distance)
         _set_field(lap_message, "total_calories", lap.calories)
-        average_hr = lap.average_heart_rate if lap.average_heart_rate is not None else _average_hr(lap_points)
-        maximum_hr = lap.maximum_heart_rate if lap.maximum_heart_rate is not None else _maximum_hr(lap_points)
+        average_hr = lap.average_heart_rate
+        if average_hr is None:
+            average_hr = _average_hr(lap_points)
+        if average_hr is None:
+            average_hr = activity.average_heart_rate_bpm
+        maximum_hr = lap.maximum_heart_rate
+        if maximum_hr is None:
+            maximum_hr = _maximum_hr(lap_points)
+        if maximum_hr is None:
+            maximum_hr = activity.maximum_heart_rate_bpm
         _set_field(lap_message, "avg_heart_rate", _rounded(average_hr))
         _set_field(lap_message, "max_heart_rate", _rounded(maximum_hr))
         _set_field(lap_message, "sport", _sport_fit_value(activity.sport_type))
@@ -983,6 +1041,15 @@ def _write_fit(activity: ActivityFile, *, allow_trackless_records: bool = False)
     _set_field(session, "total_distance", total_distance)
     _set_field(session, "sport", _sport_fit_value(activity.sport_type))
     _set_field(session, "num_laps", written_lap_count)
+    average_hr = activity.average_heart_rate_bpm
+    if average_hr is None:
+        average_hr = _average_hr(activity.track_points)
+    maximum_hr = activity.maximum_heart_rate_bpm
+    if maximum_hr is None:
+        maximum_hr = _maximum_hr(activity.track_points)
+    _set_field(session, "avg_heart_rate", _rounded(average_hr))
+    _set_field(session, "max_heart_rate", _rounded(maximum_hr))
+    _set_field(session, "training_stress_score", activity.training_stress_score)
     builder.add(session)
 
     stop_event = EventMessage()
