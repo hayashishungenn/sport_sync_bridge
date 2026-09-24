@@ -146,6 +146,10 @@ AOT 伪代码与 Blutter ARM64 汇编交叉确认了 GarSync 的计算步骤：H
 
 `PeriodSummaryService._computeAvgNormPower` 的 AArch64 汇编遍历活动的 `normPower` 字段，只将大于零的值累加并计数，返回算术平均；没有正值时返回空值。活动模型中的 `normPower` 是活动级标准化功率。这个计算按活动等权，不按活动时长或记录点加权。本项目的 `library period` 读取本地摘要 `normalized_power_w`，输出 `avg_norm_power_w` 和参与活动数 `avg_norm_power_activity_count`，并同样忽略空值和非正值。
 
+### 周期平均踏频
+
+`PeriodSummaryService._computeAvgCadence` 的 AArch64 汇编按 FIT 运动类型分组读取活动字段：跑步组读取 `avgCadenceSpm`，骑行组读取 `avgCadenceRpm`；每组分别对应 `_isRunSport` 的三个枚举实例和 `_isCyclSport` 的两个实例。函数将非空整数值放入同一列表后做算术平均，没有有效值时返回空值；汇编没有过滤零值。活动模型序列化器中可见 `avgCadenceSpm` 与 `avgCadenceRpm` 字段名。AOT 导出的枚举实例名未恢复完整，因此本地仅按已映射的跑步类型和 `cycling` 汇总，其他运动类型不纳入。当前本地活动摘要从轨迹 FIT `cadence` 记录计算活动均值，字段来源与 GarSync 的活动级指标不完全相同，且未做运行时对照。输出字段为 `avg_cadence` 和 `avg_cadence_activity_count`。
+
 ### 周期功率曲线补充复核
 
 `PeriodSummaryService._computePowerCurve` 的 AOT 汇编初始化 10 个窗口秒数：10、60、120、360、600、2400、3600、7200、14400、21600。实现按活动轨迹采样点滚动维护窗口内功率总和与样本数，计算算术平均值并转为整数；活动时长达不到窗口长度时跳过。`_mergePowerCurves` 遍历各活动结果，对相同窗口保留较大的功率值。`PeriodStats.toJson` 将结果暴露为 `powerCurve`，周期复核页显示曲线，并可标注基于近期样本或全部活动。

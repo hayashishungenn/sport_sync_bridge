@@ -28,6 +28,7 @@ RECORDED_ZONE_FIELDS = {
 }
 POWER_CURVE_DURATIONS_S = (10, 60, 120, 360, 600, 2400, 3600, 7200, 14400, 21600)
 POWER_FILE_FORMATS = {"fit", "gpx", "tcx"}
+CADENCE_SPORTS = RUNNING_SPORTS | {"cycling"}
 
 
 def calculate_period_summary(
@@ -74,6 +75,7 @@ def calculate_period_summary(
         if pace is None and average_speed is not None:
             pace = 1000.0 / average_speed
         average_hr = _optional_nonnegative(summary.get("average_heart_rate_bpm"))
+        average_cadence = _optional_nonnegative(summary.get("average_cadence_rpm"))
         average_power = _optional_nonnegative(summary.get("average_power_w"))
         normalized_power = _optional_nonnegative(summary.get("normalized_power_w"))
         ascent = _optional_nonnegative(summary.get("total_ascent_m"))
@@ -102,6 +104,7 @@ def calculate_period_summary(
                 "average_speed_mps": average_speed,
                 "pace_seconds_per_km": pace,
                 "average_heart_rate_bpm": average_hr,
+                "average_cadence": average_cadence,
                 "average_power_w": average_power,
                 "normalized_power_w": normalized_power,
                 "intensity_factor": _optional_nonnegative(summary.get("intensity_factor")),
@@ -123,6 +126,12 @@ def calculate_period_summary(
         float(value)
         for item in activities
         if (value := _optional_nonnegative(item.get("normalized_power_w"))) is not None and value > 0
+    ]
+    cadence_values = [
+        float(value)
+        for item in activities
+        if item["sport_type"] in CADENCE_SPORTS
+        and (value := _optional_nonnegative(item.get("average_cadence"))) is not None
     ]
     total_distance = sum(float(item["distance_m"]) for item in activities if item["distance_m"] is not None)
     total_duration = sum(float(item["duration_s"]) for item in activities if item["duration_s"] is not None)
@@ -151,6 +160,8 @@ def calculate_period_summary(
             else None
         ),
         "avg_norm_power_activity_count": len(normalized_power_values),
+        "avg_cadence": sum(cadence_values) / len(cadence_values) if cadence_values else None,
+        "avg_cadence_activity_count": len(cadence_values),
         "weekly_slices": weekly_slices,
         "recorded_zone_time_s": _aggregate_recorded_zone_time(activities),
         "power_curve_w": power_curve,
@@ -176,6 +187,7 @@ def format_period_summary(summary: dict[str, object], output_format: str) -> str
         f"时长：{_format_duration(float(summary['total_duration_s']))}",
         f"TSS：{_format_optional(summary['total_tss'])}（已评分 {summary['scored_tss_activity_count']}，未评分 {summary['unscored_tss_activity_count']}）",
         f"VDOT：起始 {_format_optional(summary['vdot_start'])}，结束 {_format_optional(summary['vdot_end'])}，最高 {_format_optional(summary['vdot_max'])}",
+        f"平均踏频：{_format_optional(summary['avg_cadence'])}（{summary['avg_cadence_activity_count']} 次有效活动）",
         f"平均 NP：{_format_optional(summary['avg_norm_power_w'])} W（{summary['avg_norm_power_activity_count']} 次有效活动）",
         "周汇总：",
     ]

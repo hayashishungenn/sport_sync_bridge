@@ -39,6 +39,8 @@ class PeriodSummaryTests(unittest.TestCase):
         self.assertEqual(result["fit_file_count"], 2)
         self.assertIsNone(result["avg_norm_power_w"])
         self.assertEqual(result["avg_norm_power_activity_count"], 0)
+        self.assertIsNone(result["avg_cadence"])
+        self.assertEqual(result["avg_cadence_activity_count"], 0)
         self.assertEqual(result["total_distance_m"], 35000)
         self.assertEqual(result["total_duration_s"], 8400)
         self.assertEqual(result["total_tss"], 230)
@@ -103,6 +105,36 @@ class PeriodSummaryTests(unittest.TestCase):
         self.assertEqual(result["avg_norm_power_w"], 275)
         self.assertEqual(result["avg_norm_power_activity_count"], 2)
         self.assertIn("平均 NP：275.0 W（2 次有效活动）", format_period_summary(result, "txt"))
+
+    def test_period_averages_cadence_for_running_and_cycling_activities(self) -> None:
+        rows = [
+            self._row("a" * 64, "running", "2026-01-01T08:00:00Z", "fit", 5000, 1500, 150, average_cadence=180),
+            self._row("b" * 64, "cycling", "2026-01-02T08:00:00Z", "fit", 20000, 3600, 150, average_cadence=90),
+            self._row(
+                "c" * 64,
+                "trail_running",
+                "2026-01-03T08:00:00Z",
+                "fit",
+                5000,
+                1500,
+                150,
+                average_cadence=170,
+            ),
+            self._row("d" * 64, "cycling", "2026-01-04T08:00:00Z", "fit", 20000, 3600, 150, average_cadence=0),
+            self._row("e" * 64, "swimming", "2026-01-05T08:00:00Z", "fit", 1000, 1200, 140, average_cadence=75),
+            self._row("f" * 64, "walking", "2026-01-06T08:00:00Z", "fit", 3000, 1800, 100, average_cadence=110),
+            self._row("g" * 64, "running", "2026-01-07T08:00:00Z", "fit", 5000, 1500, 150),
+        ]
+
+        result = calculate_period_summary(
+            rows,
+            date_from=date(2026, 1, 1),
+            date_to=date(2026, 1, 7),
+        )
+
+        self.assertEqual(result["avg_cadence"], 110)
+        self.assertEqual(result["avg_cadence_activity_count"], 4)
+        self.assertIn("平均踏频：110.0（4 次有效活动）", format_period_summary(result, "txt"))
 
     def test_hr_tss_fallback_is_optional_and_fit_tss_takes_precedence(self) -> None:
         rows = [
@@ -340,6 +372,7 @@ class PeriodSummaryTests(unittest.TestCase):
         *,
         tss: float | None = None,
         normalized_power: float | None = None,
+        average_cadence: float | None = None,
         zones: list[dict[str, object]] | None = None,
         file_path: Path | None = None,
     ) -> dict[str, object]:
@@ -353,6 +386,8 @@ class PeriodSummaryTests(unittest.TestCase):
             summary["training_stress_score"] = tss
         if normalized_power is not None:
             summary["normalized_power_w"] = normalized_power
+        if average_cadence is not None:
+            summary["average_cadence_rpm"] = average_cadence
         if zones is not None:
             summary["time_in_zone_messages"] = zones
         return {
