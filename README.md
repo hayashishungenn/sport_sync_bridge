@@ -169,6 +169,8 @@ python sync.py library route <活动ID前缀> --to gpx --output .\route.gpx
 python sync.py library map <活动ID前缀> --output .\route-map.html
 python sync.py library chart <活动ID前缀> --output .\activity-chart.html
 python sync.py library merge .\part-1.fit .\part-2.fit --output .\merged.fit --name "合并骑行"
+python sync.py library samba list smb://nas.local/activities --username athlete --password-env SAMBA_PASSWORD
+python sync.py library samba import smb://nas.local/activities/ride.fit --username athlete --password-env SAMBA_PASSWORD
 python sync.py weather --lat 30.5728 --lon 104.0668
 python sync.py weather --lat 30.5728 --lon 104.0668 --format json --refresh
 python sync.py sync --source local --target strava --format strava=tcx
@@ -183,6 +185,8 @@ python sync.py sync --source local --target strava --format strava=tcx
 `library map` 将本地活动 GPS 轨迹生成可缩放、平移的 HTML 地图，并标出起点和终点。建议在 HTML 所在目录运行 `python -m http.server 8765 --bind 127.0.0.1`，再访问 `http://127.0.0.1:8765/route-map.html`；按 `Ctrl+C` 停止服务。页面使用 OpenStreetMap 在线地图瓦片并显示版权归属，不下载离线地图；浏览地图时，浏览器会向地图服务请求当前视窗的瓦片坐标，活动轨迹数据仍保存在本地 HTML 文件中。
 
 `library chart` 为单次活动导出离线 HTML 时间序列图，自动显示有数据的心率、速度、海拔、功率和踏频。横轴优先使用经过时间，其次使用累计距离，缺少两者时使用采样序号；页面只保存图表数据，不包含 GPS 坐标，也不请求外部资源。
+
+`library samba list` 浏览 SMB 共享中的单层目录，`library samba import` 将指定 FIT、GPX、TCX、JSON、CSV 或 ZIP 文件导入本地活动库。SMB 密码只从 `SAMBA_PASSWORD`（或 `--password-env` 指定的变量）读取；加密 ZIP 密码使用 `ACTIVITY_ARCHIVE_PASSWORD`（或 `--archive-password-env` 指定的变量）。当前后端支持 SMB2/3 直连 TCP，不支持 APK 中的 SMB1/NetBIOS 139 回退；导入是只读的，不会修改或删除共享上的文件。
 
 `weather` 按指定的十进制度坐标读取当前天气、可用时的 AQI 和城市名称，并按 AOT 中恢复的阈值生成户外运动建议。结果缓存在 `.data/weather_cache.json` 15 分钟；`--refresh` 可强制更新。坐标会发送到 APK 中发现的 `api.unicgames.com` 天气接口。请求需要在本机 `.env` 设置 `GARSYNC_WEATHER_TOKEN`；示例配置不包含令牌。天气接口属于 GarSync 服务端接口，服务策略或响应格式变化时此功能可能失效。
 
@@ -233,7 +237,7 @@ python sync.py receive --host 0.0.0.0 --port 8765
 
 接收页不设访问口令，只应在可信的本地网络中临时开启。
 
-未移植到 Python CLI 的 APK 功能包括其余云平台的私有认证/同步协议、Samba、手机 BLE 与传感器实时录制、设备侧训练准备度和恢复算法（HR-TSS/CTL/ATL/TSB 已实现）、在线健康数据源、AI 聊天及 AI 计划/课表生成。GarSync 健康状态数值可从本地 CSV 导入，但项目不从手表或云端读取这些数据。当前天气功能需要显式坐标和 GarSync 天气服务令牌；AI 活动分析使用本地汇总和可配置模型接口。静态 AOT 索引不足以确认这些云端接口的运行期请求、服务端校验或设备交互行为。
+未移植到 Python CLI 的 APK 功能包括其余云平台的私有认证/同步协议、手机 BLE 与传感器实时录制、设备侧训练准备度和恢复算法（HR-TSS/CTL/ATL/TSB 已实现）、在线健康数据源、AI 聊天及 AI 计划/课表生成。Samba 导入支持 SMB2/3 的目录浏览和只读文件导入，SMB1/NetBIOS 139 回退尚未移植。GarSync 健康状态数值可从本地 CSV 导入，但项目不从手表或云端读取这些数据。当前天气功能需要显式坐标和 GarSync 天气服务令牌；AI 活动分析使用本地汇总和可配置模型接口。静态 AOT 索引不足以确认这些云端接口的运行期请求、服务端校验或设备交互行为。
 
 常用参数:
 

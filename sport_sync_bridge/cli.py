@@ -26,6 +26,7 @@ from .fit_tools import normalize_fit_coordinates
 from .formats import SUPPORTED_FORMATS, convert_activity_file, read_activity_file
 from .health import import_health_csv, summarize_health, summarize_health_for_activity
 from .period_summary import calculate_period_summary, format_period_summary
+from .samba import import_samba_activity, list_samba_directory
 from .state import StateDB
 from .training_balance import calculate_training_balance, format_training_balance
 from .vdot import analyze_running_activities, format_vdot_report
@@ -167,6 +168,24 @@ def build_parser() -> argparse.ArgumentParser:
     library_merge.add_argument("paths", nargs="+", type=Path, help="FIT files in the desired activity order")
     library_merge.add_argument("--output", type=Path, required=True, help="Merged FIT output path")
     library_merge.add_argument("--name", help="Merged activity label for the command result")
+    library_samba = library_actions.add_parser("samba", help="Browse and import activities from an SMB share")
+    samba_actions = library_samba.add_subparsers(dest="samba_action", required=True)
+    samba_list = samba_actions.add_parser("list", help="List one SMB share directory")
+    samba_import = samba_actions.add_parser("import", help="Import one SMB activity file or ZIP archive")
+    for samba_command in (samba_list, samba_import):
+        samba_command.add_argument("url", help="SMB URL such as smb://server/share/path")
+        samba_command.add_argument("--username", help="SMB username; omit for the default or guest session")
+        samba_command.add_argument(
+            "--password-env",
+            default="SAMBA_PASSWORD",
+            help="Environment variable containing the SMB password (default: SAMBA_PASSWORD)",
+        )
+        samba_command.add_argument("--timeout", type=float, default=30.0, help="SMB connection timeout in seconds")
+    samba_import.add_argument(
+        "--archive-password-env",
+        default="ACTIVITY_ARCHIVE_PASSWORD",
+        help="Environment variable containing an encrypted ZIP password",
+    )
 
     plans_parser = subparsers.add_parser("plans", help="Use bundled training plan templates")
     plans_actions = plans_parser.add_subparsers(dest="plans_action", required=True)
@@ -478,6 +497,9 @@ def _convert_file(args: argparse.Namespace, config: AppConfig) -> int:
 
 def _run_local_command(args: argparse.Namespace, config: AppConfig) -> int:
     if args.command == "library":
+        if args.library_action == "samba":
+            return _run_samba_command(args, config)
+
         if args.library_action == "merge":
             result = merge_fit_files(args.paths, args.output, name=args.name)
             print(f"merged={result.input_count}")
@@ -881,6 +903,69 @@ def _run_local_command(args: argparse.Namespace, config: AppConfig) -> int:
             state.close()
 
     raise ValueError(f"Unsupported local command: {args.command}")
+
+
+def _run_samba_command(args: argparse.Namespace, config: AppConfig) -> int:
+    password_value = os.getenv(args.password_env) if args.password_env else None
+    try:
+        if args.samba_action == "list":
+            entries = list_samba_directory(
+                args.url,
+                username=args.username,
+                password=password_value,
+                timeout=args.timeout,
+            )
+            for entry in entries:
+                print(
+                    json.dumps(
+                        {
+                            "name": entry.name,
+                            "url": entry.url,
+                            "type": "directory" if entry.is_directory else "file",
+                            "size_bytes": entry.size_bytes,
+                            "supported_activity": entry.supported_activity,
+                        },
+                        ensure_ascii=False,
+                    )
+                )
+            print(f"entries={len(entries)}")
+            return 0
+
+        state = StateDB(config.db_path)
+        try:
+            archive_password_value = (
+                os.getenv(args.archive_password_env) if args.archive_password_env else None
+            )
+            results = import_samba_activity(
+                LocalActivityLibrary(state, config.data_dir),
+                args.url,
+                username=args.username,
+                password=password_value,
+                archive_password=archive_password_value.encode("utf-8") if archive_password_value else None,
+                timeout=args.timeout,
+            )
+        finally:
+            state.close()
+        for result in results:
+            print(
+                json.dumps(
+                    {
+                        "id": result.fingerprint[:12],
+                        "name": result.name,
+                        "sport_type": result.sport_type,
+                        "start_time": result.start_time,
+                        "format": result.file_format,
+                        "duplicate": result.duplicate,
+                        "source": result.source_label,
+                    },
+                    ensure_ascii=False,
+                )
+            )
+        print(f"imported={len(results)}")
+        return 0
+    except ValueError as exc:
+        print(f"samba_error={exc}", file=sys.stderr)
+        return 2
 
 
 def _template_week_count(template: dict[str, object]) -> int:
