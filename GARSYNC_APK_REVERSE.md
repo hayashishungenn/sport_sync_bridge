@@ -26,16 +26,35 @@ APK 容器、Android Manifest、资源、DEX/smali、Flutter AOT 元数据、字
 | JADX | 生成约 4,472 个 Java 文件；报告 31 个反编译错误，进程以错误状态结束。Android 资源和 Manifest 可读 |
 | AOTopsy | v1.6.0 Windows 发布版，校验官方 SHA-256 后执行；建立 61,983 个函数、7,686 个类和调用图索引，并为 40,460 个方法导出 Dart 伪代码 |
 | 定向伪代码 | 对 21 个关键方法逐项复核，覆盖六种格式转换、FIT 解析/生成、坐标修正、导入、重复活动检查和同步 |
-| Blutter | 此前分析记录为对应 Dart VM 在 WSL 构建成功，生成 2,576 个 Dart 汇编文件（其中 GarSync 包 414 个）、对象池、汇编索引、IDA 命名脚本和 Frida 脚本；3 个可选命名参数分析报错。本轮连接的 Ubuntu-26.04 未找到此前登记的缓存目录，相关输出无法重新核验 |
+| Blutter | 当前工作区 `.data/apk_reverse/blutter/` 中可复核到 2,576 个 Dart 汇编文件，其中 `garsync` 414 个、`data_sync_api` 328 个；对象池 `objs.txt` 为 78,939 行，`pp.txt` 为 134,510 行，并生成 IDA 命名脚本和 Frida 脚本。构建日志记录 3 个可选命名参数分析错误；没有运行生成的 Frida 脚本 |
 | FlutterDec | GitHub `v0.1.0-alpha.4` Linux 发布包 SHA-256 校验通过；安装与快照哈希匹配的适配器，并确认 arm64、Dart 3.10.7 与 AOTopsy 识别结果一致。内部反编译报告 9,556 个函数中解码 0 个，严格质量门失败，因此没有据此增加业务逻辑结论 |
 
-APK 中有 arm64-v8a、armeabi-v7a、x86_64 三种 ABI 目录；Flutter 主体 AOT 库位于 arm64-v8a。原始 APK 未修改。APK 文件 SHA-256 在分析开始和收尾时一致。
+APK 中有 arm64-v8a、armeabi-v7a、x86_64 三种 ABI 目录，共解出 9 个 native `.so`；Flutter 主体 AOT 库位于 arm64-v8a。Apktool 输出目录共 5,722 个文件，包含 235 个 Flutter asset、533 个 Android 资源文件及 9 个 native 库文件。ZIP 完整性检查无错误，原始 APK 未修改，当前 SHA-256 与报告记录一致。
+
+### 全量静态输出覆盖
+
+下表区分了“工具覆盖到的条目”和“人工逐项解释的行为”。自动导出覆盖面完整，不代表每个函数的业务语义都已人工确认。
+
+| 范围 | 可复核覆盖 |
+| --- | --- |
+| Android/Flutter 容器 | 778 个 ZIP 条目；Manifest、资源、DEX、smali、Flutter assets 和 native 库均已解包 |
+| Android Java | JADX 输出 4,472 个 `.java` 文件和 898 个资源文件；31 个类反编译失败，Android 层不等于零缺失源码 |
+| Flutter AOT 索引 | AOTopsy 索引 61,983 个函数、7,686 个类；生成 16,514 个汇编文件和 3,326 个 CFG 文件 |
+| Flutter AOT 伪代码 | app-only 导出 40,460 个方法、2,795 个类，分布在 1,728 个 `.dart` 命名文件，共 59,421,511 字节；这是伪代码，不是原始 Dart 源码 |
+| Blutter 交叉结果 | 2,576 个 Dart 汇编文件；其中 `garsync` 414 个、`data_sync_api` 328 个。对象池及汇编索引保存在 `.data/apk_reverse/blutter/` |
+| Native 库 | 9 个 `.so` 均已从三种 ABI 解出；`libapp.so` 由 AOTopsy/Blutter 分析，AndroidX DataStore 的 `libdatastore_shared_counter.so` 三种架构变体由 LLVM `objdump` 导出汇编。Flutter 引擎、Dart JNI 和 SQLite 库仅完成提取与分类，未逐函数语义反编译 |
+| 应用页面索引 | 25 个页面命名空间；按用户要求不深入数独和媒体/音频模块后，覆盖其余 23 个命名空间、170 条 library 索引记录、363 个类和 4,835 个函数索引条目 |
+| 平台适配器索引 | 35 个云平台适配器对应 169 条 library 索引记录、233 个类和 1,833 个函数索引条目；索引数量不证明每个平台都能实际登录或同步 |
+
+本次只做 APK 静态拆解和报告整理，没有构建、重签或安装安卓包。没有 Android 运行设备及 Frida 动态跟踪结果，因此网络请求、账号认证、设备交互和运行时分支仍未验证。
 
 ## 应用结构与入口
 
 这是一个 Flutter 应用。Dart 包路径显示主应用按 blocs、config、controllers、models、pages、providers、repositories、services、utils、widgets 分层；数据同步核心拆在 data_sync_api 包中，FIT 解析使用 fit_sdk。
 
 Android 主入口是 com.unicgames.garsync.MainActivity，继承音频服务 Activity。原生代码注册两个 Flutter MethodChannel：com.unicgames.garsync/native 与 com.garsync.app/cookie。MainActivity 在启动/恢复时把 DeepLink 交给 Dart 侧处理；WebView 调试只在 application debuggable 标志存在时开启。微信入口和微信支付各有回调 Activity。
+
+Native 库中，`libdatastore_shared_counter.so` 导出 AndroidX DataStore 的 JNI 文件计数器接口：将计数文件截断为 4 字节、映射共享计数器、原子读取与递增。arm64 变体对递增实现做 CPU 原子指令能力探测并保留 LL/SC 回退；arm64、armv7、x86_64 的完整 `llvm-objdump` 输出保存在 `.data/apk_reverse/native/`。这部分属于 DataStore 同步原语，不是运动业务逻辑。`libflutter.so`、`libdartjni.so` 与 `libsqlite3.so` 已提取，但本次没有逐函数恢复其通用运行库实现。
 
 Manifest 的文件关联包含 file URI 的 FIT、ZIP、JSON、TCX、GPX；content URI 支持 FIT、GPX、TCX 和通用二进制 MIME；另有 ACTION_SEND 及 garsync: 自定义 scheme。可确认应用预期接收其他应用分享或打开的运动文件。Wi-Fi 导入网页还允许 CSV。
 
@@ -59,6 +78,29 @@ AOT 中检测到以下 35 个平台数据源模块。模块文件还包括账号
 Blackbird、Codoon、Concept2、COROS、Cycling Analytics、Fitbit、Garmin、Giant、Hammerhead、Honor、Huawei Archive、Huawei Web、iGPSPORT、Intervals.icu、Joyrun、Keep、Komoot、MapMyFitness、MyWhoosh、Nike、Nolio、OneLap、Polar、Ride with GPS、RQRun、Smashrun、Strava、Suunto、TrainingPeaks、Wahoo、Withings、Xiaomi、Xingzhe、Zepp、Zwift。
 
 另外能看到 ZIP archive 与本地文件/文件系统、Samba、SQLite 数据源。认证结构包含 basic 与 OAuth 2；Garmin 目录还包含 Garth、OAuth 1、SSO 相关实现。字符串中有 Garmin、COROS、Huawei/Honor、iGPSPORT、OneLap、Strava、Suunto、Wahoo、Xiaomi/Zepp、MyWhoosh、TrainingPeaks 等服务端点，也有 OpenAI、DeepSeek、阿里 DashScope、火山方舟等 AI 服务端点，以及高德、腾讯地图、OpenStreetMap、ArcGIS 等地图端点。报告不复制 APK 内的应用凭据或 OAuth 配置值。
+
+`library_functions.jsonl` 为上述 35 个云平台模块记录的静态索引规模如下。方法数量不是经过运行验证的可用操作数量。
+
+| 适配器 | 类条目 | 函数条目 | 适配器 | 类条目 | 函数条目 |
+| --- | ---: | ---: | --- | ---: | ---: |
+| Blackbird | 5 | 32 | Codoon | 6 | 40 |
+| Concept2 | 13 | 72 | COROS | 17 | 158 |
+| Cycling Analytics | 3 | 25 | Fitbit | 3 | 30 |
+| Garmin | 13 | 264 | Giant | 3 | 30 |
+| Hammerhead | 4 | 17 | Honor | 6 | 25 |
+| Huawei Archive | 7 | 51 | Huawei Web | 5 | 143 |
+| iGPSPORT | 8 | 38 | Intervals.icu | 10 | 79 |
+| Joyrun | 6 | 41 | Keep | 5 | 52 |
+| Komoot | 8 | 39 | MapMyFitness | 5 | 24 |
+| MyWhoosh | 9 | 53 | Nike | 5 | 33 |
+| Nolio | 4 | 22 | OneLap | 12 | 52 |
+| Polar | 4 | 19 | Ride with GPS | 4 | 34 |
+| RQRun | 5 | 35 | Smashrun | 5 | 24 |
+| Strava | 5 | 43 | Suunto | 4 | 38 |
+| TrainingPeaks | 5 | 42 | Wahoo | 3 | 25 |
+| Withings | 5 | 25 | Xiaomi | 22 | 115 |
+| Xingzhe | 5 | 33 | Zepp | 6 | 52 |
+| Zwift | 3 | 28 |  |  |  |
 
 ## 运动文件模型、格式转换与坐标
 
@@ -117,7 +159,7 @@ AOT 伪代码与 Blutter ARM64 汇编交叉确认了 GarSync 的计算步骤：H
 - 训练计划、阶段、日程、训练课表和 workout 生成；内置 42 份训练计划 JSON，分别覆盖英语、西班牙语、法语、意大利语、葡萄牙语和中文，每种语言包含 7 个游泳、骑行、跑步计划模板，周期为 8、12 或 16 周。
 - AI 教练、单次训练和计划生成、训练后 AI 分析；可见 AI 健康数据上下文构造器与多个第三方模型服务端点。
 - BLE 设备扫描、设备状态/电量和 BigRun ECG/心率服务。
-- 内购目录含 6 种 gems 商品与 4 种 VIP 商品；另有 Sudoku 五档题库和森林/海洋/雨声三条音频资源。
+- 付费、数独和音频功能按用户要求不做深入拆解；APK 的整包解码产物仍保留在 `.data/apk_reverse/`，本报告不展开其商品、题库或音频内容。
 
 中文隐私协议和使用条款随包发布，隐私协议标记生效日 2026-03-23。协议称运动账号凭据保存在本机并用于对应平台登录；AI 计划会把相关信息发送到 AI 服务，PB 排名会上报服务端。以上是随 APK 附带的政策文本，不代表已通过网络抓包核实的运行事实。
 
@@ -165,9 +207,20 @@ AOT class 表确认 `TrainingType` 是六值枚举；活动详情页构造的本
 
 继续对照 `_classifySingleActivity` 与 `Activity.toJson` 汇编后，已确认该分类器先读取 `Activity.hrZone`（字段偏移 272）；字段非空时会对它执行动态调用，并将返回值与 `6` 比较。汇编未能可靠恢复这个动态调用对应的 Dart 方法。该分支与六个 `TrainingType` 名称的映射仍不明确。若 `hrZone` 为空或该返回值小于 `6`，代码会检查 `sport` 字段（偏移 52）的数值 `1`、`11`、`17`；这些分支读取 `distance`（偏移 76），遍历四个双精度阈值，并按距离与候选值的相对差进行比较，汇编中的容差常量为 `0.03`。四个阈值的具体数值及其对应训练类型尚未恢复，因此分类器仍不移植。
 
-活动详情另有 `ActivityPatcher.classifyTrainingIntensity` 分类器；AOT 调用点位于活动详情页、统计页和 `AiPromptBuilder.build`。它包含功率分区、心率分区和速度序列分类分支。`TrainingIntensity` 类实例表中有六个单例，本地化键显示 `recovery`、`base`、`tempo`、`threshold`、`vo2max`、`anaerobic` 六种标签。`_speedZoneBoundaries` 汇编可还原六个参考速度倍率：0.70、0.80、0.90、1.05、1.15、3.00，均先将参考值除以 3.6 再相乘。AOT 导出把多个枚举单例压为同一 `unresolved_Instance_8360`，部分分类分支仍依赖未解析的 dispatch；各分区比例到标签的映射尚未确认，因此本项目尚未移植此分类器。
+活动详情另有 `ActivityPatcher.classifyTrainingIntensity` 分类器；AOT 调用点位于活动详情页、统计页和 `AiPromptBuilder.build`。它包含功率分区、心率分区和速度序列分类分支。Blutter 对象池把 AOTopsy 中统一显示为 `unresolved_Instance_8360` 的六个返回对象恢复为：
 
-本轮再检查 AOTopsy 的 `classes.jsonl` 与 `instances.jsonl`：`TrainingIntensity` 的类 ID 为 8360，实例表有六个单例，引用编号为 264833–264838；类字段表显示枚举 `index` 位于对象偏移 8，`_name` 位于偏移 16。详情页根据 `_name` 动态拼接 `training_intensity_{sport}_{name}` 本地化键，因此标签集合可由资源确认，但导出未把六个 `_name` 字符串对象关联回各自的枚举实例。速度分类器汇编还出现 0.08、0.15 和 1.5 等比较常量；由于 AOT 导出没有可靠恢复这些浮点寄存器对应的业务参数，本报告不把它们解释成确定的时长比例或分类边界，也不据此移植标签规则。
+| `TrainingIntensity.index` | `_name` | 显示标签 |
+| ---: | --- | --- |
+| 0 | `recovery` | Recovery |
+| 1 | `base` | Base |
+| 2 | `tempo` | Tempo |
+| 3 | `threshold` | Threshold |
+| 4 | `vo2max` | VO2max |
+| 5 | `anaerobic` | Anaerobic |
+
+结合 `pp.txt` 对象池槽位与 AOTopsy 三个分类器的 AArch64 返回指令，可以恢复各分支标签：心率分类依次比较 `zoneRatio(zones, 5, 4)`、`(4, 3)`、`(3, 2)` 与 1.5、1.0、0.4，达到阈值时返回 VO2max、Threshold、Tempo。均未命中时，代码根据原始整型参数是否等于 2，选择 3,600 或 1,800 的浮点比较边界；低于边界返回 Recovery，达到或超过边界返回 Base。功率分类先比较 7、6 区时长占比之和与 0.08；低于该值时继续比较 `(5,4)`、`(4,3)`、`(3,2)` 分区比与 1.5、1.0、0.8，达到阈值时分别返回 VO2max、Threshold、Tempo。7、6 区占比之和达到 0.08 后，再看 7、6、5 区占比之和是否低于 0.15，低于时返回 Anaerobic，否则返回 VO2max。功率分类未命中这些条件时，也按 3,600/1,800 的边界在 Recovery 与 Base 间选择。两个分类器的浮点参数对应哪个活动字段，AOT 伪代码尚未恢复。
+
+速度分类依据 zone 时长比例比较 0.08 和 0.15，并在较低高强度占比路径检查相邻区间比 1.5；从 AArch64 返回对象可确认其明确标签结果为 Anaerobic 或 VO2max，未命中时返回空值。`_speedZoneBoundaries` 还可还原六个参考速度倍率：0.70、0.80、0.90、1.05、1.15、3.00，均先将参考值除以 3.6 再相乘。分类主函数选择或合并三路结果时仍有未恢复的动态字段语义；本次仅补全静态映射，未移植分类器，也未通过 GarSync 运行时样例验证。
 
 ### 周期功率曲线补充复核
 
@@ -198,8 +251,9 @@ AOT class 表确认 `TrainingType` 是六值枚举；活动详情页构造的本
 - `aotopsy/pipeline/`：AOTopsy v1.6.0 对 arm64 `libapp.so` 生成的函数/类清单、调用边、调用图、字符串引用、类型/派发索引及部分函数汇编和 CFG。索引覆盖 61,983 个函数条目与 7,686 个类；当前汇编与 CFG 输出分别有 16,514、3,326 个文件。
 - `aotopsy/reconstructed_dart_all/`：AOTopsy 的 app-only 全量方法伪代码导出，共 40,460 个方法、2,795 个类、1,728 个 `.dart` 命名文件，约 1.4 百万行；不是原始或可编译 Dart 源码。
 - `aotopsy/targeted/`：21 个关键函数的定向伪代码，包括六个转换器、活动 FIT parser/generator、坐标 patcher、导入/去重和同步入口。
+- `native/`：`libdatastore_shared_counter.so` 的 arm64、armv7、x86_64 完整静态汇编文本。
 - `flutterdec_classifier/`：FlutterDec 针对分类器名称的定向反编译输出；适配器精确识别快照，但内部反编译 0/9,556 个函数通过质量门，故没有作为行为证据。GitHub 发布包和对应源码放在 `tools/flutterdec-v0.1.0-alpha.4/`、`tools/flutterdec-src/`。
-- Blutter：此前登记的输出位置为 WSL `/root/.cache/sport_sync_bridge/garsync_blutter/`；本轮检查连接的 Ubuntu-26.04 时该路径和 `/home/hayas/.cache/sport_sync_bridge/garsync_blutter/` 都不存在，故无法重读此前记录的对象池、汇编及脚本。
+- Blutter：已从 `.data/apk_reverse/blutter/` 复核对象池、PP 表、2,576 个汇编文件、IDA 命名脚本和 Frida 脚本。Frida 脚本仅生成，未在设备上运行；汇编导出仍有 3 个可选命名参数解析错误。
 - `aot_ascii_strings.txt`、`aot_feature_strings.txt`、`aot_hosts.txt`：AOT 静态字符串筛选结果；完整字符串和端点转储可能含应用配置，不应公开或提交。
 - `app_package_paths.txt`、`format_package_paths.txt`、`data_adapter_modules.txt`、`aot_sql_strings.txt`：用于模块、格式和 SQL 名称盘点。
 
