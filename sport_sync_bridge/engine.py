@@ -9,6 +9,7 @@ from typing import cast
 from .config import AppConfig
 from .fit_tools import normalize_fit_coordinates
 from .formats import SUPPORTED_FORMATS, convert_activity_file
+from .intervals_icu import IntervalsIcuSource
 from .models import FileBundle, UploadResult
 from .sources import IGPSportSource, LocalFileSource, OneLapSource, SourceAdapter
 from .state import StateDB
@@ -272,6 +273,7 @@ class SyncEngine:
         adapters = (
             IGPSportSource(self.config),
             OneLapSource(self.config),
+            IntervalsIcuSource(self.config),
             LocalFileSource(self.config, self.state_db),
         )
         for adapter in adapters:

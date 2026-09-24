@@ -36,6 +36,8 @@ class AppConfig:
     onelap_cookie: str | None
     onelap_coord_mode: str
     onelap_coord_strict: bool
+    intervals_icu_athlete_id: str | None
+    intervals_icu_api_key: str | None
     garmin_email: str | None
     garmin_password: str | None
     garmin_session_b64: str | None
@@ -89,6 +91,8 @@ class AppConfig:
             onelap_cookie=env_or_none("ONELAP_COOKIE"),
             onelap_coord_mode=os.getenv("ONELAP_COORD_MODE", "gcj02_to_wgs84").strip().lower(),
             onelap_coord_strict=parse_bool(os.getenv("ONELAP_COORD_STRICT"), False),
+            intervals_icu_athlete_id=env_or_none("INTERVALS_ICU_ATHLETE_ID"),
+            intervals_icu_api_key=env_or_none("INTERVALS_ICU_API_KEY"),
             garmin_email=env_or_none("GARMIN_EMAIL"),
             garmin_password=env_or_none("GARMIN_PASSWORD"),
             garmin_session_b64=env_or_none("GARMIN_SESSION_B64"),

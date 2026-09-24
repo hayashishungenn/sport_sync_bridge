@@ -102,6 +102,13 @@ Copy-Item .env.example .env
 - `GARMIN_EMAIL` / `GARMIN_PASSWORD`
 - `STRAVA_CLIENT_ID` / `STRAVA_CLIENT_SECRET`
 
+Intervals.icu 是可选活动来源。配置 `INTERVALS_ICU_ATHLETE_ID` 和 `INTERVALS_ICU_API_KEY` 后，可以用 `--source intervals_icu` 选择它；该来源只下载 FIT，不向 Intervals.icu 上传：
+
+```powershell
+python sync.py check --source intervals_icu --target garmin
+python sync.py sync --source intervals_icu --target garmin --dry-run
+```
+
 ### 4. Strava 授权
 
 先输出授权 URL:
@@ -131,6 +138,8 @@ python sync.py sync
 ```text
 iGPSPORT / OneLap -> 下载 FIT -> 修正坐标 -> 上传 Garmin 国际区 -> 上传 Strava
 ```
+
+Intervals.icu 来源使用 athlete ID 和个人 API key 读取活动列表并下载 FIT，会跳过来源标记为 `STRAVA` 的活动，避免重复导入。
 
 Garmin 和 Strava 默认仍上传 FIT。可按目标分别指定格式，未指定的目标保持 FIT：
 

@@ -103,7 +103,7 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers = parser.add_subparsers(dest="command", required=False)
 
     sync_parser = subparsers.add_parser("sync", help="Run a sync pass")
-    sync_parser.add_argument("--source", action="append", choices=["igpsport", "onelap", "local"], help="Repeatable source")
+    sync_parser.add_argument("--source", action="append", choices=["igpsport", "onelap", "intervals_icu", "local"], help="Repeatable source")
     sync_parser.add_argument("--target", action="append", choices=["garmin", "strava"], help="Repeatable target")
     sync_parser.add_argument("--from", dest="date_from", help="Start date, e.g. 2026-01-01")
     sync_parser.add_argument("--to", dest="date_to", help="End date, e.g. 2026-03-01")
@@ -443,7 +443,7 @@ def build_parser() -> argparse.ArgumentParser:
     status_parser.add_argument("--json", action="store_true", help="Reserved for future use")
 
     check_parser = subparsers.add_parser("check", help="Verify configured source/target logins")
-    check_parser.add_argument("--source", action="append", choices=["igpsport", "onelap", "local"], help="Repeatable source")
+    check_parser.add_argument("--source", action="append", choices=["igpsport", "onelap", "intervals_icu", "local"], help="Repeatable source")
     check_parser.add_argument("--target", action="append", choices=["garmin", "strava"], help="Repeatable target")
 
     garmin_export_parser = subparsers.add_parser(
