@@ -245,7 +245,12 @@ python sync.py workouts export <课表ID> --output .\workout.fit
 python sync.py health import .\health.csv
 python sync.py health summary
 python sync.py health summary --format text
+python sync.py health import-readiness .\training-readiness.json
+python sync.py health readiness --format text --limit 7
+python sync.py health readiness --format json
 ```
+
+`health import-readiness` 接受一个训练准备度 JSON 对象或对象数组，按日期保存在本地 SQLite；重复导入相同记录不会重复写入。记录保留 AOT 模型中的评分、恢复时间、ACWR、急性负荷、压力、HRV、睡眠因子，以及完整的 `inputContext`、`metadata` 和其他字段。该命令展示文件提供的分数，不自行计算设备侧准备度；`--format json` 可查看完整原始字段。
 
 AI 运动分析保留为可选功能。它把单次活动摘要、最近活动的周汇总和本地健康指标发送给 OpenAI 兼容的 Chat Completions 接口，不发送 GPS 坐标。可先检查提示词，再配置自己使用的远端或本地模型：
 
@@ -283,7 +288,7 @@ python sync.py receive --host 0.0.0.0 --port 8765
 
 接收页不设访问口令，只应在可信的本地网络中临时开启。
 
-未移植到 Python CLI 的 APK 功能包括其余云平台的私有认证/同步协议、手机 BLE 配对引导界面、训练台其他控制命令、BigRun ECG 诊断分类规则、设备侧训练准备度和恢复算法（HR-TSS/CTL/ATL/TSB 已实现）、在线健康数据源、AI 聊天及 AI 计划/课表生成。标准 FTMS 目标功率控制已实现；BLE 测量通知也支持心率、跑步步频、骑行速度/踏频、功率计测量与功率向量、室内单车数据。BigRun ECG 已支持原始通知采集、波形解码、工作模式切换、波形归一化及非诊断性 R 峰、R-R 间期和心率指标计算；诊断分类规则尚未移植。Samba 默认使用 SMB2/3；旧协议需要显式添加 `--legacy-smb`，导入始终只读。GarSync 健康状态数值可从本地 CSV 导入，但项目不从手表或云端读取这些数据。当前天气功能需要显式坐标和 GarSync 天气服务令牌；AI 活动分析使用本地汇总和可配置模型接口。静态 AOT 索引不足以确认这些云端接口的运行期请求、服务端校验或设备交互行为。
+未移植到 Python CLI 的 APK 功能包括其余云平台的私有认证/同步协议、手机 BLE 配对引导界面、训练台其他控制命令、BigRun ECG 诊断分类规则、设备侧训练准备度评分算法（JSON 快照可导入和查看，通用 HR-TSS/CTL/ATL/TSB 训练负荷指标已实现）、在线健康数据源、AI 聊天及 AI 计划/课表生成。标准 FTMS 目标功率控制已实现；BLE 测量通知也支持心率、跑步步频、骑行速度/踏频、功率计测量与功率向量、室内单车数据。BigRun ECG 已支持原始通知采集、波形解码、工作模式切换、波形归一化及非诊断性 R 峰、R-R 间期和心率指标计算；诊断分类规则尚未移植。Samba 默认使用 SMB2/3；旧协议需要显式添加 `--legacy-smb`，导入始终只读。GarSync 健康状态数值可从本地 CSV 导入，但项目不从手表或云端读取这些数据。当前天气功能需要显式坐标和 GarSync 天气服务令牌；AI 活动分析使用本地汇总和可配置模型接口。静态 AOT 索引不足以确认这些云端接口的运行期请求、服务端校验或设备交互行为。
 
 常用参数:
 

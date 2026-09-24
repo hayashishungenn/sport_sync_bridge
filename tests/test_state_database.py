@@ -33,6 +33,7 @@ class StateDatabaseTests(unittest.TestCase):
             connection.execute(
                 "INSERT INTO kv_store (key, value, updated_at) VALUES ('legacy', 'kept', '2026-01-01T00:00:00+00:00')"
             )
+            connection.execute("PRAGMA user_version = 1")
             connection.commit()
             connection.close()
 
@@ -40,6 +41,10 @@ class StateDatabaseTests(unittest.TestCase):
             try:
                 self.assertEqual(state.get_value("legacy"), "kept")
                 self.assertEqual(state.connection.execute("PRAGMA user_version").fetchone()[0], DATABASE_SCHEMA_VERSION)
+                readiness_table = state.connection.execute(
+                    "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'training_readiness_records'"
+                ).fetchone()
+                self.assertIsNotNone(readiness_table)
             finally:
                 state.close()
 

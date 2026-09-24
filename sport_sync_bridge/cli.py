@@ -66,6 +66,11 @@ from .health import (
     summarize_health,
     summarize_health_for_activity,
 )
+from .training_readiness import (
+    format_training_readiness_text,
+    import_training_readiness_json,
+    summarize_training_readiness,
+)
 from .period_summary import calculate_period_summary, format_period_summary
 from .samba import import_samba_activity, list_samba_directory
 from .state import StateDB
@@ -358,8 +363,15 @@ def build_parser() -> argparse.ArgumentParser:
     health_actions = health_parser.add_subparsers(dest="health_action", required=True)
     health_import = health_actions.add_parser("import", help="Import a UTF-8 health CSV")
     health_import.add_argument("input", type=Path)
+    health_readiness_import = health_actions.add_parser(
+        "import-readiness", help="Import GarSync training readiness JSON records"
+    )
+    health_readiness_import.add_argument("input", type=Path)
     health_summary = health_actions.add_parser("summary", help="Show latest health measurements")
     health_summary.add_argument("--format", choices=["json", "text"], default="json")
+    health_readiness = health_actions.add_parser("readiness", help="Show imported training readiness history")
+    health_readiness.add_argument("--format", choices=["json", "text"], default="text")
+    health_readiness.add_argument("--limit", type=int, default=30)
 
     weather_parser = subparsers.add_parser("weather", help="Show current weather and outdoor exercise advice")
     weather_parser.add_argument("--lat", required=True, type=float, help="Latitude in decimal degrees")
@@ -1062,6 +1074,15 @@ def _run_local_command(args: argparse.Namespace, config: AppConfig) -> int:
             if args.health_action == "import":
                 imported = import_health_csv(state, args.input)
                 print(f"observations={imported}")
+            elif args.health_action == "import-readiness":
+                imported = import_training_readiness_json(state, args.input)
+                print(f"records_added={imported}")
+            elif args.health_action == "readiness":
+                summary = summarize_training_readiness(state, limit=args.limit)
+                if args.format == "text":
+                    print(format_training_readiness_text(summary))
+                else:
+                    print(json.dumps(summary, ensure_ascii=False, indent=2))
             else:
                 summary = summarize_health(state)
                 if args.format == "text":

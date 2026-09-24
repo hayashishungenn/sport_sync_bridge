@@ -10,7 +10,7 @@ from .models import Activity
 from .utils import ensure_directory, utcnow
 
 
-DATABASE_SCHEMA_VERSION = 1
+DATABASE_SCHEMA_VERSION = 2
 
 
 class StateDB:
@@ -94,6 +94,21 @@ class StateDB:
                 ON health_observations(metric, observed_at);
             CREATE INDEX IF NOT EXISTS idx_health_time
                 ON health_observations(observed_at);
+
+            CREATE TABLE IF NOT EXISTS training_readiness_records (
+                fingerprint TEXT PRIMARY KEY,
+                record_id TEXT,
+                source_id TEXT NOT NULL,
+                calendar_date TEXT NOT NULL,
+                observed_at TEXT NOT NULL,
+                score REAL,
+                level TEXT,
+                payload_json TEXT NOT NULL,
+                source_label TEXT NOT NULL,
+                imported_at TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_training_readiness_date
+                ON training_readiness_records(calendar_date, observed_at);
 
             CREATE TABLE IF NOT EXISTS ai_analysis (
                 id TEXT PRIMARY KEY,
@@ -400,6 +415,46 @@ class StateDB:
         return self.connection.execute(
             f"SELECT * FROM health_observations{where} ORDER BY observed_at DESC, metric, id DESC",
             values,
+        ).fetchall()
+
+    def save_training_readiness_records(self, records: list[dict[str, object]]) -> int:
+        if not records:
+            return 0
+        imported_at = utcnow().isoformat()
+        values = [
+            (
+                record["fingerprint"],
+                record.get("record_id"),
+                record["source_id"],
+                record["calendar_date"],
+                record["observed_at"],
+                record.get("score"),
+                record.get("level"),
+                record["payload_json"],
+                record["source_label"],
+                imported_at,
+            )
+            for record in records
+        ]
+        with self.connection:
+            before = self.connection.total_changes
+            self.connection.executemany(
+                "INSERT OR IGNORE INTO training_readiness_records ("
+                "fingerprint, record_id, source_id, calendar_date, observed_at, "
+                "score, level, payload_json, source_label, imported_at) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                values,
+            )
+            return self.connection.total_changes - before
+
+    def list_training_readiness_records(self, *, limit: int = 30) -> list[sqlite3.Row]:
+        if limit < 1:
+            raise ValueError("Training readiness record limit must be positive")
+        return self.connection.execute(
+            "SELECT * FROM training_readiness_records "
+            "ORDER BY calendar_date DESC, observed_at DESC, imported_at DESC, fingerprint "
+            "LIMIT ?",
+            (limit,),
         ).fetchall()
 
     def save_ai_analysis_result(
