@@ -4,12 +4,16 @@ import csv
 import html
 import io
 import json
+import os
 import re
 import statistics
+import tempfile
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from typing import Callable, Iterable
 
 from .formats import ActivityFile, ActivityTimeInZone, ActivityZoneTime, TrackPoint
+from .utils import ensure_directory, safe_filename
 
 
 def summarize_activity(activity: ActivityFile) -> dict[str, object]:
@@ -463,6 +467,50 @@ def _completion_content_text(content: object) -> str | None:
         ]
         return "".join(parts) if parts else None
     return None
+
+
+def write_ai_analysis_markdown(
+    directory: Path,
+    *,
+    activity_id: str,
+    result_id: str,
+    model_name: str,
+    content: str,
+) -> Path:
+    if not activity_id or not result_id or not model_name.strip() or not content.strip():
+        raise ValueError("AI analysis activity, result, model, and content must be non-empty")
+
+    activity_dir = ensure_directory(directory / safe_filename(activity_id))
+    output_path = activity_dir / f"{safe_filename(result_id)}.md"
+    metadata = json.dumps(
+        {
+            "activity_id": activity_id,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "model_name": model_name,
+            "result_id": result_id,
+        },
+        ensure_ascii=False,
+        sort_keys=True,
+    )
+    document = f"---\n{metadata}\n---\n\n{content.strip()}\n"
+    temporary_path: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            encoding="utf-8",
+            newline="\n",
+            dir=activity_dir,
+            prefix=f".{safe_filename(result_id)}-",
+            suffix=".tmp",
+            delete=False,
+        ) as handle:
+            temporary_path = Path(handle.name)
+            handle.write(document)
+        os.replace(temporary_path, output_path)
+    finally:
+        if temporary_path is not None:
+            temporary_path.unlink(missing_ok=True)
+    return output_path
 
 
 def _row_summary(row: object) -> dict[str, object]:

@@ -165,12 +165,20 @@ class AIStreamingTests(unittest.TestCase):
                     ):
                         status = main(["ai-analysis", imported.fingerprint])
                     self.assertEqual(status, 0)
-                    self.assertEqual(output.getvalue(), "流式分析结果\n")
+                    self.assertIn("流式分析结果\n", output.getvalue())
+                    self.assertIn("markdown_saved=", output.getvalue())
                     self.assertIsNotNone(StreamingAIHandler.last_request)
                     self.assertTrue(StreamingAIHandler.last_request["stream"])
                     saved = state.list_ai_analysis_results(imported.fingerprint)
                     self.assertEqual(len(saved), 1)
                     self.assertEqual(saved[0]["content"], "流式分析结果")
+                    markdown_files = list(
+                        (root / ".data" / "ai_analysis" / imported.fingerprint).glob("*.md")
+                    )
+                    self.assertEqual(len(markdown_files), 1)
+                    markdown = markdown_files[0].read_text(encoding="utf-8")
+                    self.assertIn('"model_name": "local-test-model"', markdown)
+                    self.assertIn("流式分析结果", markdown)
                 finally:
                     server.shutdown()
                     server.server_close()

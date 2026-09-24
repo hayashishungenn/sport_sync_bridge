@@ -11,6 +11,7 @@ from .activity_analysis import (
     build_ai_analysis_prompt,
     format_activity_report,
     validate_ai_language_code,
+    write_ai_analysis_markdown,
 )
 from .activity_library import LocalActivityLibrary
 from .activity_merge import merge_fit_files
@@ -727,8 +728,15 @@ def _run_local_command(args: argparse.Namespace, config: AppConfig) -> int:
                 prompt=prompt,
                 on_delta=show_delta,
             )
-            state.save_ai_analysis_result(
+            result_id = state.save_ai_analysis_result(
                 activity_id=row["fingerprint"],
+                model_name=config.ai_model,
+                content=result,
+            )
+            markdown_path = write_ai_analysis_markdown(
+                config.data_dir / "ai_analysis",
+                activity_id=row["fingerprint"],
+                result_id=result_id,
                 model_name=config.ai_model,
                 content=result,
             )
@@ -736,6 +744,7 @@ def _run_local_command(args: argparse.Namespace, config: AppConfig) -> int:
                 print()
             else:
                 print(result)
+            print(f"markdown_saved={markdown_path}")
             return 0
         finally:
             state.close()
