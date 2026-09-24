@@ -21,7 +21,7 @@ APK 容器、Android Manifest、资源、DEX/smali、Flutter AOT 元数据、字
 | DEX | 一个 classes.dex，4,785,424 字节 |
 | Flutter AOT | arm64-v8a/libapp.so，24,249,264 字节 |
 | Flutter 引擎 | arm64-v8a/libflutter.so，11,107,920 字节 |
-| Dart 版本 | AOTopsy 元数据显示 3.10.7；Blutter 使用 3.10.8 VM 成功解析。两者观察到同一快照标识 `1ce86630892e2dca9a8543fdb8ed8e22`，补丁版本标签差异仍未消解 |
+| Dart 版本 | AOTopsy 元数据显示 Dart 3.10.7；Blutter 使用 Dart 3.10.8 VM 成功解析。两者观察到同一快照标识 `1ce86630892e2dca9a8543fdb8ed8e22`，补丁版本标签差异仍未消解 |
 | Apktool | 3.0.3 解包成功，生成 Manifest、资源、原生库和 smali |
 | JADX | 生成约 4,472 个 Java 文件；报告 31 个反编译错误，进程以错误状态结束。Android 资源和 Manifest 可读 |
 | AOTopsy | v1.6.0 Windows 发布版，校验官方 SHA-256 后执行；建立 61,983 个函数、7,686 个类和调用图索引，并为 40,460 个方法导出 Dart 伪代码 |
