@@ -8,7 +8,7 @@ import statistics
 from datetime import datetime, timedelta, timezone
 from typing import Iterable
 
-from .formats import ActivityFile, TrackPoint
+from .formats import ActivityFile, ActivityTimeInZone, ActivityZoneTime, TrackPoint
 
 
 def summarize_activity(activity: ActivityFile) -> dict[str, object]:
@@ -71,6 +71,9 @@ def summarize_activity(activity: ActivityFile) -> dict[str, object]:
         "aerobic_training_effect": activity.aerobic_training_effect,
         "anaerobic_training_effect": activity.anaerobic_training_effect,
         "total_ascent_m": ascent if altitudes else None,
+        "time_in_zone_messages": [
+            _time_in_zone_summary(message) for message in activity.time_in_zone_messages
+        ],
         "lap_count": len(activity.laps),
         "track_point_count": len(points),
         "has_gps_track": any(point.latitude is not None and point.longitude is not None for point in points),
@@ -138,6 +141,7 @@ def format_activity_report(rows: Iterable[object], output_format: str) -> str:
         "anaerobic_training_effect",
         "training_stress_score",
         "total_ascent_m",
+        "time_in_zone_messages",
         "lap_count",
         "track_point_count",
     )
@@ -148,12 +152,14 @@ def format_activity_report(rows: Iterable[object], output_format: str) -> str:
     if output_format == "json":
         return json.dumps(records, ensure_ascii=False, indent=2) + "\n"
     if output_format == "csv":
+        _encode_nested_report_fields(records, "time_in_zone_messages")
         stream = io.StringIO(newline="")
         writer = csv.DictWriter(stream, fieldnames=fields, extrasaction="ignore")
         writer.writeheader()
         writer.writerows(records)
         return stream.getvalue()
     if output_format == "html":
+        _encode_nested_report_fields(records, "time_in_zone_messages")
         headers = "".join(f"<th>{html.escape(field.replace('_', ' '))}</th>" for field in fields)
         body = "".join(
             "<tr>" + "".join(f"<td>{html.escape(str(record.get(field) or ''))}</td>" for field in fields) + "</tr>"
@@ -212,6 +218,20 @@ def build_ai_analysis_prompt(
         f"训练压力分（TSS）：{_display(activity_summary.get('training_stress_score'))}",
         f"爬升（米）：{_display(activity_summary.get('total_ascent_m'))}",
         f"轨迹点数：{_display(activity_summary.get('track_point_count'))}",
+        "心率分区时间："
+        + _format_zone_groups(
+            activity_summary.get("time_in_zone_messages"),
+            "heart_rate_zones",
+            "heart_rate_calculation",
+            "bpm",
+        ),
+        "功率分区时间："
+        + _format_zone_groups(
+            activity_summary.get("time_in_zone_messages"),
+            "power_zones",
+            "power_calculation",
+            "W",
+        ),
         "",
         f"已导入活动：{recent['activity_count']} 次",
         f"活动总距离（米）：{recent['distance_m']:.1f}",
@@ -290,6 +310,95 @@ def _row_summary(row: object) -> dict[str, object]:
     summary["start_time"] = row["start_time"]
     summary["activity_id"] = str(row["fingerprint"])
     return summary
+
+
+def _time_in_zone_summary(message: ActivityTimeInZone) -> dict[str, object]:
+    hr_calculation_labels = {
+        0: "custom",
+        1: "percent_max_hr",
+        2: "percent_heart_rate_reserve",
+        3: "percent_lactate_threshold_hr",
+    }
+    power_calculation_labels = {0: "custom", 1: "percent_ftp"}
+    return {
+        "timestamp": message.timestamp.isoformat() if message.timestamp else None,
+        "reference_message": message.reference_message,
+        "reference_index": message.reference_index,
+        "heart_rate_calculation_code": message.heart_rate_calculation,
+        "heart_rate_calculation": hr_calculation_labels.get(
+            message.heart_rate_calculation,
+            f"unknown ({message.heart_rate_calculation})" if message.heart_rate_calculation is not None else None,
+        ),
+        "max_heart_rate_bpm": message.max_heart_rate_bpm,
+        "resting_heart_rate_bpm": message.resting_heart_rate_bpm,
+        "threshold_heart_rate_bpm": message.threshold_heart_rate_bpm,
+        "power_calculation_code": message.power_calculation,
+        "power_calculation": power_calculation_labels.get(
+            message.power_calculation,
+            f"unknown ({message.power_calculation})" if message.power_calculation is not None else None,
+        ),
+        "functional_threshold_power_w": message.functional_threshold_power_w,
+        "heart_rate_zones": [_zone_summary(zone) for zone in message.heart_rate_zones],
+        "speed_zones": [_zone_summary(zone) for zone in message.speed_zones],
+        "cadence_zones": [_zone_summary(zone) for zone in message.cadence_zones],
+        "power_zones": [_zone_summary(zone) for zone in message.power_zones],
+    }
+
+
+def _zone_summary(zone: ActivityZoneTime) -> dict[str, float | int | None]:
+    return {"zone": zone.zone, "seconds": zone.seconds, "high_boundary": zone.high_boundary}
+
+
+def _encode_nested_report_fields(records: list[dict[str, object]], field_name: str) -> None:
+    for record in records:
+        value = record.get(field_name)
+        if isinstance(value, (dict, list)):
+            record[field_name] = json.dumps(value, ensure_ascii=False, separators=(",", ":"))
+
+
+def _format_zone_groups(
+    groups: object,
+    zone_field: str,
+    calculation_field: str,
+    boundary_unit: str,
+) -> str:
+    if not isinstance(groups, list):
+        return "未知"
+    summaries: list[str] = []
+    for group in groups:
+        if not isinstance(group, dict):
+            continue
+        zones = group.get(zone_field)
+        if not isinstance(zones, list) or not zones:
+            continue
+        details: list[str] = []
+        for zone in zones:
+            if not isinstance(zone, dict):
+                continue
+            index = zone.get("zone")
+            seconds = zone.get("seconds")
+            duration = f"{_display(seconds)}秒" if seconds is not None else "未知秒数"
+            boundary = zone.get("high_boundary")
+            if boundary is not None:
+                duration += f"（上界 {_display(boundary)} {boundary_unit}）"
+            details.append(f"Z{index} {duration}")
+        if not details:
+            continue
+        calculation = group.get(calculation_field)
+        calculation_labels = {
+            "custom": "自定义分区",
+            "percent_max_hr": "最大心率百分比",
+            "percent_heart_rate_reserve": "心率储备百分比",
+            "percent_lactate_threshold_hr": "乳酸阈值心率百分比",
+            "percent_ftp": "FTP 百分比",
+        }
+        calculation = calculation_labels.get(calculation, calculation)
+        prefix = f"{calculation}：" if calculation else ""
+        reference = group.get("reference_index")
+        if reference is not None:
+            prefix += f"索引 {reference}，"
+        summaries.append(prefix + "、".join(details))
+    return "；".join(summaries) if summaries else "未知"
 
 
 def _number(value: object) -> float | None:

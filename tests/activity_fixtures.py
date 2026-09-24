@@ -9,6 +9,7 @@ from fit_tool.profile.messages.file_id_message import FileIdMessage
 from fit_tool.profile.messages.lap_message import LapMessage
 from fit_tool.profile.messages.record_message import RecordMessage
 from fit_tool.profile.messages.session_message import SessionMessage
+from fit_tool.profile.messages.time_in_zone_message import TimeInZoneMessage
 from fit_tool.profile.profile_type import FileType, Sport
 
 
@@ -36,6 +37,7 @@ def create_fit(
     aerobic_training_effect: float | None = None,
     anaerobic_training_effect: float | None = None,
     training_stress_score: float | None = None,
+    time_in_zone: dict[str, int | float | list[int | float]] | None = None,
 ) -> Path:
     builder = FitFileBuilder(auto_define=True)
     file_id = FileIdMessage()
@@ -110,6 +112,17 @@ def create_fit(
         if training_stress_score is not None:
             _set(session, "training_stress_score", training_stress_score)
         builder.add(session)
+
+    if time_in_zone:
+        zones = TimeInZoneMessage()
+        for field_name, value in time_in_zone.items():
+            field = zones.get_field_by_name(field_name)
+            if field is None:
+                raise ValueError(f"Unknown FIT time-in-zone field: {field_name}")
+            values = value if isinstance(value, list) else [value]
+            for index, item in enumerate(values):
+                field.set_value(index, item)
+        builder.add(zones)
 
     path.parent.mkdir(parents=True, exist_ok=True)
     builder.build().to_file(str(path))

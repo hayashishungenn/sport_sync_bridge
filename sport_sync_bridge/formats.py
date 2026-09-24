@@ -80,6 +80,25 @@ _FIT_SESSION_FIELDS = {
     "intensity_factor",
     "training_stress_score",
 }
+_FIT_TIME_IN_ZONE_FIELDS = {
+    "timestamp",
+    "reference_mesg",
+    "reference_index",
+    "time_in_hr_zone",
+    "time_in_speed_zone",
+    "time_in_cadence_zone",
+    "time_in_power_zone",
+    "hr_zone_high_boundary",
+    "speed_zone_high_boundary",
+    "cadence_zone_high_bondary",
+    "power_zone_high_boundary",
+    "hr_calc_type",
+    "max_heart_rate",
+    "resting_heart_rate",
+    "threshold_heart_rate",
+    "pwr_calc_type",
+    "functional_threshold_power",
+}
 _KNOWN_FIT_MESSAGES = {
     "file_id",
     "device_info",
@@ -90,6 +109,7 @@ _KNOWN_FIT_MESSAGES = {
     "lap",
     "session",
     "activity",
+    "time_in_zone",
     "event",
 }
 _KNOWN_EXTENSION_FIELDS = {
@@ -131,6 +151,30 @@ class ActivityLap:
 
 
 @dataclass(slots=True)
+class ActivityZoneTime:
+    zone: int
+    seconds: float | None = None
+    high_boundary: float | None = None
+
+
+@dataclass(slots=True)
+class ActivityTimeInZone:
+    timestamp: datetime | None = None
+    reference_message: int | None = None
+    reference_index: int | None = None
+    heart_rate_calculation: int | None = None
+    max_heart_rate_bpm: int | None = None
+    resting_heart_rate_bpm: int | None = None
+    threshold_heart_rate_bpm: int | None = None
+    power_calculation: int | None = None
+    functional_threshold_power_w: int | None = None
+    heart_rate_zones: list[ActivityZoneTime] = field(default_factory=list)
+    speed_zones: list[ActivityZoneTime] = field(default_factory=list)
+    cadence_zones: list[ActivityZoneTime] = field(default_factory=list)
+    power_zones: list[ActivityZoneTime] = field(default_factory=list)
+
+
+@dataclass(slots=True)
 class ActivityFile:
     name: str | None = None
     sport_type: str | None = None
@@ -140,6 +184,7 @@ class ActivityFile:
     timer_time_s: float | None = None
     distance_m: float | None = None
     laps: list[ActivityLap] = field(default_factory=list)
+    time_in_zone_messages: list[ActivityTimeInZone] = field(default_factory=list)
     creator: str | None = None
     losses: list[str] = field(default_factory=list)
     average_heart_rate_bpm: float | None = None
@@ -270,6 +315,8 @@ def _target_format_losses(activity: ActivityFile, target_format: str) -> list[st
             for label, value in summary_values
             if value is not None
         )
+        if activity.time_in_zone_messages:
+            losses.append(f"{target_name} does not preserve FIT time-in-zone statistics")
 
     if target_format == "gpx":
         if activity.elapsed_time_s is not None or activity.timer_time_s is not None:
@@ -391,6 +438,7 @@ def _read_fit(path: Path) -> ActivityFile:
     unsupported_message_types: set[str] = set()
     unsupported_summary_fields: set[str] = set()
     unsupported_metadata_messages: set[str] = set()
+    unsupported_time_in_zone_fields: set[str] = set()
     unsupported_sport_values: set[int] = set()
     session_start: datetime | None = None
     session_end: datetime | None = None
@@ -492,6 +540,13 @@ def _read_fit(path: Path) -> ActivityFile:
                 if field.is_valid()
                 and field.name not in {"timestamp", "total_timer_time", "num_sessions", "event", "event_type"}
             )
+        elif name == "time_in_zone":
+            activity.time_in_zone_messages.append(_read_fit_time_in_zone(message))
+            unsupported_time_in_zone_fields.update(
+                field.name
+                for field in message.fields
+                if field.is_valid() and field.name not in _FIT_TIME_IN_ZONE_FIELDS
+            )
         elif name in {"file_id", "device_info", "file_creator", "developer_data_id", "field_description"}:
             if any(field.is_valid() for field in message.fields):
                 unsupported_metadata_messages.add(name)
@@ -534,6 +589,10 @@ def _read_fit(path: Path) -> ActivityFile:
     if unsupported_metadata_messages:
         activity.losses.append(
             "FIT file/device metadata omitted: " + ", ".join(sorted(unsupported_metadata_messages))
+        )
+    if unsupported_time_in_zone_fields:
+        activity.losses.append(
+            "FIT time-in-zone fields omitted: " + ", ".join(sorted(unsupported_time_in_zone_fields))
         )
     if unsupported_sport_values:
         values = ", ".join(str(value) for value in sorted(unsupported_sport_values))
@@ -1122,6 +1181,44 @@ def _valid_message_values(message: object) -> dict[str, object]:
         for item in getattr(message, "fields", [])
         if item.is_valid()
     }
+
+
+def _read_fit_time_in_zone(message: object) -> ActivityTimeInZone:
+    values = _valid_message_values(message)
+    return ActivityTimeInZone(
+        timestamp=_fit_datetime(values.get("timestamp")),
+        reference_message=_optional_int(values.get("reference_mesg")),
+        reference_index=_optional_int(values.get("reference_index")),
+        heart_rate_calculation=_optional_int(values.get("hr_calc_type")),
+        max_heart_rate_bpm=_optional_int(values.get("max_heart_rate")),
+        resting_heart_rate_bpm=_optional_int(values.get("resting_heart_rate")),
+        threshold_heart_rate_bpm=_optional_int(values.get("threshold_heart_rate")),
+        power_calculation=_optional_int(values.get("pwr_calc_type")),
+        functional_threshold_power_w=_optional_int(values.get("functional_threshold_power")),
+        heart_rate_zones=_fit_zone_buckets(message, "time_in_hr_zone", "hr_zone_high_boundary"),
+        speed_zones=_fit_zone_buckets(message, "time_in_speed_zone", "speed_zone_high_boundary"),
+        cadence_zones=_fit_zone_buckets(message, "time_in_cadence_zone", "cadence_zone_high_bondary"),
+        power_zones=_fit_zone_buckets(message, "time_in_power_zone", "power_zone_high_boundary"),
+    )
+
+
+def _fit_zone_buckets(message: object, duration_field: str, boundary_field: str) -> list[ActivityZoneTime]:
+    durations = _valid_message_array(message, duration_field)
+    boundaries = _valid_message_array(message, boundary_field)
+    buckets: list[ActivityZoneTime] = []
+    for index in range(max(len(durations), len(boundaries))):
+        seconds = _optional_float(durations[index]) if index < len(durations) else None
+        boundary = _optional_float(boundaries[index]) if index < len(boundaries) else None
+        if seconds is not None or boundary is not None:
+            buckets.append(ActivityZoneTime(zone=index + 1, seconds=seconds, high_boundary=boundary))
+    return buckets
+
+
+def _valid_message_array(message: object, field_name: str) -> list[object]:
+    field = getattr(message, "get_field_by_name", lambda _name: None)(field_name)
+    if field is None or not field.is_valid():
+        return []
+    return list(field.get_values())
 
 
 def _first_float(values: dict[str, object], *names: str) -> float | None:

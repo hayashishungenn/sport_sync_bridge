@@ -46,6 +46,22 @@ class ActivityMergeTests(unittest.TestCase):
         self.assertEqual(second.read_bytes(), second_bytes)
         self.assertTrue(any("activity name" in loss.lower() for loss in result.losses))
 
+    def test_merge_reports_time_in_zone_data_loss(self) -> None:
+        first = create_fit(
+            self.root / "zoned.fit",
+            time_in_zone={
+                "time_in_hr_zone": [30, 60],
+                "hr_zone_high_boundary": [140, 160],
+            },
+        )
+        second = create_fit(self.root / "plain.fit", start=START + timedelta(minutes=10))
+
+        result = merge_fit_files([first, second], self.root / "merged-zones.fit")
+        activity = read_activity_file(result.output_path)
+
+        self.assertTrue(any("time-in-zone statistics" in loss for loss in result.losses))
+        self.assertEqual(activity.time_in_zone_messages, [])
+
     def test_merge_preserves_an_inter_activity_rest_lap(self) -> None:
         first = create_fit(self.root / "early.fit")
         second = create_fit(self.root / "late.fit", start=START + timedelta(minutes=10))

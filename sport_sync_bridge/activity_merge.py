@@ -91,6 +91,8 @@ def merge_fit_files(
     )
     merged_records: list[TrackPoint] = []
     losses: list[str] = []
+    if any(activity.time_in_zone_messages for _, activity in source_activities):
+        losses.append("FIT time-in-zone statistics are not copied into merged output")
     previous_end: datetime | None = None
     merged_start: datetime | None = None
     merged_end: datetime | None = None

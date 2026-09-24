@@ -11,7 +11,11 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 from sport_sync_bridge.activity_library import LocalActivityLibrary
-from sport_sync_bridge.activity_analysis import build_ai_analysis_prompt, summarize_activity
+from sport_sync_bridge.activity_analysis import (
+    build_ai_analysis_prompt,
+    format_activity_report,
+    summarize_activity,
+)
 from sport_sync_bridge.cli import main
 from sport_sync_bridge.formats import read_activity_file
 from sport_sync_bridge.state import StateDB
@@ -142,6 +146,17 @@ class TrainingBalanceTests(unittest.TestCase):
                     aerobic_training_effect=3.7,
                     anaerobic_training_effect=2.1,
                     training_stress_score=72.5,
+                    time_in_zone={
+                        "reference_mesg": 18,
+                        "reference_index": 0,
+                        "time_in_hr_zone": [30, 60],
+                        "hr_zone_high_boundary": [140, 160],
+                        "hr_calc_type": 2,
+                        "time_in_power_zone": [40, 50],
+                        "power_zone_high_boundary": [200, 250],
+                        "pwr_calc_type": 1,
+                        "functional_threshold_power": 240,
+                    },
                 )
             )
             summary = summarize_activity(activity)
@@ -154,6 +169,27 @@ class TrainingBalanceTests(unittest.TestCase):
             self.assertIn("强度因子（IF）：0.82", prompt)
             self.assertIn("有氧训练效果：3.7", prompt)
             self.assertIn("无氧训练效果：2.1", prompt)
+            self.assertEqual(summary["time_in_zone_messages"][0]["heart_rate_zones"][1]["seconds"], 60)
+            self.assertIn("心率分区时间：", prompt)
+            self.assertIn("心率储备百分比", prompt)
+            self.assertIn("Z2 60.0秒（上界 160.0 bpm）", prompt)
+            self.assertIn("功率分区时间：", prompt)
+            self.assertIn("FTP 百分比", prompt)
+
+            report_row = {
+                "summary_json": json.dumps(summary),
+                "name": summary["name"],
+                "sport_type": summary["sport_type"],
+                "start_time": summary["start_time"],
+                "fingerprint": "a" * 40,
+            }
+            report = json.loads(format_activity_report([report_row], "json"))
+            self.assertEqual(
+                report[0]["time_in_zone_messages"][0]["power_zones"][0]["seconds"],
+                40,
+            )
+            csv_report = format_activity_report([report_row], "csv")
+            self.assertIn('"heart_rate_zones"', csv_report)
 
     def test_library_balance_cli_reads_sqlite_rows_and_runs_without_accounts(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

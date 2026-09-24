@@ -153,6 +153,56 @@ class FormatConversionTests(unittest.TestCase):
                 ):
                     self.assertTrue(any(label in loss for loss in result.losses), label)
 
+    def test_fit_time_in_zone_messages_keep_all_zone_arrays_and_report_xml_loss(self) -> None:
+        source_path = create_fit(
+            self.root / "time-in-zone.fit",
+            time_in_zone={
+                "timestamp": round(START.timestamp() * 1000),
+                "reference_mesg": 18,
+                "reference_index": 0,
+                "time_in_hr_zone": [12.5, 34.5, 10.0],
+                "hr_zone_high_boundary": [120, 150, 180],
+                "hr_calc_type": 1,
+                "max_heart_rate": 190,
+                "resting_heart_rate": 55,
+                "threshold_heart_rate": 172,
+                "time_in_speed_zone": [20.0, 37.0],
+                "speed_zone_high_boundary": [3.0, 5.0],
+                "time_in_cadence_zone": [15.0, 42.0],
+                "cadence_zone_high_bondary": [80, 100],
+                "time_in_power_zone": [15.0, 25.0, 17.0],
+                "power_zone_high_boundary": [100, 200, 300],
+                "pwr_calc_type": 1,
+                "functional_threshold_power": 250,
+            },
+        )
+
+        activity = _read_fit(source_path)
+
+        self.assertEqual(len(activity.time_in_zone_messages), 1)
+        zones = activity.time_in_zone_messages[0]
+        self.assertEqual(zones.reference_message, 18)
+        self.assertEqual(zones.reference_index, 0)
+        self.assertEqual(zones.heart_rate_calculation, 1)
+        self.assertEqual(zones.threshold_heart_rate_bpm, 172)
+        self.assertEqual(zones.heart_rate_zones[1].seconds, 34.5)
+        self.assertEqual(zones.heart_rate_zones[1].high_boundary, 150)
+        self.assertEqual(zones.speed_zones[0].high_boundary, 3.0)
+        self.assertEqual(zones.cadence_zones[-1].seconds, 42.0)
+        self.assertEqual(zones.power_calculation, 1)
+        self.assertEqual(zones.functional_threshold_power_w, 250)
+        self.assertEqual(zones.power_zones[-1].high_boundary, 300)
+        self.assertFalse(any("FIT message types omitted" in loss for loss in activity.losses))
+
+        for target_format in ("gpx", "tcx"):
+            with self.subTest(target=target_format):
+                result = convert_activity_file(
+                    source_path,
+                    self.root / f"time-in-zone.{target_format}",
+                    target_format,
+                )
+                self.assertTrue(any("time-in-zone statistics" in loss for loss in result.losses))
+
     def test_fit_writer_preserves_activity_summary_metrics(self) -> None:
         from sport_sync_bridge.formats import _write_fit
 
