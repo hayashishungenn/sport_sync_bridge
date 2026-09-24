@@ -156,6 +156,12 @@ AOT 伪代码与 Blutter ARM64 汇编交叉确认了 GarSync 的计算步骤：H
 
 `PeriodSummaryService._computeAvgCadence` 的 AArch64 汇编按 FIT 运动类型分组读取活动字段：跑步组读取 `avgCadenceSpm`，骑行组读取 `avgCadenceRpm`；每组分别对应 `_isRunSport` 的三个枚举实例和 `_isCyclSport` 的两个实例。函数将非空整数值放入同一列表后做算术平均，没有有效值时返回空值；汇编没有过滤零值。活动模型序列化器中可见 `avgCadenceSpm` 与 `avgCadenceRpm` 字段名。AOT 导出的枚举实例名未恢复完整，因此本地仅按已映射的跑步类型和 `cycling` 汇总，其他运动类型不纳入。当前本地活动摘要从轨迹 FIT `cadence` 记录计算活动均值，字段来源与 GarSync 的活动级指标不完全相同，且未做运行时对照。输出字段为 `avg_cadence` 和 `avg_cadence_activity_count`。
 
+### 周期训练类型与强度模型（部分恢复）
+
+AOT class 表确认 `TrainingType` 是六值枚举；活动详情页构造的本地化键为 `training_intensity_{sport}_{type}`，sport 分支包括 `running`、`cycling`、`swimming`。字符串引用表列出六种 type：`recovery`、`base`、`tempo`、`threshold`、`vo2max`、`anaerobic`。周期 `_classifyTrainingTypes` 遍历活动，调用 `_classifySingleActivity`，再将活动 `duration` 累加到对应 `TrainingType`。这些事实分别来自 `classes.jsonl`、`string_refs.jsonl` 和 `PeriodSummaryService` 的 AArch64 汇编；该流程仍是静态恢复，未在 GarSync 运行时验证。
+
+`_detectIntensityModel` 对分类后的时长做总和与比例计算；总时长为零时返回空值，非零时模型字符串包括 `pyramidal`、`polarized`、`mixed`。函数使用的阈值常量包括 `0.6`、`0.4` 和约 `0.14`。目前未能把两个比例对应的匿名 `TrainingType` 单例可靠映射到上述六个名称；`_classifySingleActivity` 的指标来源及六档边界也没有足够证据复原，因此这两处暂不移植，避免生成貌似精确但无法验证的分类结果。
+
 ### 周期功率曲线补充复核
 
 `PeriodSummaryService._computePowerCurve` 的 AOT 汇编初始化 10 个窗口秒数：10、60、120、360、600、2400、3600、7200、14400、21600。实现按活动轨迹采样点滚动维护窗口内功率总和与样本数，计算算术平均值并转为整数；活动时长达不到窗口长度时跳过。`_mergePowerCurves` 遍历各活动结果，对相同窗口保留较大的功率值。`PeriodStats.toJson` 将结果暴露为 `powerCurve`，周期复核页显示曲线，并可标注基于近期样本或全部活动。
