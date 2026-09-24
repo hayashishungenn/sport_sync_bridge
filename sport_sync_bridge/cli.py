@@ -30,6 +30,8 @@ from .ble_sensors import (
     scan_ble_devices,
     read_battery_level,
     stream_heart_rate,
+    stream_sensor_data,
+    validate_sensor_recording_options,
 )
 from .config import AppConfig
 from .engine import SyncEngine
@@ -212,6 +214,16 @@ def build_parser() -> argparse.ArgumentParser:
     ble_heart_rate.add_argument("--duration", type=float, default=60.0, help="Recording duration in seconds")
     ble_heart_rate.add_argument("--timeout", type=float, default=15.0, help="Connection timeout in seconds")
     ble_heart_rate.add_argument("--output", type=Path, help="Optional CSV output path")
+    ble_record = ble_actions.add_parser("record", help="Record standard BLE sports sensor measurements")
+    ble_record.add_argument("address", help="BLE address or platform identifier")
+    ble_record.add_argument("--duration", type=float, default=60.0, help="Recording duration in seconds")
+    ble_record.add_argument("--timeout", type=float, default=15.0, help="Connection timeout in seconds")
+    ble_record.add_argument(
+        "--wheel-circumference-m",
+        type=float,
+        help="Wheel circumference in meters for deriving wheel-sensor speed and distance",
+    )
+    ble_record.add_argument("--output", type=Path, help="Optional JSON Lines output path")
     ble_rename = ble_actions.add_parser("rename", help="Rename a saved BLE sensor")
     ble_rename.add_argument("address", help="Saved BLE device address")
     ble_rename.add_argument("name", help="Local display name")
@@ -1011,6 +1023,47 @@ def _run_ble_command(args: argparse.Namespace, config: AppConfig) -> int:
 
             try:
                 asyncio.run(_record())
+            finally:
+                if output_stream is not None:
+                    output_stream.close()
+            registry.update_last_connected(args.address)
+            print(f"samples={sample_count}")
+            if output_path is not None:
+                print(f"output={output_path}")
+            return 0
+
+        if args.ble_action == "record":
+            validate_sensor_recording_options(
+                args.duration,
+                args.timeout,
+                args.wheel_circumference_m,
+            )
+            output_path = args.output.expanduser().resolve() if args.output else None
+            output_stream = None
+            if output_path is not None:
+                output_path.parent.mkdir(parents=True, exist_ok=True)
+                output_stream = output_path.open("w", encoding="utf-8", newline="")
+            sample_count = 0
+
+            async def _record_sensor_data() -> None:
+                nonlocal sample_count
+                async for sample in stream_sensor_data(
+                    args.address,
+                    args.duration,
+                    args.timeout,
+                    wheel_circumference_m=args.wheel_circumference_m,
+                ):
+                    row = asdict(sample)
+                    line = json.dumps(row, ensure_ascii=False, sort_keys=True)
+                    if output_stream is not None:
+                        output_stream.write(line + "\n")
+                        output_stream.flush()
+                    else:
+                        print(line)
+                    sample_count += 1
+
+            try:
+                asyncio.run(_record_sensor_data())
             finally:
                 if output_stream is not None:
                     output_stream.close()

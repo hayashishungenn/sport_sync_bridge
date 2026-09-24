@@ -10,6 +10,18 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import AsyncIterator
 
+from .ble_measurements import (
+    SENSOR_CHARACTERISTICS,
+    BleMeasurementError,
+    BleSensorSample,
+    SensorMeasurementDecoder,
+    decode_csc_measurement,
+    decode_cycling_power_measurement,
+    decode_cycling_power_vector,
+    decode_indoor_bike_data,
+    decode_rsc_measurement,
+)
+
 
 BLE_TYPES = {
     "heart_rate",
@@ -383,6 +395,108 @@ async def stream_heart_rate(
         raise
     except Exception as exc:
         raise BleError(f"Could not stream BLE heart rate ({type(exc).__name__})") from exc
+
+
+async def stream_sensor_data(
+    address: str,
+    duration_seconds: float,
+    timeout: float = 15.0,
+    *,
+    wheel_circumference_m: float | None = None,
+    scanner_type: object | None = None,
+    client_type: object | None = None,
+) -> AsyncIterator[BleSensorSample]:
+    validate_sensor_recording_options(duration_seconds, timeout, wheel_circumference_m)
+    decoder = SensorMeasurementDecoder(wheel_circumference_m)
+    if scanner_type is None or client_type is None:
+        loaded_client, loaded_scanner = _load_bleak()
+        scanner_type = scanner_type or loaded_scanner
+        client_type = client_type or loaded_client
+
+    try:
+        device = await scanner_type.find_device_by_address(address, timeout=timeout)
+        if device is None:
+            raise BleError(f"BLE device was not found: {address}")
+        async with client_type(device, timeout=timeout) as client:
+            available = [
+                (sensor_type, characteristic)
+                for sensor_type, (service_uuid, characteristic_uuid) in SENSOR_CHARACTERISTICS.items()
+                if (
+                    characteristic := _find_characteristic(client, service_uuid, characteristic_uuid)
+                ) is not None
+            ]
+            if not available:
+                raise BleError(f"Device does not expose a supported BLE measurement characteristic: {address}")
+
+            queue: asyncio.Queue[BleSensorSample | tuple[str, Exception]] = asyncio.Queue()
+
+            def make_callback(sensor_type: str):
+                def on_measurement(_characteristic: object, payload: bytearray) -> None:
+                    try:
+                        if sensor_type == "heart_rate":
+                            measurement = decode_heart_rate_measurement(payload)
+                            fields: dict[str, object] = {
+                                "heart_rate_bpm": measurement.heart_rate_bpm,
+                                "sensor_contact": measurement.sensor_contact,
+                                "energy_expended_kj": measurement.energy_expended_kj,
+                                "rr_intervals_ms": list(measurement.rr_intervals_ms),
+                            }
+                        else:
+                            fields = decoder.decode(sensor_type, payload)
+                        queue.put_nowait(
+                            BleSensorSample(
+                                datetime.now(timezone.utc).isoformat(),
+                                sensor_type,
+                                fields,
+                            )
+                        )
+                    except Exception as exc:
+                        queue.put_nowait((sensor_type, exc))
+
+                return on_measurement
+
+            started: list[object] = []
+            try:
+                for _sensor_type, characteristic in available:
+                    await client.start_notify(characteristic, make_callback(_sensor_type))
+                    started.append(characteristic)
+
+                deadline = asyncio.get_running_loop().time() + duration_seconds
+                while True:
+                    remaining = deadline - asyncio.get_running_loop().time()
+                    if remaining <= 0:
+                        return
+                    try:
+                        result = await asyncio.wait_for(queue.get(), timeout=remaining)
+                    except TimeoutError:
+                        return
+                    if isinstance(result, tuple):
+                        sensor_type, error = result
+                        raise BleError(
+                            f"Invalid {sensor_type} measurement ({type(error).__name__})"
+                        ) from error
+                    yield result
+            finally:
+                for characteristic in reversed(started):
+                    await client.stop_notify(characteristic)
+    except BleError:
+        raise
+    except Exception as exc:
+        raise BleError(f"Could not stream BLE sensor data ({type(exc).__name__})") from exc
+
+
+def validate_sensor_recording_options(
+    duration_seconds: float,
+    timeout: float,
+    wheel_circumference_m: float | None,
+) -> None:
+    _validate_timeout(timeout)
+    if not math.isfinite(duration_seconds) or not 1 <= duration_seconds <= 86400:
+        raise BleError("Sensor recording duration must be between 1 second and 24 hours")
+    try:
+        SensorMeasurementDecoder(wheel_circumference_m)
+    except BleMeasurementError as exc:
+        raise BleError(str(exc)) from exc
 
 
 def _find_characteristic(client: object, service_uuid: str, characteristic_uuid: str):
