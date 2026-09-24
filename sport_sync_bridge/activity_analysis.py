@@ -857,6 +857,11 @@ def _format_training_intensity(activity_summary: dict[str, object]) -> str:
     duration = activity_summary.get("timer_time_s")
     if duration is None:
         duration = activity_summary.get("elapsed_time_s")
+    power_intensity_factor = (
+        activity_summary.get("intensity_factor")
+        if activity_summary.get("timer_time_s") is not None
+        else None
+    )
     sport_type = activity_summary.get("sport_type")
     labels: list[str] = []
     for index, message in enumerate(messages, start=1):
@@ -865,7 +870,12 @@ def _format_training_intensity(activity_summary: dict[str, object]) -> str:
         heart_rate = classify_heart_rate_intensity(
             message.get("heart_rate_zones"), duration, sport_type
         )
-        power = classify_power_intensity(message.get("power_zones"), duration, sport_type)
+        power = classify_power_intensity(
+            message.get("power_zones"),
+            duration,
+            sport_type,
+            intensity_factor=power_intensity_factor,
+        )
         speed = classify_speed_intensity(message.get("speed_zones"))
         group_labels = []
         if heart_rate is not None:

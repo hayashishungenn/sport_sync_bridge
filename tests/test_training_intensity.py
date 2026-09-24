@@ -87,6 +87,37 @@ class TrainingIntensityTests(unittest.TestCase):
         self.assertEqual(classify_power_intensity(zones, 3599, "cycling"), "Recovery")
         self.assertEqual(classify_power_intensity(zones, 3600, "cycling"), "Base")
 
+    def test_cycling_intensity_factor_override_thresholds(self) -> None:
+        zones = [{"zone": 1, "seconds": 92}, {"zone": 6, "seconds": 8}]
+        self.assertEqual(
+            classify_power_intensity(zones, 2400, "cycling", intensity_factor=0.80),
+            "Anaerobic",
+        )
+        self.assertEqual(
+            classify_power_intensity(zones, 2400, "cycling", intensity_factor=0.55),
+            "Anaerobic",
+        )
+        self.assertEqual(
+            classify_power_intensity(zones, 3899, "cycling", intensity_factor=0.54),
+            "Base",
+        )
+        self.assertEqual(
+            classify_power_intensity(zones, 3900, "cycling", intensity_factor=0.54),
+            "Recovery",
+        )
+        self.assertEqual(
+            classify_power_intensity(zones, 7200, "cycling", intensity_factor=0.54),
+            "Base",
+        )
+        self.assertEqual(
+            classify_power_intensity(zones, 9000, "running", intensity_factor=0.10),
+            "Anaerobic",
+        )
+        self.assertEqual(
+            classify_power_intensity(zones, 9000, "e_biking", intensity_factor=0.10),
+            "Anaerobic",
+        )
+
     def test_speed_high_zone_share_classification(self) -> None:
         self.assertEqual(
             classify_speed_intensity(
@@ -162,6 +193,46 @@ class TrainingIntensityTests(unittest.TestCase):
             "FIT 分区训练强度参考：心率=Tempo，功率=Anaerobic，速度=Anaerobic",
             prompt,
         )
+
+    def test_ai_prompt_applies_cycling_intensity_factor_override(self) -> None:
+        prompt = build_ai_analysis_prompt(
+            {
+                "sport_type": "cycling",
+                "timer_time_s": 3900,
+                "intensity_factor": 0.54,
+                "time_in_zone_messages": [
+                    {
+                        "power_zones": [
+                            {"zone": 1, "seconds": 92},
+                            {"zone": 6, "seconds": 8},
+                        ]
+                    }
+                ],
+            },
+            [],
+        )
+
+        self.assertIn("FIT 分区训练强度参考：功率=Recovery", prompt)
+
+    def test_ai_prompt_does_not_use_elapsed_time_for_cycling_override(self) -> None:
+        prompt = build_ai_analysis_prompt(
+            {
+                "sport_type": "cycling",
+                "elapsed_time_s": 3900,
+                "intensity_factor": 0.54,
+                "time_in_zone_messages": [
+                    {
+                        "power_zones": [
+                            {"zone": 1, "seconds": 92},
+                            {"zone": 6, "seconds": 8},
+                        ]
+                    }
+                ],
+            },
+            [],
+        )
+
+        self.assertIn("FIT 分区训练强度参考：功率=Anaerobic", prompt)
 
 
 if __name__ == "__main__":
