@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 import argparse
+import asyncio
+import csv
 import json
 import os
 import sys
 import tempfile
+from dataclasses import asdict
 from datetime import date, datetime, timezone
 from pathlib import Path
 
@@ -20,6 +23,14 @@ from .activity_map import write_route_map
 from .activity_poster import POSTER_LAYOUTS, POSTER_METRICS, POSTER_RATIOS, write_activity_poster
 from .activity_library import LocalActivityLibrary
 from .activity_merge import merge_fit_files
+from .ble_sensors import (
+    BLE_TYPES,
+    BleDeviceRegistry,
+    BleError,
+    scan_ble_devices,
+    read_battery_level,
+    stream_heart_rate,
+)
 from .config import AppConfig
 from .engine import SyncEngine
 from .fit_tools import normalize_fit_coordinates
@@ -187,6 +198,29 @@ def build_parser() -> argparse.ArgumentParser:
         help="Environment variable containing an encrypted ZIP password",
     )
 
+    ble_parser = subparsers.add_parser("ble", help="Scan and manage BLE sports sensors")
+    ble_actions = ble_parser.add_subparsers(dest="ble_action", required=True)
+    ble_scan = ble_actions.add_parser("scan", help="Scan for nearby BLE sensors")
+    ble_scan.add_argument("--timeout", type=float, default=8.0, help="Scan duration in seconds")
+    ble_scan.add_argument("--save", action="store_true", help="Save discovered sensors locally")
+    ble_devices = ble_actions.add_parser("devices", help="List saved BLE sensors")
+    ble_battery = ble_actions.add_parser("battery", help="Read a saved sensor battery level")
+    ble_battery.add_argument("address", help="BLE address or platform identifier")
+    ble_battery.add_argument("--timeout", type=float, default=15.0, help="Connection timeout in seconds")
+    ble_heart_rate = ble_actions.add_parser("heart-rate", help="Record heart rate notifications")
+    ble_heart_rate.add_argument("address", help="BLE address or platform identifier")
+    ble_heart_rate.add_argument("--duration", type=float, default=60.0, help="Recording duration in seconds")
+    ble_heart_rate.add_argument("--timeout", type=float, default=15.0, help="Connection timeout in seconds")
+    ble_heart_rate.add_argument("--output", type=Path, help="Optional CSV output path")
+    ble_rename = ble_actions.add_parser("rename", help="Rename a saved BLE sensor")
+    ble_rename.add_argument("address", help="Saved BLE device address")
+    ble_rename.add_argument("name", help="Local display name")
+    ble_remove = ble_actions.add_parser("remove", help="Remove a saved BLE sensor")
+    ble_remove.add_argument("address", help="Saved BLE device address")
+    ble_prefer = ble_actions.add_parser("prefer", help="Set a preferred device for a sensor type")
+    ble_prefer.add_argument("address", help="Saved BLE device address")
+    ble_prefer.add_argument("--type", required=True, choices=sorted(BLE_TYPES))
+
     plans_parser = subparsers.add_parser("plans", help="Use bundled training plan templates")
     plans_actions = plans_parser.add_subparsers(dest="plans_action", required=True)
     plans_templates = plans_actions.add_parser("list", help="List plan templates")
@@ -307,7 +341,7 @@ def main(argv: list[str] | None = None) -> int:
         return _convert_file(args, config)
     if args.command == "weather":
         return _run_weather(args, config)
-    if args.command in {"library", "plans", "workouts", "health", "ai-analysis", "receive"}:
+    if args.command in {"library", "plans", "workouts", "health", "ai-analysis", "receive", "ble"}:
         return _run_local_command(args, config)
 
     engine = SyncEngine(config)
@@ -496,6 +530,9 @@ def _convert_file(args: argparse.Namespace, config: AppConfig) -> int:
 
 
 def _run_local_command(args: argparse.Namespace, config: AppConfig) -> int:
+    if args.command == "ble":
+        return _run_ble_command(args, config)
+
     if args.command == "library":
         if args.library_action == "samba":
             return _run_samba_command(args, config)
@@ -903,6 +940,102 @@ def _run_local_command(args: argparse.Namespace, config: AppConfig) -> int:
             state.close()
 
     raise ValueError(f"Unsupported local command: {args.command}")
+
+
+def _run_ble_command(args: argparse.Namespace, config: AppConfig) -> int:
+    registry = BleDeviceRegistry(config.data_dir / "ble_devices.json")
+    try:
+        if args.ble_action == "scan":
+            results = asyncio.run(scan_ble_devices(args.timeout))
+            saved_addresses: set[str] = set()
+            if args.save:
+                for result in results:
+                    registry.add_scan_result(result)
+                    saved_addresses.add(result.address)
+            for result in results:
+                item = asdict(result)
+                item["service_uuids"] = list(result.service_uuids)
+                item["saved"] = result.address in saved_addresses
+                print(json.dumps(item, ensure_ascii=False))
+            print(f"devices={len(results)}")
+            if args.save:
+                print(f"saved={len(saved_addresses)}")
+            return 0
+
+        if args.ble_action == "devices":
+            devices = registry.list_devices()
+            for device in devices:
+                print(json.dumps(device, ensure_ascii=False))
+            print(f"devices={len(devices)}")
+            return 0
+
+        if args.ble_action == "battery":
+            battery_level = asyncio.run(read_battery_level(args.address, args.timeout))
+            registry.update_battery_level(args.address, battery_level)
+            registry.update_last_connected(args.address)
+            print(f"address={args.address}")
+            print(f"battery_level={battery_level}")
+            return 0
+
+        if args.ble_action == "heart-rate":
+            output_path = args.output.expanduser().resolve() if args.output else None
+            output_stream = None
+            writer = None
+            if output_path is not None:
+                output_path.parent.mkdir(parents=True, exist_ok=True)
+                output_stream = output_path.open("w", encoding="utf-8", newline="")
+                writer = csv.DictWriter(
+                    output_stream,
+                    fieldnames=[
+                        "timestamp",
+                        "heart_rate_bpm",
+                        "sensor_contact",
+                        "energy_expended_kj",
+                        "rr_intervals_ms",
+                    ],
+                )
+                writer.writeheader()
+            sample_count = 0
+
+            async def _record() -> None:
+                nonlocal sample_count
+                async for sample in stream_heart_rate(args.address, args.duration, args.timeout):
+                    row = asdict(sample)
+                    row["rr_intervals_ms"] = list(sample.rr_intervals_ms)
+                    if writer is not None and output_stream is not None:
+                        writer.writerow(row)
+                        output_stream.flush()
+                    else:
+                        print(json.dumps(row, ensure_ascii=False))
+                    sample_count += 1
+
+            try:
+                asyncio.run(_record())
+            finally:
+                if output_stream is not None:
+                    output_stream.close()
+            registry.update_last_connected(args.address)
+            print(f"samples={sample_count}")
+            if output_path is not None:
+                print(f"output={output_path}")
+            return 0
+
+        if args.ble_action == "rename":
+            registry.rename_device(args.address, args.name)
+            print(f"renamed={args.address}")
+            return 0
+
+        if args.ble_action == "remove":
+            registry.remove_device(args.address)
+            print(f"removed={args.address}")
+            return 0
+
+        registry.set_preferred_device(args.address, args.type)
+        print(f"preferred_{args.type}={args.address}")
+        return 0
+    except BleError as exc:
+        print(f"ble_error={exc}", file=sys.stderr)
+        return 2
 
 
 def _run_samba_command(args: argparse.Namespace, config: AppConfig) -> int:
