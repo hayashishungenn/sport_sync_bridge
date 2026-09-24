@@ -167,6 +167,8 @@ AOT class 表确认 `TrainingType` 是六值枚举；活动详情页构造的本
 
 活动详情另有 `ActivityPatcher.classifyTrainingIntensity` 分类器；AOT 调用点位于活动详情页、统计页和 `AiPromptBuilder.build`。它包含功率分区、心率分区和速度序列分类分支。`TrainingIntensity` 类实例表中有六个单例，本地化键显示 `recovery`、`base`、`tempo`、`threshold`、`vo2max`、`anaerobic` 六种标签。`_speedZoneBoundaries` 汇编可还原六个参考速度倍率：0.70、0.80、0.90、1.05、1.15、3.00，均先将参考值除以 3.6 再相乘。AOT 导出把多个枚举单例压为同一 `unresolved_Instance_8360`，部分分类分支仍依赖未解析的 dispatch；各分区比例到标签的映射尚未确认，因此本项目尚未移植此分类器。
 
+本轮再检查 AOTopsy 的 `classes.jsonl` 与 `instances.jsonl`：`TrainingIntensity` 的类 ID 为 8360，实例表有六个单例，引用编号为 264833–264838；类字段表显示枚举 `index` 位于对象偏移 8，`_name` 位于偏移 16。详情页根据 `_name` 动态拼接 `training_intensity_{sport}_{name}` 本地化键，因此标签集合可由资源确认，但导出未把六个 `_name` 字符串对象关联回各自的枚举实例。速度分类器汇编还出现 0.08、0.15 和 1.5 等比较常量；由于 AOT 导出没有可靠恢复这些浮点寄存器对应的业务参数，本报告不把它们解释成确定的时长比例或分类边界，也不据此移植标签规则。
+
 ### 周期功率曲线补充复核
 
 `PeriodSummaryService._computePowerCurve` 的 AOT 汇编初始化 10 个窗口秒数：10、60、120、360、600、2400、3600、7200、14400、21600。实现按活动轨迹采样点滚动维护窗口内功率总和与样本数，计算算术平均值并转为整数；活动时长达不到窗口长度时跳过。`_mergePowerCurves` 遍历各活动结果，对相同窗口保留较大的功率值。`PeriodStats.toJson` 将结果暴露为 `powerCurve`，周期复核页显示曲线，并可标注基于近期样本或全部活动。
