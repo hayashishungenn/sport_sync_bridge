@@ -113,6 +113,34 @@ _STATUS_VALUES = {
         "fully recovered", "not fully recovered", "是", "否", "完全恢复", "未恢复",
     },
 }
+_HEALTH_DISPLAY_LABELS = {
+    "weight_kg": "体重",
+    "height_cm": "身高",
+    "resting_hr_bpm": "静息心率",
+    "hrv_ms": "HRV",
+    "spo2_percent": "血氧饱和度",
+    "sleep_hours": "睡眠时长",
+    "steps": "步数",
+    "stress_score": "压力",
+    "body_battery": "身体电量",
+    "vo2_max_run": "跑步 VO₂max",
+    "vo2_max_ride": "骑行 VO₂max",
+    "sleep_score": "睡眠分数",
+    "lactate_threshold_hr_bpm": "乳酸阈值心率",
+    "lactate_threshold_speed_kmh": "乳酸阈值速度",
+    "calories_kcal": "卡路里",
+    "floors": "楼层",
+    "respiration_bpm": "呼吸频率",
+    "hydration_l": "饮水量",
+    "recovery_hours": "恢复时长",
+    "hrv_status": "HRV 状态",
+    "ready_to_train_status": "训练准备状态",
+    "fully_recovered": "完全恢复状态",
+    "systolic_bp_mmhg": "收缩压",
+    "diastolic_bp_mmhg": "舒张压",
+    "bmi": "BMI",
+}
+_HEALTH_DISPLAY_ORDER = {metric: index for index, metric in enumerate(_HEALTH_DISPLAY_LABELS)}
 
 
 def import_health_csv(state_db: StateDB, input_path: Path) -> int:
@@ -186,6 +214,61 @@ def summarize_health(state_db: StateDB) -> dict[str, object]:
             ),
         }
     return {"measurement_count": sum(len(rows) for rows in grouped.values()), "latest": latest}
+
+
+def format_health_summary_text(summary: dict[str, object]) -> str:
+    latest = summary.get("latest")
+    if not isinstance(latest, dict):
+        latest = {}
+    lines = [f"测量记录：{summary.get('measurement_count', 0)}"]
+    if not latest:
+        lines.append("暂无健康指标")
+        return "\n".join(lines)
+
+    for metric in sorted(latest, key=_health_display_order):
+        observation = latest[metric]
+        if not isinstance(observation, dict) or "value" not in observation:
+            continue
+        value = observation["value"]
+        unit = str(observation.get("unit", ""))
+        display_value = _format_health_value(value)
+        if metric == "lactate_threshold_speed_kmh":
+            pace = _format_kmh_to_pace(value)
+            if pace:
+                display_value = f"{pace} /km"
+                suffix = f"（{_format_health_value(value)} km/h）"
+            else:
+                suffix = " km/h"
+        else:
+            display_unit = {"steps": "步", "floors": "层"}.get(metric, unit)
+            suffix = f" {display_unit}" if display_unit and display_unit != "status" else ""
+        observed_at = observation.get("observed_at")
+        timestamp = f"（记录时间：{observed_at}）" if observed_at else ""
+        label = _HEALTH_DISPLAY_LABELS.get(metric, metric)
+        lines.append(f"{label}：{display_value}{suffix}{timestamp}")
+    return "\n".join(lines)
+
+
+def _health_display_order(metric: str) -> tuple[int, str]:
+    return _HEALTH_DISPLAY_ORDER.get(metric, len(_HEALTH_DISPLAY_ORDER)), metric
+
+
+def _format_health_value(value: object) -> str:
+    if isinstance(value, float):
+        return f"{value:g}"
+    return str(value)
+
+
+def _format_kmh_to_pace(value: object) -> str | None:
+    try:
+        speed = float(value)
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(speed) or speed <= 0:
+        return None
+    seconds_per_km = math.floor(3600 / speed + 0.5)
+    minutes, seconds = divmod(seconds_per_km, 60)
+    return f"{minutes}:{seconds:02d}"
 
 
 def summarize_health_for_activity(

@@ -18,7 +18,12 @@ from sport_sync_bridge.activity_analysis import build_ai_analysis_prompt, summar
 from sport_sync_bridge.activity_library import LocalActivityLibrary
 from sport_sync_bridge.cli import main
 from sport_sync_bridge.formats import read_activity_file
-from sport_sync_bridge.health import import_health_csv, summarize_health, summarize_health_for_activity
+from sport_sync_bridge.health import (
+    format_health_summary_text,
+    import_health_csv,
+    summarize_health,
+    summarize_health_for_activity,
+)
 from sport_sync_bridge.sources import LocalFileSource
 from sport_sync_bridge.state import StateDB
 from sport_sync_bridge.training import (
@@ -222,6 +227,32 @@ class GarSyncLocalFeatureTests(unittest.TestCase):
         summary = summarize_health(self.state)
         self.assertEqual(summary["measurement_count"], 3)
         self.assertEqual(summary["latest"]["bmi"]["value"], 22.9)
+        text = format_health_summary_text(summary)
+        self.assertIn("体重：70 kg", text)
+        self.assertIn("BMI：22.9 kg/m²", text)
+
+    def test_health_text_summary_preserves_status_labels_and_formats_threshold_pace(self) -> None:
+        health_csv = self.root / "health-display.csv"
+        health_csv.write_text(
+            "date,metric,value,unit\n"
+            "2026-01-02,lt_speed,14.1,km/h\n"
+            "2026-01-02,hrv_status,Moderate,status\n"
+            "2026-01-02,ready_to_train,High,status\n",
+            encoding="utf-8",
+        )
+        import_health_csv(self.state, health_csv)
+
+        text = format_health_summary_text(summarize_health(self.state))
+
+        self.assertIn("乳酸阈值速度：4:15 /km（14.1 km/h）", text)
+        self.assertIn("HRV 状态：Moderate", text)
+        self.assertIn("训练准备状态：High", text)
+
+    def test_empty_health_text_summary(self) -> None:
+        self.assertEqual(
+            format_health_summary_text({"measurement_count": 0, "latest": {}}),
+            "测量记录：0\n暂无健康指标",
+        )
 
     def test_health_csv_imports_garsync_indicators_and_statuses(self) -> None:
         health_csv = self.root / "health-indicators.csv"

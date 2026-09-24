@@ -233,11 +233,12 @@ python sync.py workouts show <课表ID>
 python sync.py workouts export <课表ID> --output .\workout.fit
 ```
 
-健康指标可从 UTF-8 CSV 导入，支持 `date,metric,value,unit` 长表格式及带日期列的宽表。指标包括体重、身高、静息心率、HRV、血氧、睡眠、步数、压力、身体电量、血压，以及 AOT 中确认的跑步/骑行 VO₂max、睡眠分数、阈值心率/速度、卡路里、楼层、呼吸率、饮水量、恢复时长、HRV 状态、训练准备状态和完全恢复状态；体重与身高齐全时会计算 BMI。数值指标可用于本地汇总和 AI 活动分析；状态字段只保存 CSV 提供的标签，不计算设备侧准备度或恢复算法。
+健康指标可从 UTF-8 CSV 导入，支持 `date,metric,value,unit` 长表格式及带日期列的宽表。指标包括体重、身高、静息心率、HRV、血氧、睡眠、步数、压力、身体电量、血压，以及 AOT 中确认的跑步/骑行 VO₂max、睡眠分数、阈值心率/速度、卡路里、楼层、呼吸率、饮水量、恢复时长、HRV 状态、训练准备状态和完全恢复状态；体重与身高齐全时会计算 BMI。汇总默认输出 JSON，也可用文本格式查看指标名称和单位；乳酸阈值速度会同时显示每公里配速。数值指标可用于本地汇总和 AI 活动分析；状态字段只保存 CSV 提供的标签，不计算设备侧准备度或恢复算法。
 
 ```powershell
 python sync.py health import .\health.csv
 python sync.py health summary
+python sync.py health summary --format text
 ```
 
 AI 运动分析保留为可选功能。它把单次活动摘要、最近活动的周汇总和本地健康指标发送给 OpenAI 兼容的 Chat Completions 接口，不发送 GPS 坐标。可先检查提示词，再配置自己使用的远端或本地模型：

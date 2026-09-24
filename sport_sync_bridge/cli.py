@@ -47,7 +47,12 @@ from .ecg_signal import EcgSignalNormalizer
 from .engine import SyncEngine
 from .fit_tools import normalize_fit_coordinates
 from .formats import SUPPORTED_FORMATS, convert_activity_file, read_activity_file
-from .health import import_health_csv, summarize_health, summarize_health_for_activity
+from .health import (
+    format_health_summary_text,
+    import_health_csv,
+    summarize_health,
+    summarize_health_for_activity,
+)
 from .period_summary import calculate_period_summary, format_period_summary
 from .samba import import_samba_activity, list_samba_directory
 from .state import StateDB
@@ -310,7 +315,8 @@ def build_parser() -> argparse.ArgumentParser:
     health_actions = health_parser.add_subparsers(dest="health_action", required=True)
     health_import = health_actions.add_parser("import", help="Import a UTF-8 health CSV")
     health_import.add_argument("input", type=Path)
-    health_actions.add_parser("summary", help="Show latest health measurements")
+    health_summary = health_actions.add_parser("summary", help="Show latest health measurements")
+    health_summary.add_argument("--format", choices=["json", "text"], default="json")
 
     weather_parser = subparsers.add_parser("weather", help="Show current weather and outdoor exercise advice")
     weather_parser.add_argument("--lat", required=True, type=float, help="Latitude in decimal degrees")
@@ -970,7 +976,11 @@ def _run_local_command(args: argparse.Namespace, config: AppConfig) -> int:
                 imported = import_health_csv(state, args.input)
                 print(f"observations={imported}")
             else:
-                print(json.dumps(summarize_health(state), ensure_ascii=False, indent=2))
+                summary = summarize_health(state)
+                if args.format == "text":
+                    print(format_health_summary_text(summary))
+                else:
+                    print(json.dumps(summary, ensure_ascii=False, indent=2))
             return 0
         finally:
             state.close()
