@@ -119,6 +119,11 @@ def calculate_period_summary(
     scored = [item for item in activities if item["training_stress_score"] is not None]
     running = [item for item in activities if item["vdot"] is not None]
     vdot_values = [float(item["vdot"]) for item in running]
+    normalized_power_values = [
+        float(value)
+        for item in activities
+        if (value := _optional_nonnegative(item.get("normalized_power_w"))) is not None and value > 0
+    ]
     total_distance = sum(float(item["distance_m"]) for item in activities if item["distance_m"] is not None)
     total_duration = sum(float(item["duration_s"]) for item in activities if item["duration_s"] is not None)
     total_tss = sum(float(item["training_stress_score"]) for item in scored)
@@ -140,6 +145,12 @@ def calculate_period_summary(
         "vdot_start": vdot_values[0] if vdot_values else None,
         "vdot_end": vdot_values[-1] if vdot_values else None,
         "vdot_max": max(vdot_values) if vdot_values else None,
+        "avg_norm_power_w": (
+            sum(normalized_power_values) / len(normalized_power_values)
+            if normalized_power_values
+            else None
+        ),
+        "avg_norm_power_activity_count": len(normalized_power_values),
         "weekly_slices": weekly_slices,
         "recorded_zone_time_s": _aggregate_recorded_zone_time(activities),
         "power_curve_w": power_curve,
@@ -165,6 +176,7 @@ def format_period_summary(summary: dict[str, object], output_format: str) -> str
         f"时长：{_format_duration(float(summary['total_duration_s']))}",
         f"TSS：{_format_optional(summary['total_tss'])}（已评分 {summary['scored_tss_activity_count']}，未评分 {summary['unscored_tss_activity_count']}）",
         f"VDOT：起始 {_format_optional(summary['vdot_start'])}，结束 {_format_optional(summary['vdot_end'])}，最高 {_format_optional(summary['vdot_max'])}",
+        f"平均 NP：{_format_optional(summary['avg_norm_power_w'])} W（{summary['avg_norm_power_activity_count']} 次有效活动）",
         "周汇总：",
     ]
     weekly = summary["weekly_slices"]

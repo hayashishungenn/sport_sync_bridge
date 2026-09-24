@@ -37,6 +37,8 @@ class PeriodSummaryTests(unittest.TestCase):
 
         self.assertEqual(result["activity_count"], 3)
         self.assertEqual(result["fit_file_count"], 2)
+        self.assertIsNone(result["avg_norm_power_w"])
+        self.assertEqual(result["avg_norm_power_activity_count"], 0)
         self.assertEqual(result["total_distance_m"], 35000)
         self.assertEqual(result["total_duration_s"], 8400)
         self.assertEqual(result["total_tss"], 230)
@@ -48,6 +50,59 @@ class PeriodSummaryTests(unittest.TestCase):
         )
         self.assertEqual(result["key_activities"][0]["title"], "最长距离")
         self.assertIn("最高 TSS", format_period_summary(result, "txt"))
+
+    def test_period_averages_positive_normalized_power_per_activity(self) -> None:
+        rows = [
+            self._row(
+                "a" * 64,
+                "cycling",
+                "2026-01-01T08:00:00Z",
+                "fit",
+                20000,
+                3600,
+                150,
+                normalized_power=250,
+            ),
+            self._row(
+                "b" * 64,
+                "cycling",
+                "2026-01-02T08:00:00Z",
+                "fit",
+                20000,
+                3600,
+                150,
+                normalized_power=300,
+            ),
+            self._row(
+                "c" * 64,
+                "cycling",
+                "2026-01-03T08:00:00Z",
+                "fit",
+                20000,
+                3600,
+                150,
+                normalized_power=0,
+            ),
+            self._row(
+                "d" * 64,
+                "cycling",
+                "2026-01-04T08:00:00Z",
+                "fit",
+                20000,
+                3600,
+                150,
+            ),
+        ]
+
+        result = calculate_period_summary(
+            rows,
+            date_from=date(2026, 1, 1),
+            date_to=date(2026, 1, 7),
+        )
+
+        self.assertEqual(result["avg_norm_power_w"], 275)
+        self.assertEqual(result["avg_norm_power_activity_count"], 2)
+        self.assertIn("平均 NP：275.0 W（2 次有效活动）", format_period_summary(result, "txt"))
 
     def test_hr_tss_fallback_is_optional_and_fit_tss_takes_precedence(self) -> None:
         rows = [
@@ -284,6 +339,7 @@ class PeriodSummaryTests(unittest.TestCase):
         average_hr: float,
         *,
         tss: float | None = None,
+        normalized_power: float | None = None,
         zones: list[dict[str, object]] | None = None,
         file_path: Path | None = None,
     ) -> dict[str, object]:
@@ -295,6 +351,8 @@ class PeriodSummaryTests(unittest.TestCase):
         }
         if tss is not None:
             summary["training_stress_score"] = tss
+        if normalized_power is not None:
+            summary["normalized_power_w"] = normalized_power
         if zones is not None:
             summary["time_in_zone_messages"] = zones
         return {
