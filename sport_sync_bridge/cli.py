@@ -1394,6 +1394,8 @@ def _run_ble_command(args: argparse.Namespace, config: AppConfig) -> int:
             print(f"r_peaks={len(metrics.r_peak_indices)} rr_intervals={len(metrics.rr_intervals_ms)}")
             if metrics.heart_rate_bpm is not None:
                 print(f"heart_rate_bpm={metrics.heart_rate_bpm:.2f}")
+            if metrics.heart_rate_threshold_status is not None:
+                print(f"heart_rate_threshold_status={metrics.heart_rate_threshold_status}")
             print(f"output={output_path}")
             return 0
 

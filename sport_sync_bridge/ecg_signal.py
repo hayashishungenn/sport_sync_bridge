@@ -13,6 +13,8 @@ ECG_MAX_SAMPLE_RATE_HZ = 2000.0
 ECG_MIN_ANALYSIS_SECONDS = 5.0
 ECG_MOVING_AVERAGE_WINDOW_MS = 100.0
 ECG_R_PEAK_REFRACTORY_MS = 300.0
+ECG_BRADYCARDIA_THRESHOLD_BPM = 60.0
+ECG_TACHYCARDIA_THRESHOLD_BPM = 100.0
 ECG_LOW_PASS_RC_SECONDS = 0.013262911924324612
 ECG_HIGH_PASS_RC_SECONDS = 0.3183098861837907
 ECG_ANALYSIS_DISCLAIMER = "免责声明：此分析仅供参考，不能替代专业的医疗诊断。"
@@ -27,6 +29,7 @@ class EcgAnalysisMetrics:
     rr_intervals_ms: tuple[float, ...]
     average_rr_ms: float | None
     heart_rate_bpm: float | None
+    heart_rate_threshold_status: str | None
     disclaimer: str = ECG_ANALYSIS_DISCLAIMER
 
 
@@ -110,7 +113,18 @@ def analyze_bigrun_ecg_signal(
         rr_intervals_ms=rr_intervals,
         average_rr_ms=average_rr,
         heart_rate_bpm=heart_rate,
+        heart_rate_threshold_status=_heart_rate_threshold_status(heart_rate),
     )
+
+
+def _heart_rate_threshold_status(heart_rate_bpm: float | None) -> str | None:
+    if heart_rate_bpm is None:
+        return None
+    if heart_rate_bpm < ECG_BRADYCARDIA_THRESHOLD_BPM:
+        return "below_60_bpm"
+    if heart_rate_bpm > ECG_TACHYCARDIA_THRESHOLD_BPM:
+        return "above_100_bpm"
+    return "between_60_and_100_bpm"
 
 
 def _preprocess_bigrun_ecg_signal(

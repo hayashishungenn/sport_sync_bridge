@@ -212,7 +212,7 @@ python sync.py ble prefer <设备地址> --type heart_rate
 python sync.py ble remove <设备地址>
 ```
 
-`bigrun-ecg-analyze` 读取 `bigrun-ecg-decode` 生成的 JSON，要求采样率为 100–2000 Hz 且至少有 5 秒样本。它复现 APK 中的 100 ms 移动平均、0.5 Hz 高通、12 Hz 低通、R 峰检测和 R-R 间期计算，只输出心率与间期指标，不给出疾病分类；报告包含非医疗声明。
+`bigrun-ecg-analyze` 读取 `bigrun-ecg-decode` 生成的 JSON，要求采样率为 100–2000 Hz 且至少有 5 秒样本。它复现 APK 中的 100 ms 移动平均、0.5 Hz 高通、12 Hz 低通、R 峰检测和 R-R 间期计算，并按低于 60 bpm、高于 100 bpm 输出心率阈值状态。该状态只复现设备阈值提示，不是疾病分类；报告包含非医疗声明。
 
 已保存设备信息位于 `.data/ble_devices.json`。BLE 扫描和连接需要本机蓝牙适配器及操作系统授予的权限；命令必须运行在能够访问该适配器的环境中。WSL 的 NAT 代理警告只说明代理配置未传入 WSL，不能据此判断 BLE 是否可用。
 
