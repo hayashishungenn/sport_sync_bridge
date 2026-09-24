@@ -7,6 +7,7 @@ import json
 import os
 import sys
 import tempfile
+from collections.abc import Iterator
 from dataclasses import asdict
 from datetime import date, datetime, timezone
 from pathlib import Path
@@ -42,6 +43,7 @@ from .ble_bigrun_ecg import (
     validate_bigrun_ecg_options,
 )
 from .config import AppConfig
+from .ecg_signal import EcgSignalNormalizer
 from .engine import SyncEngine
 from .fit_tools import normalize_fit_coordinates
 from .formats import SUPPORTED_FORMATS, convert_activity_file, read_activity_file
@@ -256,6 +258,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     ble_bigrun_ecg_decode.add_argument("input", type=Path, help="Raw JSON Lines capture from bigrun-ecg")
     ble_bigrun_ecg_decode.add_argument("--output", type=Path, required=True, help="Decoded JSON output path")
+    ble_bigrun_ecg_decode.add_argument(
+        "--normalize",
+        action="store_true",
+        help="Add the APK-style -5..5 normalized waveform to the decoded JSON",
+    )
     ble_bigrun_ecg_mode = ble_actions.add_parser(
         "bigrun-ecg-mode",
         help="Set a BigRun ECG sensor work mode",
@@ -508,6 +515,33 @@ def _parse_target_format(value: str) -> tuple[str, str]:
         supported = ", ".join(sorted(SUPPORTED_FORMATS))
         raise argparse.ArgumentTypeError(f"format must be one of: {supported}")
     return target, activity_format
+
+
+def _iter_bigrun_ecg_capture(
+    input_path: Path,
+) -> Iterator[tuple[int, dict[str, object], tuple[int, ...] | None]]:
+    with input_path.open("r", encoding="utf-8") as input_stream:
+        for line_number, line in enumerate(input_stream, start=1):
+            if not line.strip():
+                continue
+            try:
+                record = json.loads(line)
+            except json.JSONDecodeError as exc:
+                raise ValueError(f"Invalid JSON on ECG capture line {line_number}") from exc
+            if not isinstance(record, dict) or not isinstance(record.get("payload_hex"), str):
+                raise ValueError(f"ECG capture line {line_number} has no payload_hex string")
+            try:
+                payload = bytes.fromhex(record["payload_hex"])
+            except ValueError as exc:
+                raise ValueError(f"Invalid payload_hex on ECG capture line {line_number}") from exc
+            payload_length = record.get("payload_length")
+            if payload_length is not None and (
+                isinstance(payload_length, bool)
+                or not isinstance(payload_length, int)
+                or payload_length != len(payload)
+            ):
+                raise ValueError(f"ECG capture line {line_number} has a mismatched payload_length")
+            yield line_number, record, decode_bigrun_ecg_payload(payload)
 
 
 def _target_format_map(values: list[tuple[str, str]] | None) -> dict[str, str]:
@@ -1183,55 +1217,53 @@ def _run_ble_command(args: argparse.Namespace, config: AppConfig) -> int:
             sample_count = 0
             decoded_frame_count = 0
             ignored_frame_count = 0
+            normalizer = EcgSignalNormalizer() if args.normalize else None
             try:
                 with os.fdopen(descriptor, "w", encoding="utf-8", newline="") as output_stream:
                     output_stream.write(
                         f'{{"sample_rate_hz":{BIGRUN_ECG_SAMPLE_RATE_HZ},"frames":['
                     )
-                    with input_path.open("r", encoding="utf-8") as input_stream:
-                        for line_number, line in enumerate(input_stream, start=1):
-                            if not line.strip():
-                                continue
-                            try:
-                                record = json.loads(line)
-                            except json.JSONDecodeError as exc:
-                                raise ValueError(f"Invalid JSON on ECG capture line {line_number}") from exc
-                            if not isinstance(record, dict) or not isinstance(record.get("payload_hex"), str):
-                                raise ValueError(f"ECG capture line {line_number} has no payload_hex string")
-                            try:
-                                payload = bytes.fromhex(record["payload_hex"])
-                            except ValueError as exc:
-                                raise ValueError(f"Invalid payload_hex on ECG capture line {line_number}") from exc
-                            payload_length = record.get("payload_length")
-                            if payload_length is not None and (
-                                isinstance(payload_length, bool)
-                                or not isinstance(payload_length, int)
-                                or payload_length != len(payload)
-                            ):
-                                raise ValueError(f"ECG capture line {line_number} has a mismatched payload_length")
-
-                            frame_samples = decode_bigrun_ecg_payload(payload)
-                            if frame_samples is None:
-                                ignored_frame_count += 1
-                                continue
-                            if decoded_frame_count:
-                                output_stream.write(",")
-                            frame = {"samples": frame_samples}
-                            timestamp = record.get("timestamp")
-                            if timestamp is not None:
-                                if not isinstance(timestamp, str):
-                                    raise ValueError(
-                                        f"ECG capture line {line_number} has an invalid timestamp"
-                                    )
-                                frame["timestamp"] = timestamp
-                            output_stream.write(json.dumps(frame, separators=(",", ":")))
-                            decoded_frame_count += 1
-                            sample_count += len(frame_samples)
+                    for line_number, record, frame_samples in _iter_bigrun_ecg_capture(input_path):
+                        if frame_samples is None:
+                            ignored_frame_count += 1
+                            continue
+                        if normalizer is not None:
+                            normalizer.observe(frame_samples)
+                        if decoded_frame_count:
+                            output_stream.write(",")
+                        frame = {"samples": frame_samples}
+                        timestamp = record.get("timestamp")
+                        if timestamp is not None:
+                            if not isinstance(timestamp, str):
+                                raise ValueError(
+                                    f"ECG capture line {line_number} has an invalid timestamp"
+                                )
+                            frame["timestamp"] = timestamp
+                        output_stream.write(json.dumps(frame, separators=(",", ":")))
+                        decoded_frame_count += 1
+                        sample_count += len(frame_samples)
 
                     output_stream.write(
                         f'],"sample_count":{sample_count},"decoded_frame_count":{decoded_frame_count},'
-                        f'"ignored_frame_count":{ignored_frame_count}}}\n'
+                        f'"ignored_frame_count":{ignored_frame_count}'
                     )
+                    if normalizer is not None:
+                        output_stream.write(',"normalized_samples":[')
+                        normalized_count = 0
+                        for _, _, frame_samples in _iter_bigrun_ecg_capture(input_path):
+                            if frame_samples is None:
+                                continue
+                            for sample in frame_samples:
+                                if normalized_count:
+                                    output_stream.write(",")
+                                output_stream.write(
+                                    json.dumps(normalizer.normalize_value(sample), allow_nan=False)
+                                )
+                                normalized_count += 1
+                        if normalized_count != sample_count:
+                            raise ValueError("ECG capture changed while normalized samples were being written")
+                        output_stream.write("]")
+                    output_stream.write("}\n")
                     output_stream.flush()
                     os.fsync(output_stream.fileno())
                 os.replace(temporary_path, output_path)
@@ -1240,6 +1272,8 @@ def _run_ble_command(args: argparse.Namespace, config: AppConfig) -> int:
                     temporary_path.unlink()
 
             print(f"frames={decoded_frame_count} samples={sample_count} sample_rate_hz={BIGRUN_ECG_SAMPLE_RATE_HZ}")
+            if normalizer is not None:
+                print(f"normalized_samples={sample_count}")
             print(f"output={output_path}")
             return 0
 

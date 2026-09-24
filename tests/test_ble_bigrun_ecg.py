@@ -72,7 +72,14 @@ class BigRunEcgTests(unittest.TestCase):
                 contextlib.redirect_stdout(stdout),
             ):
                 status = main(
-                    ["ble", "bigrun-ecg-decode", str(input_path), "--output", str(output_path)]
+                    [
+                        "ble",
+                        "bigrun-ecg-decode",
+                        str(input_path),
+                        "--normalize",
+                        "--output",
+                        str(output_path),
+                    ]
                 )
 
             self.assertEqual(status, 0)
@@ -84,6 +91,37 @@ class BigRunEcgTests(unittest.TestCase):
             self.assertEqual(decoded["sample_rate_hz"], 125)
             self.assertEqual(decoded["ignored_frame_count"], 1)
             self.assertEqual(decoded["decoded_frame_count"], 1)
+            self.assertEqual(decoded["normalized_samples"], [-5.0, 5.0])
+            self.assertIn("normalized_samples=2", stdout.getvalue())
+
+    def test_cli_decode_keeps_normalization_opt_in(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            config = SimpleNamespace(
+                data_dir=root / ".data",
+                db_path=root / ".data" / "state.db",
+                log_level="INFO",
+                log_path=root / "sync.log",
+            )
+            input_path = root / "ecg.jsonl"
+            input_path.write_text(
+                json.dumps({"payload_hex": "410010271827", "payload_length": 6}) + "\n",
+                encoding="utf-8",
+            )
+            output_path = root / "decoded.json"
+
+            with (
+                patch("sport_sync_bridge.cli.AppConfig.load", return_value=config),
+                patch("sport_sync_bridge.cli.configure_logging"),
+                contextlib.redirect_stdout(io.StringIO()),
+            ):
+                status = main(
+                    ["ble", "bigrun-ecg-decode", str(input_path), "--output", str(output_path)]
+                )
+
+            self.assertEqual(status, 0)
+            decoded = json.loads(output_path.read_text(encoding="utf-8"))
+            self.assertNotIn("normalized_samples", decoded)
 
     def test_identifies_bigrun_service_for_ble_registry(self) -> None:
         self.assertIn("bigrun_ecg", BLE_TYPES)
