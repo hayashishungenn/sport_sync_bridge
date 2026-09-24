@@ -198,6 +198,275 @@ def format_activity_report(rows: Iterable[object], output_format: str) -> str:
     raise ValueError(f"Unsupported activity report format: {output_format}")
 
 
+def write_activity_report_pdf(rows: Iterable[object], output_path: Path) -> Path:
+    try:
+        from reportlab.lib import colors
+        from reportlab.lib.pagesizes import A4
+        from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+        from reportlab.pdfbase import pdfmetrics
+        from reportlab.pdfbase.cidfonts import UnicodeCIDFont
+        from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+    except ImportError as exc:
+        raise RuntimeError("PDF reports require ReportLab; install the project requirements") from exc
+
+    rows = list(rows)
+    fields = (
+        "activity_id",
+        "name",
+        "sport_type",
+        "start_time",
+        "distance_m",
+        "elapsed_time_s",
+        "timer_time_s",
+        "average_speed_mps",
+        "average_heart_rate_bpm",
+        "maximum_heart_rate_bpm",
+        "average_cadence_rpm",
+        "average_power_w",
+        "maximum_power_w",
+        "normalized_power_w",
+        "intensity_factor",
+        "aerobic_training_effect",
+        "anaerobic_training_effect",
+        "training_stress_score",
+        "total_ascent_m",
+        "time_in_zone_messages",
+        "lap_count",
+        "track_point_count",
+    )
+    labels = {
+        "activity_id": "活动 ID",
+        "name": "名称",
+        "sport_type": "运动类型",
+        "start_time": "开始时间",
+        "distance_m": "距离",
+        "elapsed_time_s": "总时长",
+        "timer_time_s": "运动时长",
+        "average_speed_mps": "平均速度",
+        "average_heart_rate_bpm": "平均心率",
+        "maximum_heart_rate_bpm": "最高心率",
+        "average_cadence_rpm": "平均踏频",
+        "average_power_w": "平均功率",
+        "maximum_power_w": "最高功率",
+        "normalized_power_w": "标准化功率",
+        "intensity_factor": "强度因子",
+        "aerobic_training_effect": "有氧训练效果",
+        "anaerobic_training_effect": "无氧训练效果",
+        "training_stress_score": "训练压力分",
+        "total_ascent_m": "总爬升",
+        "time_in_zone_messages": "区间时间",
+        "lap_count": "圈数",
+        "track_point_count": "轨迹点数",
+    }
+    summaries = [_row_summary(row) for row in rows]
+    records = [
+        {
+            key: str(row["fingerprint"])[:12] if key == "activity_id" else summary.get(key)
+            for key in fields
+        }
+        for row, summary in zip(rows, summaries)
+    ]
+
+    font_name = "STSong-Light"
+    if font_name not in pdfmetrics.getRegisteredFontNames():
+        pdfmetrics.registerFont(UnicodeCIDFont(font_name))
+
+    sample_styles = getSampleStyleSheet()
+    title_style = ParagraphStyle(
+        "ActivityPdfTitle",
+        parent=sample_styles["Title"],
+        fontName=font_name,
+        fontSize=18,
+        leading=23,
+        alignment=0,
+        textColor=colors.HexColor("#172554"),
+        spaceAfter=5,
+    )
+    activity_style = ParagraphStyle(
+        "ActivityPdfHeading",
+        parent=sample_styles["Heading2"],
+        fontName=font_name,
+        fontSize=12,
+        leading=16,
+        textColor=colors.HexColor("#1E3A8A"),
+        spaceBefore=10,
+        spaceAfter=5,
+        keepWithNext=True,
+    )
+    label_style = ParagraphStyle(
+        "ActivityPdfLabel",
+        parent=sample_styles["BodyText"],
+        fontName=font_name,
+        fontSize=7.5,
+        leading=10,
+        textColor=colors.HexColor("#475569"),
+        wordWrap="CJK",
+    )
+    value_style = ParagraphStyle(
+        "ActivityPdfValue",
+        parent=sample_styles["BodyText"],
+        fontName=font_name,
+        fontSize=7.5,
+        leading=10,
+        wordWrap="CJK",
+    )
+    metadata_style = ParagraphStyle(
+        "ActivityPdfMetadata",
+        parent=sample_styles["BodyText"],
+        fontName=font_name,
+        fontSize=8,
+        leading=11,
+        textColor=colors.HexColor("#475569"),
+        spaceAfter=10,
+    )
+    zone_style = ParagraphStyle(
+        "ActivityPdfZone",
+        parent=sample_styles["BodyText"],
+        fontName=font_name,
+        fontSize=7,
+        leading=9,
+        wordWrap="CJK",
+        leftIndent=4,
+        spaceAfter=2,
+    )
+
+    def escape_paragraph(value: object) -> str:
+        text = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f]", "", str(value))
+        return html.escape(text, quote=False).replace("\n", "<br/>")
+
+    def format_value(key: str, value: object) -> str:
+        if value is None:
+            return "未知"
+        number = _number(value)
+        if key == "distance_m" and number is not None:
+            return f"{value} 米（{number / 1000:.2f} 公里）"
+        if key in {"elapsed_time_s", "timer_time_s"} and number is not None:
+            return f"{value} 秒（{_format_duration(number)}）"
+        if key == "average_speed_mps" and number is not None:
+            return f"{value} 米/秒（{number * 3.6:.2f} 公里/小时）"
+        if key == "time_in_zone_messages":
+            return json.dumps(value, ensure_ascii=False, separators=(",", ":"))
+        units = {
+            "average_heart_rate_bpm": "bpm",
+            "maximum_heart_rate_bpm": "bpm",
+            "average_cadence_rpm": "rpm",
+            "average_power_w": "W",
+            "maximum_power_w": "W",
+            "normalized_power_w": "W",
+            "training_stress_score": "TSS",
+            "total_ascent_m": "m",
+            "lap_count": "圈",
+            "track_point_count": "点",
+        }
+        if key in units and number is not None:
+            return f"{value} {units[key]}"
+        if number is not None:
+            return str(value)
+        if isinstance(value, (dict, list)):
+            return json.dumps(value, ensure_ascii=False, separators=(",", ":"))
+        return str(value)
+
+    output_path = Path(output_path).expanduser().resolve()
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    temporary_path: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="wb",
+            dir=output_path.parent,
+            prefix=f".{output_path.name}-",
+            suffix=".tmp",
+            delete=False,
+        ) as handle:
+            temporary_path = Path(handle.name)
+
+        document = SimpleDocTemplate(
+            str(temporary_path),
+            pagesize=A4,
+            leftMargin=36,
+            rightMargin=36,
+            topMargin=36,
+            bottomMargin=40,
+            title="运动活动报告",
+            author="sport_sync_bridge",
+        )
+        available_width = A4[0] - document.leftMargin - document.rightMargin
+        label_width = available_width * 0.15
+        value_width = available_width * 0.35
+        story = [
+            Paragraph("运动活动报告", title_style),
+            Paragraph(
+                f"生成时间：{datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}　活动数：{len(records)}",
+                metadata_style,
+            ),
+        ]
+        if not records:
+            story.append(Paragraph("当前活动库没有记录。", value_style))
+
+        for index, record in enumerate(records, start=1):
+            heading = f"{index}. {record.get('sport_type') or '未知运动'} | {record.get('name') or '未命名活动'}"
+            story.append(Paragraph(escape_paragraph(heading), activity_style))
+            table_rows = []
+            metric_fields = [field for field in fields if field != "time_in_zone_messages"]
+            for offset in range(0, len(metric_fields), 2):
+                first = metric_fields[offset]
+                second = metric_fields[offset + 1] if offset + 1 < len(metric_fields) else None
+                table_rows.append(
+                    [
+                        Paragraph(escape_paragraph(labels[first]), label_style),
+                        Paragraph(escape_paragraph(format_value(first, record.get(first))), value_style),
+                        Paragraph(escape_paragraph(labels[second]), label_style) if second else "",
+                        Paragraph(escape_paragraph(format_value(second, record.get(second))), value_style)
+                        if second
+                        else "",
+                    ]
+                )
+            table = Table(
+                table_rows,
+                colWidths=[label_width, value_width, label_width, value_width],
+                hAlign="LEFT",
+                splitByRow=1,
+            )
+            table.setStyle(
+                TableStyle(
+                    [
+                        ("BACKGROUND", (0, 0), (0, -1), colors.HexColor("#F1F5F9")),
+                        ("BACKGROUND", (2, 0), (2, -1), colors.HexColor("#F1F5F9")),
+                        ("GRID", (0, 0), (-1, -1), 0.35, colors.HexColor("#CBD5E1")),
+                        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                        ("LEFTPADDING", (0, 0), (-1, -1), 4),
+                        ("RIGHTPADDING", (0, 0), (-1, -1), 4),
+                        ("TOPPADDING", (0, 0), (-1, -1), 3),
+                        ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+                    ]
+                )
+            )
+            story.append(table)
+            zones = record.get("time_in_zone_messages") or []
+            story.append(Paragraph(escape_paragraph(labels["time_in_zone_messages"]), label_style))
+            if zones:
+                zone_text = json.dumps(zones, ensure_ascii=False, separators=(",", ":"))
+                for start in range(0, len(zone_text), 130):
+                    story.append(Paragraph(escape_paragraph(zone_text[start : start + 130]), zone_style))
+            else:
+                story.append(Paragraph("无", zone_style))
+            story.append(Spacer(1, 8))
+
+        def draw_footer(canvas: object, doc: object) -> None:
+            canvas.saveState()
+            canvas.setFont(font_name, 7)
+            canvas.setFillColor(colors.HexColor("#64748B"))
+            canvas.drawString(doc.leftMargin, 22, "sport_sync_bridge")
+            canvas.drawRightString(A4[0] - doc.rightMargin, 22, f"{doc.page}")
+            canvas.restoreState()
+
+        document.build(story, onFirstPage=draw_footer, onLaterPages=draw_footer)
+        os.replace(temporary_path, output_path)
+    finally:
+        if temporary_path is not None:
+            temporary_path.unlink(missing_ok=True)
+    return output_path
+
+
 def build_ai_analysis_prompt(
     activity_summary: dict[str, object],
     recent_rows: Iterable[object],

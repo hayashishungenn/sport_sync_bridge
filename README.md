@@ -162,6 +162,7 @@ python sync.py library period --from 2026-01-01 --to 2026-03-31 --threshold-hr 1
 python sync.py library balance --threshold-hr 180 --resting-hr 60 --from 2026-01-01
 python sync.py library vdot --from 2026-01-01 --format json
 python sync.py library report --format html --output .\activities.html
+python sync.py library report --format pdf --output .\activities.pdf
 python sync.py library route <活动ID前缀> --to gpx --output .\route.gpx
 python sync.py library merge .\part-1.fit .\part-2.fit --output .\merged.fit --name "合并骑行"
 python sync.py sync --source local --target strava --format strava=tcx

@@ -11,6 +11,7 @@ from .activity_analysis import (
     build_ai_analysis_prompt,
     format_activity_report,
     validate_ai_language_code,
+    write_activity_report_pdf,
     write_ai_analysis_markdown,
 )
 from .activity_library import LocalActivityLibrary
@@ -119,8 +120,8 @@ def build_parser() -> argparse.ArgumentParser:
     library_vdot.add_argument("--to", dest="date_to", help="Last activity date to include (inclusive)")
     library_vdot.add_argument("--format", choices=["json", "txt"], default="json")
     library_report = library_actions.add_parser("report", help="Export local activity summaries")
-    library_report.add_argument("--format", choices=["txt", "json", "csv", "html"], default="txt")
-    library_report.add_argument("--output", type=Path, help="Output path; omit to print to stdout")
+    library_report.add_argument("--format", choices=["txt", "json", "csv", "html", "pdf"], default="txt")
+    library_report.add_argument("--output", type=Path, help="Output path; omit to print text reports to stdout")
     library_route = library_actions.add_parser("route", help="Export one activity track")
     library_route.add_argument("activity_id", help="Activity fingerprint or its unique prefix")
     library_route.add_argument("--to", choices=sorted(SUPPORTED_FORMATS), required=True)
@@ -223,6 +224,13 @@ def main(argv: list[str] | None = None) -> int:
     root_dir = Path(__file__).resolve().parent.parent
     parser = build_parser()
     args = parser.parse_args(argv)
+    if (
+        args.command == "library"
+        and args.library_action == "report"
+        and args.format == "pdf"
+        and args.output is None
+    ):
+        parser.error("library report --format pdf requires --output")
     try:
         target_formats = _target_format_map(getattr(args, "target_formats", None))
     except ValueError as exc:
@@ -543,14 +551,18 @@ def _run_local_command(args: argparse.Namespace, config: AppConfig) -> int:
 
             if args.library_action == "report":
                 rows = state.list_local_activities()
-                report = format_activity_report(rows, args.format)
-                if args.output:
-                    output_path = args.output.expanduser().resolve()
-                    output_path.parent.mkdir(parents=True, exist_ok=True)
-                    output_path.write_text(report, encoding="utf-8", newline="")
+                if args.format == "pdf":
+                    output_path = write_activity_report_pdf(rows, args.output)
                     print(f"written={output_path}")
                 else:
-                    print(report, end="")
+                    report = format_activity_report(rows, args.format)
+                    if args.output:
+                        output_path = args.output.expanduser().resolve()
+                        output_path.parent.mkdir(parents=True, exist_ok=True)
+                        output_path.write_text(report, encoding="utf-8", newline="")
+                        print(f"written={output_path}")
+                    else:
+                        print(report, end="")
                 return 0
 
             if args.library_action == "route":
