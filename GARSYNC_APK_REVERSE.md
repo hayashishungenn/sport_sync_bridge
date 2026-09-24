@@ -140,7 +140,13 @@ AOT 伪代码与 Blutter ARM64 汇编交叉确认了 GarSync 的计算步骤：H
 
 `PeriodSummaryService.computeFast` 排序周期活动后调用距离、时长、TSS、能力估算、踏频、标准化功率、时间切片、PR、训练类型/强度模型、心率区间、关键活动和活动日志计算。`PeriodStats.toJson` 的字段名确认有 `totalDistance`、`totalDuration`、`activityCount`、`totalTSS`、`vdotStart`、`vdotEnd`、`weeklySlices`、`keyActivities` 与 `activityLog` 等；`WeeklySlice.toJson` 包含周起始日、距离、时长、活动数、TSS、均速和均功率。`_buildTimeSlices` 的周键通过 `_mondayOf` 格式为 `yyyy-MM-dd`。
 
-关键活动函数可见七项标签和比较指标：最长距离、最高 TSS、最快配速、最高 NP、最高爬升、最长时长、最高均速。`library period` 已从本地活动摘要重建周期总量、周切片、支持的 TSS/跑步 VDOT 字段、活动日志和这七类亮点。`recorded_zone_time_s` 按活动 FIT `time_in_zone` 已存的 `heart_rate_zones`、`speed_zones`、`cadence_zones`、`power_zones` 秒数累加，和 APK `_accumulateHrZones` / `_accumulatePaceZones` 从活动采样与阈值生成的周期分布不是同一种计算。HR-TSS 仅在用户提供阈值心率时估算。训练类型分类、基于采样点重算的分区分布、PR 检测和 FTP/CSS 估计尚未复刻；相关 AOT 伪代码仍有对象字段和动态派发恢复限制。
+关键活动函数可见七项标签和比较指标：最长距离、最高 TSS、最快配速、最高 NP、最高爬升、最长时长、最高均速。`library period` 已从本地活动摘要重建周期总量、周切片、支持的 TSS/跑步 VDOT 字段、活动日志和这七类亮点。`recorded_zone_time_s` 按活动 FIT `time_in_zone` 已存的 `heart_rate_zones`、`speed_zones`、`cadence_zones`、`power_zones` 秒数累加，和 APK `_accumulateHrZones` / `_accumulatePaceZones` 从活动采样与阈值生成的周期分布不是同一种计算。HR-TSS 仅在用户提供阈值心率时估算。训练类型分类、基于采样点重算的分区分布和 FTP/CSS 估计尚未复刻。PR 函数目前只恢复运动档位、距离候选窗口和输出模型字段，历史基准选择及触发规则尚未确认，因此也未复刻。
+
+### 周期 PR 检测线索
+
+`PeriodSummaryService._detectPRs` 的 AOT 代码根据运动类型选择距离档位：跑步为 `5K`、`10K`、`halfMarathon`、`marathon`，骑行为 `40K`，游泳为 `100m`、`400m`、`1500m`。AArch64 汇编将目标距离乘以常量 `0x3f9eb851eb851eb8`（IEEE-754 值为 `0.03`），再比较活动距离与目标距离的绝对差；这表明候选活动的距离范围约为目标距离的正负 3%。候选活动的 `duration` 字段参与比较。`PRChange.toJson` 输出 `prType`、`oldValue`、`newValue`、`achievedAt`、`activityId` 和 `improvementPct`。
+
+伪代码中两个内部列表的来源和 `oldValue` 的历史基准选取过程无法可靠还原，`_detectPRs` 也没有足够信息证明它只比较当前周期还是会读取周期外的历史成绩。此处只记录已从常量、字段和输出模型中验证的线索，不将推断扩展成 PR 检测实现。
 
 ### 周期标准化功率平均值
 
