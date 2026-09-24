@@ -242,6 +242,40 @@ AOT class 表确认 `TrainingType` 是六值枚举；活动详情页构造的本
 
 本项目现有 `ai-analysis` CLI 已提供相同的三种侧重点和详略值，语言代码可选，默认 `zh-CN`；没有复刻 GarSync 偏好持久化。其健康上下文来自用户导入的健康 CSV；按活动开始前的最新记录和活动结束当日 UTC 日末前的记录筛选，并保留测量时间，排除活动日期之后的数据。CSV 普通观测不会被推断成睡眠阶段、HRV 基线或建议恢复时长。项目尚无独立年龄/运动员档案，也没有 GarSync 的 Training Type 分类。AI 接口、提示词和静态字段均不证明 GarSync 运行时实际发送了哪些数据。
 
+## 底层实现复核：数据、同步与 AI 请求
+
+本节依据 AOTopsy 伪代码、反编译出的 SQL 常量和 APK native 库清单整理。伪代码保留了控制流和字符串，但动态派发、变量名与部分异常分支仍未恢复成原始源码。
+
+### SQLite 存储与损坏恢复
+
+`SqliteDataSource` 通过 `FfiSqlite3.open` 打开数据库，设置 WAL、`synchronous=NORMAL`、5 秒 `busy_timeout` 和外键约束，并调用 `PRAGMA integrity_check`。数据库版本由 `PRAGMA user_version` 管理；升级在 `BEGIN IMMEDIATE` 事务内运行，完成后设为版本 8 并提交，异常路径回滚后重新抛出。初始化和每次打开还会检查关键列。
+
+恢复逻辑会尝试打开临时 `.recovery` 数据库，读取原库中非 SQLite 内部表名，并逐表构造 `INSERT INTO ... VALUES (...)` 写入语句。伪代码还包含带 `.corrupted.<时间>` 后缀的文件重命名路径；无法恢复时有删除损坏库并新建数据库的分支。AOT 导出没有完整恢复临时库与原库的替换顺序，也无法证明每张表都能无损恢复。
+
+已读到的迁移包括：V3 为活动增加本地开始时间；V4 为体重记录增加测量时间；V5 增加 metadata fingerprint；V6 为同步元数据增加 `remote_id`、`format` 和快照版本，并回填旧 ID；V7 有测量时间从文本到整数的兼容迁移标记；V8 为训练计划增加个人备注。V7 的确切数据转换代码没有从当前伪代码中恢复出来。
+
+数据库共有 14 个业务表：`activities`、`metadata_entries`、`metadata_snapshots`、`training_readiness`、`user_summaries`、`sleeps`、`workouts`、`routes`、`weights`、`ai_analysis`、`training_tasks`、`training_phases`、`training_plans` 和 `schedule_items`。活动表保存运动类型、时间、距离、速度、功率、心率、训练效果、左右平衡、轨迹摘要和设备等统计字段。`ai_analysis` 以活动 ID 为主键，当前模型按每项活动保存一条分析。
+
+同步索引使用 `(source_id, data_type, entry_id)` 作为 `metadata_entries` 复合主键；另存平台远端 ID、跨平台 fingerprint、格式、hash、开始时间、本地时间、名称和扩展 JSON。`metadata_snapshots` 以 `(source_id, data_type)` 为键，保存更新时间、初始化状态和版本。快照刷新路径会替换该来源/数据类型的旧条目，再写入新快照和条目；时间范围查询使用 `start_time` 索引。这里的索引结构说明它能支撑增量扫描和跨来源匹配，但具体 fingerprint 算法仍需单独跟踪其生成调用。
+
+### 数据源与同步执行引擎
+
+`DataSourceManager` 通过平台工厂构造数据源，按账号配置创建或复用实例，并提供缓存清除入口。通用 `DataSource.listAll` 分为 offset 分页和时间分页两条路径；两条路径都逐页累积数据，并在需要时延迟后继续请求。精确终止阈值受 AOT 动态派发影响，报告不把伪代码中的常量直接解释为固定页大小。
+
+同步任务由 `FileTaskStore` 读写 JSON。`SyncManager.prepareTask` 读取任务配置、取得来源数据快照并生成各数据类型的预览；执行阶段支持暂停、恢复和取消。`FileCheckpointStore` 使用 `cp_<标识>_<标识>.json` 保存检查点，检查点模型含数据类型和已完成条目 ID。同步执行器会批量刷新索引、记录进度，并在错误分支重试；静态日志还显示对大批量同步有确认流程、对目标 ID 缺失和目标不接受的运动类型有跳过分支。各平台具体认证与 API 请求仍必须逐适配器分析，不能由通用同步器推断。
+
+本地文件数据源同时承担格式适配：活动文件定位器含有 `yyyyMMdd_HHmmss` 时间标识生成路径，按活动、用户、健康和训练计划等类别解析目录。读取活动时可将 FIT 转成 TCX 或 GPX；写入时可将 TCX、GPX 转成 FIT，再解析成统一活动对象并保存活动 JSON metadata sidecar。metadata 读取路径还兼容旧 JSON sidecar。由此可见，FIT 是本地活动数据源的重要规范化格式，XML 可作为交换格式；这不代表每个云平台适配器都只收发 FIT。
+
+### AI 模型与流式请求底座
+
+`AiModelManager` 从偏好设置读取 `active_ai_model_id`，再从模型目录解析模型配置。配置对象的字段包括模型 ID、provider、模型名、接口地址、请求温度、最大 token 数和认证字段。静态代码显示模型目录会经网络读取并在客户端解密配置；报告不提取或复述任何密钥值。
+
+`AiChatService` 使用 Chat Completions 风格的 JSON 请求：消息由 system 与 user 两种角色组成，参数包括 `model`、`messages`、`temperature`、`max_tokens` 和 `stream=true`。请求使用 JSON 内容类型、Bearer 认证、`Accept: text/event-stream` 与 `Cache-Control: no-cache`。SSE 解析器识别 `data:` 行和 `[DONE]`，从 `choices[0].delta.content` 累积文本；另有 JSON 模式的响应解析和对 Markdown 代码围栏、尾随逗号的修复路径。不同服务商的完整兼容差异没有通过在线请求验证。
+
+单次活动分析结果由 `AiAnalysisRepository` 写入本地 Markdown 文件，并把活动 ID、来源、模型名、正文、时间和元数据保存到本地数据源。AI 页面在开始分析前显示功能确认，完成并保存后再调用功能额度扣减；具体计价未能从静态代码确认。请求构造路径存在 `debugPrintThrottled` 输出 URL、system/user prompt 和响应状态的调用；这些调用在发布版日志中的可见性没有运行验证。
+
+APK 的 Flutter 活动实现集中在 arm64 `libapp.so` AOT 快照，Android 侧还打包 Flutter、Dart JNI 和 SQLite native 库。当前已从 AOT 跟到 SQLite FFI 与 AI HTTP/SSE 业务层，但尚未把所有 JNI 方法、native 导出符号和每个云适配器协议逐一还原，因此“底层”仍有明确未覆盖边界。
+
 ## 证据文件与限制
 
 完整解包和静态分析产物保存在被 `.gitignore` 忽略的 `.data/apk_reverse/`，没有随报告提交：
