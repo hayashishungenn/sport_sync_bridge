@@ -251,9 +251,23 @@ AI 运动分析保留为可选功能。它把单次活动摘要、最近活动�
 ```powershell
 python sync.py ai-analysis <活动ID前缀> --prompt-only
 python sync.py ai-analysis <活动ID前缀> --prompt-only --language en-US --focus recovery --detail detailed
+python sync.py ai-analysis <骑行活动ID前缀> --force-vector-json .\force-vector.json --force-vector-focus stability --prompt-only
 ```
 
 `--language` 接受语言代码，默认 `zh-CN`；`--focus` 可选 `performance`、`health` 或 `recovery`，默认 `performance`；`--detail` 可选 `brief`、`normal` 或 `detailed`，默认 `normal`。提示词会要求模型准确引用已有数值，并避免医疗诊断。健康指标按活动时间筛选：活动开始前各指标最近一次记录，以及活动结束后至结束日 UTC 日末的记录；不把活动之后其他日期的数据带入历史活动分析，所有指标都保留时间戳。
+
+`ai-analysis --force-vector-json` 使用 GarSync 骑行 AI 教练的功率矢量提示词，并复用当前模型配置、活动分析历史和 Markdown 结果保存。输入使用本项目约定的 JSON 结构，最多包含 12 个左/右脚 30° 节点数组，以及左右脚的力矩有效性（TE）和踩踏平顺度（PS）百分比；缺少字段会留空，不从缺失测量推算。节点数值单位由来源设备决定，项目不擅自换算。`--force-vector-focus` 支持 `comprehensive`、`stability` 和 `peak_power`；`--detail`、`--language` 与 `--question` 继续生效。`--prompt-only` 可在不请求 AI 服务的情况下查看发送内容。
+
+```json
+{
+  "left_foot_nodes": [12.0, 15.5, 20.0],
+  "right_foot_nodes": [11.0, 14.0, 19.5],
+  "left_torque_effectiveness_percent": 75.2,
+  "right_torque_effectiveness_percent": 70.4,
+  "left_pedal_smoothness_percent": 22.1,
+  "right_pedal_smoothness_percent": 19.8
+}
+```
 
 在 `.env` 中设置 `AI_API_BASE_URL`、`AI_MODEL`，远端服务需要时再设置 `AI_API_KEY`。请求成功后会在本地 SQLite 保存模型名和分析正文，并在数据目录的 `ai_analysis/<活动指纹>/<结果ID>.md` 保存 Markdown 副本；可用 `python sync.py ai-analysis <活动ID前缀> --history` 查看数据库历史。项目不会附带 GarSync 的服务凭据或计费代码。
 

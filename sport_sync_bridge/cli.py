@@ -48,6 +48,11 @@ from .ecg_signal import EcgSignalNormalizer, analyze_bigrun_ecg_signal
 from .engine import SyncEngine
 from .fit_tools import normalize_fit_coordinates
 from .formats import SUPPORTED_FORMATS, convert_activity_file, read_activity_file
+from .force_vector_analysis import (
+    FORCE_VECTOR_FOCUSES,
+    build_force_vector_analysis_prompt,
+    load_force_vector_snapshot,
+)
 from .health import (
     format_health_summary_text,
     import_health_csv,
@@ -367,6 +372,17 @@ def build_parser() -> argparse.ArgumentParser:
         choices=["brief", "normal", "detailed"],
         default="normal",
         help="Response detail level (default: normal)",
+    )
+    ai_parser.add_argument(
+        "--force-vector-json",
+        type=Path,
+        help="Analyze a local Force Vector snapshot with the cycling AI coach prompt",
+    )
+    ai_parser.add_argument(
+        "--force-vector-focus",
+        choices=list(FORCE_VECTOR_FOCUSES),
+        default="comprehensive",
+        help="Force Vector focus when --force-vector-json is used",
     )
     ai_parser.add_argument("--prompt-only", action="store_true", help="Print the analysis prompt without sending data")
     ai_parser.add_argument("--history", action="store_true", help="Show saved analyses without contacting the AI service")
@@ -1030,50 +1046,70 @@ def _run_local_command(args: argparse.Namespace, config: AppConfig) -> int:
             if row is None:
                 raise ValueError(f"Local activity was not found: {args.activity_id}")
             if args.history:
+                if args.force_vector_json is not None or args.force_vector_focus != "comprehensive":
+                    raise ValueError("Force Vector options cannot be combined with --history")
                 results = state.list_ai_analysis_results(row["fingerprint"])
                 print(json.dumps([dict(result) for result in results], ensure_ascii=False, indent=2))
                 return 0
             summary = json.loads(row["summary_json"])
             summary.update({"name": row["name"], "sport_type": row["sport_type"]})
             summary["start_time"] = row["start_time"] or summary.get("start_time")
-            health_context = summarize_health_for_activity(
-                state, summary.get("start_time"), summary.get("end_time")
-            )
-            speed_samples = None
-            health_before = health_context.get("before_activity")
-            threshold_speed = (
-                health_before.get("lactate_threshold_speed_kmh")
-                if isinstance(health_before, dict)
-                else None
-            )
-            if (
-                isinstance(threshold_speed, dict)
-                and str(threshold_speed.get("unit") or "").strip().casefold()
-                in {"km/h", "kmh", "kph"}
-                and isinstance(threshold_speed.get("value"), (int, float))
-                and not isinstance(threshold_speed.get("value"), bool)
-                and threshold_speed["value"] > 0
-                and isinstance(summary.get("timer_time_s"), (int, float))
-                and not isinstance(summary.get("timer_time_s"), bool)
-                and threshold_speed["value"] > summary["timer_time_s"]
-            ):
-                source_path = Path(row["file_path"])
-                if source_path.is_file():
-                    source_activity = read_activity_file(source_path)
-                    speed_samples = [
-                        (point.timestamp, point.speed_mps)
-                        for point in source_activity.track_points
-                    ]
-            prompt = build_ai_analysis_prompt(
-                summary,
-                state.list_local_activities(),
-                args.question,
-                health_context,
-                language=args.language,
-                focus=args.focus,
-                detail=args.detail,
-                speed_samples=speed_samples,
-            )
+            if args.force_vector_json is not None:
+                sport_type = str(summary.get("sport_type") or "").casefold()
+                cycling_terms = ("cycl", "bike", "ride", "骑行")
+                if sport_type and not any(token in sport_type for token in cycling_terms):
+                    raise ValueError("Force Vector analysis requires a cycling activity")
+                if args.focus != "performance":
+                    raise ValueError("Use --force-vector-focus instead of --focus with Force Vector JSON")
+                snapshot = load_force_vector_snapshot(args.force_vector_json)
+                prompt = build_force_vector_analysis_prompt(
+                    snapshot,
+                    language=args.language,
+                    detail=args.detail,
+                    focus=args.force_vector_focus,
+                    question=args.question,
+                )
+            else:
+                if args.force_vector_focus != "comprehensive":
+                    raise ValueError("--force-vector-focus requires --force-vector-json")
+                health_context = summarize_health_for_activity(
+                    state, summary.get("start_time"), summary.get("end_time")
+                )
+                speed_samples = None
+                health_before = health_context.get("before_activity")
+                threshold_speed = (
+                    health_before.get("lactate_threshold_speed_kmh")
+                    if isinstance(health_before, dict)
+                    else None
+                )
+                if (
+                    isinstance(threshold_speed, dict)
+                    and str(threshold_speed.get("unit") or "").strip().casefold()
+                    in {"km/h", "kmh", "kph"}
+                    and isinstance(threshold_speed.get("value"), (int, float))
+                    and not isinstance(threshold_speed.get("value"), bool)
+                    and threshold_speed["value"] > 0
+                    and isinstance(summary.get("timer_time_s"), (int, float))
+                    and not isinstance(summary.get("timer_time_s"), bool)
+                    and threshold_speed["value"] > summary["timer_time_s"]
+                ):
+                    source_path = Path(row["file_path"])
+                    if source_path.is_file():
+                        source_activity = read_activity_file(source_path)
+                        speed_samples = [
+                            (point.timestamp, point.speed_mps)
+                            for point in source_activity.track_points
+                        ]
+                prompt = build_ai_analysis_prompt(
+                    summary,
+                    state.list_local_activities(),
+                    args.question,
+                    health_context,
+                    language=args.language,
+                    focus=args.focus,
+                    detail=args.detail,
+                    speed_samples=speed_samples,
+                )
             if args.prompt_only:
                 print(prompt)
                 return 0
