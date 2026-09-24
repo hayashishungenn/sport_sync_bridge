@@ -14,6 +14,7 @@ from typing import Callable, Iterable
 
 from .formats import ActivityFile, ActivityTimeInZone, ActivityZoneTime, TrackPoint
 from .training_intensity import (
+    classify_activity_training_intensity,
     classify_heart_rate_intensity,
     classify_power_intensity,
     classify_speed_intensity,
@@ -877,6 +878,13 @@ def _format_training_intensity(activity_summary: dict[str, object]) -> str:
             intensity_factor=power_intensity_factor,
         )
         speed = classify_speed_intensity(message.get("speed_zones"))
+        selected = classify_activity_training_intensity(
+            message.get("heart_rate_zones"),
+            message.get("power_zones"),
+            duration,
+            sport_type,
+            intensity_factor=power_intensity_factor,
+        )
         group_labels = []
         if heart_rate is not None:
             group_labels.append(f"心率={heart_rate}")
@@ -884,6 +892,8 @@ def _format_training_intensity(activity_summary: dict[str, object]) -> str:
             group_labels.append(f"功率={power}")
         if speed is not None:
             group_labels.append(f"速度={speed}")
+        if selected is not None:
+            group_labels.append(f"GarSync分类={selected}")
         if group_labels:
             prefix = f"分区记录{index}：" if len(messages) > 1 else ""
             labels.append(prefix + "，".join(group_labels))

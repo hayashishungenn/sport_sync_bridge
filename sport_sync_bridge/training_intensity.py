@@ -4,6 +4,72 @@ import math
 from collections.abc import Mapping, Sequence
 
 
+_TRAINING_INTENSITY_ORDER = {
+    "Recovery": 0,
+    "Base": 1,
+    "Tempo": 2,
+    "Threshold": 3,
+    "VO2max": 4,
+    "Anaerobic": 5,
+}
+
+
+def classify_activity_training_intensity(
+    heart_rate_zones: object,
+    power_zones: object,
+    duration_seconds: object,
+    sport_type: object,
+    *,
+    intensity_factor: object = None,
+) -> str | None:
+    heart_seconds = _zone_seconds(heart_rate_zones)
+    heart_rate = classify_heart_rate_intensity(heart_rate_zones, duration_seconds, sport_type)
+
+    if not _is_cycling_sport(sport_type):
+        # GarSync uses HR directly for running, walking, and hiking. For other
+        # sports its optional speed path needs a user threshold not modeled here;
+        # HR is the recovered fallback when that path is unavailable.
+        return heart_rate
+
+    power_seconds = _zone_seconds(power_zones)
+    if not power_seconds:
+        return heart_rate
+
+    power = classify_power_intensity(
+        power_zones,
+        duration_seconds,
+        sport_type,
+        intensity_factor=intensity_factor,
+    )
+    if power is None:
+        return heart_rate
+
+    intensity = _finite_nonnegative(intensity_factor)
+    duration = _finite_nonnegative(duration_seconds)
+    if _cycling_override_short_circuits_merge(intensity, duration):
+        return power
+    if intensity is None and power == "Anaerobic":
+        return power
+    if not heart_seconds or heart_rate is None:
+        return power
+
+    heart_order = _TRAINING_INTENSITY_ORDER[heart_rate]
+    power_order = _TRAINING_INTENSITY_ORDER[power]
+    if heart_order > power_order:
+        return heart_rate
+
+    base_fraction = _zone_fraction(heart_seconds, 1, 2)
+    if base_fraction is not None and base_fraction >= 0.9:
+        return heart_rate
+    if power_order < 3 or heart_order >= 3:
+        return power
+
+    zone_two_fraction = _zone_fraction(heart_seconds, 2)
+    if zone_two_fraction is not None and zone_two_fraction >= 0.5:
+        return heart_rate
+    return power
+
+
 def classify_heart_rate_intensity(
     zones: object,
     duration_seconds: object,
@@ -104,6 +170,13 @@ def _zone_ratio(seconds_by_zone: dict[int, float], numerator: int, denominator: 
     return seconds_by_zone.get(numerator, 0.0) / denominator_seconds
 
 
+def _zone_fraction(seconds_by_zone: dict[int, float], *zones: int) -> float | None:
+    total_seconds = sum(seconds_by_zone.values())
+    if total_seconds <= 0:
+        return None
+    return sum(seconds_by_zone.get(zone, 0.0) for zone in zones) / total_seconds
+
+
 def _duration_intensity(duration_seconds: object, sport_type: object) -> str | None:
     duration = _finite_nonnegative(duration_seconds)
     if duration is None:
@@ -140,6 +213,15 @@ def _apply_cycling_intensity_factor(
     if intensity >= 0.55:
         return label
     return "Base" if duration < 3900 else "Recovery"
+
+
+def _cycling_override_short_circuits_merge(
+    intensity_factor: float | None,
+    duration_seconds: float | None,
+) -> bool:
+    if intensity_factor is None or duration_seconds is None or intensity_factor >= 0.75:
+        return False
+    return intensity_factor < 0.55 or duration_seconds >= 7200
 
 
 def _finite_nonnegative(value: object) -> float | None:

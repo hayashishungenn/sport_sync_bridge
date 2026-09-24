@@ -4,6 +4,7 @@ import unittest
 
 from sport_sync_bridge.activity_analysis import build_ai_analysis_prompt
 from sport_sync_bridge.training_intensity import (
+    classify_activity_training_intensity,
     classify_heart_rate_intensity,
     classify_power_intensity,
     classify_speed_intensity,
@@ -118,6 +119,83 @@ class TrainingIntensityTests(unittest.TestCase):
             "Anaerobic",
         )
 
+    def test_cycling_selector_combines_power_and_heart_rate_labels(self) -> None:
+        selected = classify_activity_training_intensity(
+            [{"zone": 4, "seconds": 100}, {"zone": 5, "seconds": 150}],
+            [{"zone": 2, "seconds": 100}, {"zone": 3, "seconds": 80}],
+            2400,
+            "cycling",
+        )
+
+        self.assertEqual(selected, "VO2max")
+
+    def test_cycling_selector_uses_base_and_zone_two_fractions(self) -> None:
+        power_tempo = [{"zone": 2, "seconds": 100}, {"zone": 3, "seconds": 80}]
+        base_hr = [{"zone": 1, "seconds": 90}, {"zone": 2, "seconds": 10}]
+        self.assertEqual(
+            classify_activity_training_intensity(base_hr, power_tempo, 3600, "cycling"),
+            "Base",
+        )
+
+        power_threshold = [{"zone": 3, "seconds": 100}, {"zone": 4, "seconds": 100}]
+        hr_zone_two_majority = [{"zone": 2, "seconds": 100}, {"zone": 3, "seconds": 40}]
+        self.assertEqual(
+            classify_activity_training_intensity(
+                hr_zone_two_majority, power_threshold, 2400, "cycling"
+            ),
+            "Tempo",
+        )
+
+        hr_zone_two_minority = [{"zone": 2, "seconds": 40}, {"zone": 3, "seconds": 60}]
+        self.assertEqual(
+            classify_activity_training_intensity(
+                hr_zone_two_minority, power_threshold, 2400, "cycling"
+            ),
+            "Threshold",
+        )
+
+    def test_cycling_selector_factor_and_anaerobic_short_circuits(self) -> None:
+        hr_vo2max = [{"zone": 4, "seconds": 60}, {"zone": 5, "seconds": 100}]
+        power_anaerobic = [{"zone": 1, "seconds": 92}, {"zone": 6, "seconds": 8}]
+        self.assertEqual(
+            classify_activity_training_intensity(
+                hr_vo2max,
+                power_anaerobic,
+                3900,
+                "cycling",
+                intensity_factor=0.54,
+            ),
+            "Recovery",
+        )
+
+        power_tempo = [{"zone": 2, "seconds": 100}, {"zone": 3, "seconds": 80}]
+        self.assertEqual(
+            classify_activity_training_intensity(
+                hr_vo2max,
+                power_tempo,
+                3900,
+                "cycling",
+                intensity_factor=0.55,
+            ),
+            "VO2max",
+        )
+        self.assertEqual(
+            classify_activity_training_intensity(
+                hr_vo2max, power_anaerobic, 3900, "cycling"
+            ),
+            "Anaerobic",
+        )
+
+    def test_cycling_selector_falls_back_to_heart_rate_without_power_zones(self) -> None:
+        selected = classify_activity_training_intensity(
+            [{"zone": 4, "seconds": 100}, {"zone": 5, "seconds": 150}],
+            [],
+            2400,
+            "cycling",
+        )
+
+        self.assertEqual(selected, "VO2max")
+
     def test_speed_high_zone_share_classification(self) -> None:
         self.assertEqual(
             classify_speed_intensity(
@@ -193,6 +271,7 @@ class TrainingIntensityTests(unittest.TestCase):
             "FIT 分区训练强度参考：心率=Tempo，功率=Anaerobic，速度=Anaerobic",
             prompt,
         )
+        self.assertIn("GarSync分类=Anaerobic", prompt)
 
     def test_ai_prompt_applies_cycling_intensity_factor_override(self) -> None:
         prompt = build_ai_analysis_prompt(
