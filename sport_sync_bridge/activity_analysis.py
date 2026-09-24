@@ -4,6 +4,7 @@ import csv
 import html
 import io
 import json
+import re
 import statistics
 from datetime import datetime, timedelta, timezone
 from typing import Iterable
@@ -86,6 +87,12 @@ def _lap_hr(activity: ActivityFile, attribute: str, *, maximum: bool = False) ->
     if not values:
         return None
     return max(values) if maximum else statistics.fmean(values)
+
+
+def validate_ai_language_code(language: str) -> str:
+    if not re.fullmatch(r"[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*", language):
+        raise ValueError("AI analysis language must be a language code such as zh-CN or en")
+    return language
 
 
 def summarize_rows(rows: Iterable[object]) -> dict[str, object]:
@@ -192,11 +199,36 @@ def build_ai_analysis_prompt(
     recent_rows: Iterable[object],
     question: str | None = None,
     health_summary: dict[str, object] | None = None,
+    *,
+    language: str = "zh-CN",
+    focus: str = "performance",
+    detail: str = "normal",
 ) -> str:
+    language = validate_ai_language_code(language)
+    focus_instructions = {
+        "performance": "重点分析速度、功率、心率效率，并给出提升运动表现的建议。",
+        "health": "重点关注训练负荷的影响和长期健康价值，不作医学判断。",
+        "recovery": "重点评估恢复状态和过度训练风险，并给出恢复建议，不作医学判断。",
+    }
+    detail_instructions = {
+        "brief": "使用纯文本，不要 Markdown 标题。训练分析写 2-3 句，改进建议给出 1-2 条，控制在一屏左右。",
+        "normal": "使用 Markdown 标题。训练分析写 2-3 段，改进建议写 1-2 段并包含 2-3 条建议，控制在两屏左右。",
+        "detailed": "使用 Markdown 标题。训练分析覆盖 3-5 个维度，给出 3-5 条有数据依据的建议；每个维度写 1-3 段，控制在五屏以内。",
+    }
+    if focus not in focus_instructions:
+        raise ValueError(f"Unsupported AI analysis focus: {focus}")
+    if detail not in detail_instructions:
+        raise ValueError(f"Unsupported AI analysis detail: {detail}")
+
     recent = summarize_rows(recent_rows)
     lines = [
-        "请用中文分析这次运动记录，先概括训练内容，再指出有数据支持的表现和可执行建议。",
-        "只依据提供的汇总数据；没有数据的指标要明确说未知，不要推测伤病或作医学诊断。",
+        "你是一名注重数据的耐力运动教练。分析下面的运动和健康数据，并给出有依据、可执行的建议。",
+        f"必须使用语言代码 {language} 作答。",
+        "准确引用数据中的数值，不要取整、近似或编造。缺失的指标明确说明未知。",
+        "不要提供医疗建议或作医学诊断。",
+        "回答分为训练分析（Training Analysis）和改进建议（Improvement Advice）两部分。",
+        f"分析侧重点：{focus_instructions[focus]}",
+        f"回答详略：{detail_instructions[detail]}",
         "为保护隐私，内容不包含 GPS 坐标，也不请求身份信息。",
         "",
         "本次活动：",

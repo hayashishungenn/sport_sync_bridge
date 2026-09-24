@@ -7,7 +7,11 @@ import tempfile
 from datetime import date, datetime, timezone
 from pathlib import Path
 
-from .activity_analysis import build_ai_analysis_prompt, format_activity_report
+from .activity_analysis import (
+    build_ai_analysis_prompt,
+    format_activity_report,
+    validate_ai_language_code,
+)
 from .activity_library import LocalActivityLibrary
 from .activity_merge import merge_fit_files
 from .config import AppConfig
@@ -160,7 +164,25 @@ def build_parser() -> argparse.ArgumentParser:
 
     ai_parser = subparsers.add_parser("ai-analysis", help="Analyze an imported activity with a configured chat API")
     ai_parser.add_argument("activity_id", help="Activity fingerprint or its unique prefix")
-    ai_parser.add_argument("--question", help="Optional focus for the analysis")
+    ai_parser.add_argument("--question", help="Optional analysis question")
+    ai_parser.add_argument(
+        "--language",
+        default="zh-CN",
+        type=validate_ai_language_code,
+        help="Response language code (default: zh-CN)",
+    )
+    ai_parser.add_argument(
+        "--focus",
+        choices=["performance", "health", "recovery"],
+        default="performance",
+        help="Analysis focus (default: performance)",
+    )
+    ai_parser.add_argument(
+        "--detail",
+        choices=["brief", "normal", "detailed"],
+        default="normal",
+        help="Response detail level (default: normal)",
+    )
     ai_parser.add_argument("--prompt-only", action="store_true", help="Print the analysis prompt without sending data")
     ai_parser.add_argument("--history", action="store_true", help="Show saved analyses without contacting the AI service")
 
@@ -679,6 +701,9 @@ def _run_local_command(args: argparse.Namespace, config: AppConfig) -> int:
                 state.list_local_activities(),
                 args.question,
                 summarize_health(state),
+                language=args.language,
+                focus=args.focus,
+                detail=args.detail,
             )
             if args.prompt_only:
                 print(prompt)

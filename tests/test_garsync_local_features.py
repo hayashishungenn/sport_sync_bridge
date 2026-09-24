@@ -203,6 +203,39 @@ class GarSyncLocalFeatureTests(unittest.TestCase):
         self.assertNotIn("31.23", prompt)
         self.assertNotIn("121.47", prompt)
         self.assertIn("未知", prompt)
+        self.assertIn("必须使用语言代码 zh-CN", prompt)
+        self.assertIn("医学诊断", prompt)
+
+    def test_ai_prompt_options_cover_reversed_focus_and_detail_modes(self) -> None:
+        activity = read_activity_file(create_gpx(self.root / "ai-options.gpx"))
+        summary = summarize_activity(activity)
+        focus_text = {
+            "performance": "重点分析速度、功率、心率效率",
+            "health": "重点关注训练负荷的影响和长期健康价值",
+            "recovery": "重点评估恢复状态和过度训练风险",
+        }
+        detail_text = {
+            "brief": "使用纯文本",
+            "normal": "训练分析写 2-3 段",
+            "detailed": "训练分析覆盖 3-5 个维度",
+        }
+
+        for focus, expected in focus_text.items():
+            with self.subTest(focus=focus):
+                prompt = build_ai_analysis_prompt(summary, [], focus=focus)
+                self.assertIn(expected, prompt)
+        for detail, expected in detail_text.items():
+            with self.subTest(detail=detail):
+                prompt = build_ai_analysis_prompt(summary, [], detail=detail)
+                self.assertIn(expected, prompt)
+
+        prompt = build_ai_analysis_prompt(summary, [], language="en-US", focus="health", detail="brief")
+        self.assertIn("必须使用语言代码 en-US", prompt)
+        self.assertIn("不作医学判断", prompt)
+        with self.assertRaisesRegex(ValueError, "language code"):
+            build_ai_analysis_prompt(summary, [], language="respond in English")
+        with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
+            main(["ai-analysis", "activity-id", "--language", "respond in English"])
 
     def test_cli_ai_analysis_saves_result_and_history_without_resending(self) -> None:
         activity_path = create_gpx(self.root / "ai-ride.gpx")
@@ -227,7 +260,25 @@ class GarSyncLocalFeatureTests(unittest.TestCase):
             ) as request,
             contextlib.redirect_stdout(output),
         ):
-            self.assertEqual(main(["ai-analysis", imported.fingerprint, "--prompt-only"]), 0)
+            self.assertEqual(
+                main(
+                    [
+                        "ai-analysis",
+                        imported.fingerprint,
+                        "--prompt-only",
+                        "--language",
+                        "en-US",
+                        "--focus",
+                        "recovery",
+                        "--detail",
+                        "detailed",
+                    ]
+                ),
+                0,
+            )
+            self.assertIn("必须使用语言代码 en-US", output.getvalue())
+            self.assertIn("重点评估恢复状态", output.getvalue())
+            self.assertIn("训练分析覆盖 3-5 个维度", output.getvalue())
             self.assertEqual(self.state.list_ai_analysis_results(imported.fingerprint), [])
             self.assertEqual(main(["ai-analysis", imported.fingerprint]), 0)
             self.assertEqual(main(["ai-analysis", imported.fingerprint]), 0)

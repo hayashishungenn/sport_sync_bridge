@@ -203,7 +203,10 @@ AI 运动分析保留为可选功能。它把单次活动摘要、最近活动�
 
 ```powershell
 python sync.py ai-analysis <活动ID前缀> --prompt-only
+python sync.py ai-analysis <活动ID前缀> --prompt-only --language en-US --focus recovery --detail detailed
 ```
+
+`--language` 接受语言代码，默认 `zh-CN`；`--focus` 可选 `performance`、`health` 或 `recovery`，默认 `performance`；`--detail` 可选 `brief`、`normal` 或 `detailed`，默认 `normal`。提示词会要求模型准确引用已有数值，并避免医疗诊断。
 
 在 `.env` 中设置 `AI_API_BASE_URL`、`AI_MODEL`，远端服务需要时再设置 `AI_API_KEY`。请求成功后会在本地 SQLite 中保存模型名和分析正文，可用 `python sync.py ai-analysis <活动ID前缀> --history` 查看。项目不会附带 GarSync 的服务凭据或计费代码。
 
