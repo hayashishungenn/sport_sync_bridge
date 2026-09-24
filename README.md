@@ -194,7 +194,7 @@ AI 运动分析保留为可选功能。它把单次活动摘要、最近活动�
 python sync.py ai-analysis <活动ID前缀> --prompt-only
 ```
 
-在 `.env` 中设置 `AI_API_BASE_URL`、`AI_MODEL`，远端服务需要时再设置 `AI_API_KEY`。项目不会附带 GarSync 的服务凭据或计费代码。
+在 `.env` 中设置 `AI_API_BASE_URL`、`AI_MODEL`，远端服务需要时再设置 `AI_API_KEY`。请求成功后会在本地 SQLite 中保存模型名和分析正文，可用 `python sync.py ai-analysis <活动ID前缀> --history` 查看。项目不会附带 GarSync 的服务凭据或计费代码。
 
 Wi-Fi 文件导入页默认只监听本机。要让手机从同一局域网访问，显式绑定局域网接口：
 

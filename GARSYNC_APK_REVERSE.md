@@ -118,7 +118,7 @@ AOT 中确认了 FIT、GPX、TCX 六种有向转换器，以及统一活动模�
 
 当前仓库的目标比 GarSync 窄：iGPSPORT/OneLap 下载运动 FIT，再上传 Garmin Connect 国际区和 Strava，并用 SQLite 记录同步状态。现有实现已包含按 FIT 厂商/产品/固件匹配坐标规则、FIT/GPX/TCX 六方向转换和按目标格式生成上传文件。这与 GarSync 的统一活动模型、格式转换器和设备坐标管理结构相吻合。
 
-整包逆向完成后，按用户要求继续把可在当前 Python CLI 中独立运行的本地能力改写进仓库。新增本地活动库、FIT/GPX/TCX 与 ZIP/轨迹 JSON/CSV 导入、活动汇总与报告、本地健康 CSV、训练计划日历、FIT 课表模板导出、Wi-Fi 上传页，以及可配置 Chat Completions 接口的 AI 活动分析。AI 分析按用户明确要求保留；请求只发送活动汇总、周汇总和健康指标，不发送 GPS 坐标。项目没有复制内购目录、支付流程、数独或音频资源。
+整包逆向完成后，按用户要求继续把可在当前 Python CLI 中独立运行的本地能力改写进仓库。新增本地活动库、FIT/GPX/TCX 与 ZIP/轨迹 JSON/CSV 导入、活动汇总与报告、本地健康 CSV、训练计划日历、FIT 课表模板导出、Wi-Fi 上传页，以及可配置 Chat Completions 接口的 AI 活动分析和本地结果历史。AOT 静态索引显示 GarSync 的 `AiAnalysisRepository` 按活动读取分析结果，并将来源、活动 ID、模型名、正文、时间和元数据写入 SQLite；本项目保存模型名和正文，可按活动查看历史。AI 分析按用户明确要求保留；请求只发送活动汇总、周汇总和健康指标，不发送 GPS 坐标。项目没有复制内购目录、支付流程、数独或音频资源。
 
 本地活动源已接入现有 Garmin / Strava 上传流程；原始文件存入 `.data/local_imports/`，数据库记录摘要和指纹。42 份训练计划模板覆盖六种语言，33 个 FIT 课表模板也随项目提供。健康数据通过用户提供的 CSV 导入；该实现不登录或抓取 APK 内的健康平台账号。
 

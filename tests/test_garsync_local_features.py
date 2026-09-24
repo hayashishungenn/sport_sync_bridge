@@ -204,6 +204,44 @@ class GarSyncLocalFeatureTests(unittest.TestCase):
         self.assertNotIn("121.47", prompt)
         self.assertIn("未知", prompt)
 
+    def test_cli_ai_analysis_saves_result_and_history_without_resending(self) -> None:
+        activity_path = create_gpx(self.root / "ai-ride.gpx")
+        imported = self.library.import_paths([activity_path])[0]
+        config = SimpleNamespace(
+            data_dir=self.root / ".data",
+            db_path=self.state.path,
+            log_level="INFO",
+            log_path=self.root / "sync.log",
+            ai_api_base_url="https://ai.example.invalid/v1",
+            ai_model="test-model",
+            ai_api_key=None,
+        )
+        output = io.StringIO()
+        with (
+            patch("sport_sync_bridge.cli.AppConfig.load", return_value=config),
+            patch("sport_sync_bridge.cli.configure_logging"),
+            patch("sport_sync_bridge.cli.SyncEngine", side_effect=AssertionError("sync engine is not needed")),
+            patch(
+                "sport_sync_bridge.activity_analysis.request_ai_analysis",
+                side_effect=["本次训练节奏稳定。", "第二次分析已保存。"],
+            ) as request,
+            contextlib.redirect_stdout(output),
+        ):
+            self.assertEqual(main(["ai-analysis", imported.fingerprint, "--prompt-only"]), 0)
+            self.assertEqual(self.state.list_ai_analysis_results(imported.fingerprint), [])
+            self.assertEqual(main(["ai-analysis", imported.fingerprint]), 0)
+            self.assertEqual(main(["ai-analysis", imported.fingerprint]), 0)
+            self.assertEqual(main(["ai-analysis", imported.fingerprint, "--history"]), 0)
+
+        saved = self.state.list_ai_analysis_results(imported.fingerprint)
+        self.assertEqual(request.call_count, 2)
+        self.assertEqual(len(saved), 2)
+        self.assertEqual(saved[0]["source_id"], "local")
+        self.assertEqual(saved[0]["model_name"], "test-model")
+        self.assertEqual({row["content"] for row in saved}, {"本次训练节奏稳定。", "第二次分析已保存。"})
+        self.assertIn("本次训练节奏稳定。", output.getvalue())
+        self.assertIn("第二次分析已保存。", output.getvalue())
+
     def test_wifi_upload_page_accepts_activity_multipart(self) -> None:
         sample = create_gpx(self.root / "wifi.gpx").read_bytes()
         server = ThreadingHTTPServer(("127.0.0.1", 0), _make_handler(self.library, 1024 * 1024))

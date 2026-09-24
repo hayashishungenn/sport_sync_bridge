@@ -131,6 +131,7 @@ def build_parser() -> argparse.ArgumentParser:
     ai_parser.add_argument("activity_id", help="Activity fingerprint or its unique prefix")
     ai_parser.add_argument("--question", help="Optional focus for the analysis")
     ai_parser.add_argument("--prompt-only", action="store_true", help="Print the analysis prompt without sending data")
+    ai_parser.add_argument("--history", action="store_true", help="Show saved analyses without contacting the AI service")
 
     receive_parser = subparsers.add_parser("receive", help="Start a local Wi-Fi file import page")
     receive_parser.add_argument("--host", default="127.0.0.1", help="Bind address; use 0.0.0.0 for LAN access")
@@ -590,6 +591,10 @@ def _run_local_command(args: argparse.Namespace, config: AppConfig) -> int:
             row = state.get_local_activity(args.activity_id)
             if row is None:
                 raise ValueError(f"Local activity was not found: {args.activity_id}")
+            if args.history:
+                results = state.list_ai_analysis_results(row["fingerprint"])
+                print(json.dumps([dict(result) for result in results], ensure_ascii=False, indent=2))
+                return 0
             summary = json.loads(row["summary_json"])
             summary.update({"name": row["name"], "sport_type": row["sport_type"], "start_time": row["start_time"]})
             prompt = build_ai_analysis_prompt(
@@ -610,6 +615,11 @@ def _run_local_command(args: argparse.Namespace, config: AppConfig) -> int:
                 model=config.ai_model,
                 api_key=config.ai_api_key,
                 prompt=prompt,
+            )
+            state.save_ai_analysis_result(
+                activity_id=row["fingerprint"],
+                model_name=config.ai_model,
+                content=result,
             )
             print(result)
             return 0

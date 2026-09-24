@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import re
 import sqlite3
+import uuid
 from pathlib import Path
 
 from .models import Activity
@@ -76,6 +77,19 @@ class StateDB:
             );
             CREATE INDEX IF NOT EXISTS idx_health_metric_time
                 ON health_observations(metric, observed_at);
+
+            CREATE TABLE IF NOT EXISTS ai_analysis (
+                id TEXT PRIMARY KEY,
+                source_id TEXT NOT NULL,
+                activity_id TEXT NOT NULL,
+                model_name TEXT NOT NULL,
+                content TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                metadata TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_ai_analysis_activity
+                ON ai_analysis(activity_id);
 
             CREATE TABLE IF NOT EXISTS training_plans (
                 plan_id TEXT PRIMARY KEY,
@@ -343,6 +357,45 @@ class StateDB:
         return self.connection.execute(
             "SELECT * FROM health_observations WHERE metric = ? ORDER BY observed_at DESC",
             (metric,),
+        ).fetchall()
+
+    def save_ai_analysis_result(
+        self,
+        *,
+        activity_id: str,
+        model_name: str,
+        content: str,
+        metadata: dict[str, object] | None = None,
+    ) -> str:
+        if not activity_id or not model_name.strip() or not content.strip():
+            raise ValueError("AI analysis activity, model, and content must be non-empty")
+        result_id = uuid.uuid4().hex
+        now = utcnow().isoformat()
+        self.connection.execute(
+            """
+            INSERT INTO ai_analysis (
+                id, source_id, activity_id, model_name, content,
+                created_at, updated_at, metadata
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                result_id,
+                "local",
+                activity_id,
+                model_name,
+                content,
+                now,
+                now,
+                json.dumps(metadata or {}, ensure_ascii=False, sort_keys=True),
+            ),
+        )
+        self.connection.commit()
+        return result_id
+
+    def list_ai_analysis_results(self, activity_id: str) -> list[sqlite3.Row]:
+        return self.connection.execute(
+            "SELECT * FROM ai_analysis WHERE activity_id = ? ORDER BY created_at DESC, id DESC",
+            (activity_id,),
         ).fetchall()
 
     def save_training_plan(
