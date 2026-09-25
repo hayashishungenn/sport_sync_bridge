@@ -58,7 +58,7 @@ from .ble_bigrun_ecg import (
     stream_bigrun_ecg,
     validate_bigrun_ecg_options,
 )
-from .ble_trainer import run_trainer_course, set_trainer_target_power
+from .ble_trainer import RideRunResult, run_trainer_course, set_trainer_target_power
 from .virtual_ride import (
     RideCourse,
     RideCourseError,
@@ -401,7 +401,7 @@ def build_parser() -> argparse.ArgumentParser:
     trainer_ride = trainer_actions.add_parser(
         "ride",
         help="Run an FTMS power course; interactive terminals accept +, -, and s controls",
-        description="Run a FIT-backed FTMS ride. Interactive keys: + and - change intensity by 5%; s skips an interval.",
+        description="Run a FIT-backed FTMS ride. Interactive keys: + and - change intensity by 5%; s skips; p pauses.",
     )
     trainer_ride.add_argument("address", help="FTMS trainer BLE address")
     trainer_ride.add_argument("course_file", type=Path, nargs="?", help="Course JSON or AI workout .fit.meta file")
@@ -1891,11 +1891,17 @@ def _run_ble_command(args: argparse.Namespace, config: AppConfig) -> int:
                 ):
                     telemetry_samples.append(sample)
 
+            def report_pause(paused: bool) -> None:
+                print(f"ride_paused={str(paused).lower()}")
+
             interactive = sys.stdin.isatty()
             if interactive:
-                print("controls: + increase intensity, - decrease intensity, s skip interval", file=sys.stderr)
+                print(
+                    "controls: + increase, - decrease intensity, s skip interval, p pause/resume",
+                    file=sys.stderr,
+                )
 
-            elapsed_time_s = asyncio.run(
+            ride_result = asyncio.run(
                 run_trainer_course(
                     args.address,
                     course,
@@ -1905,6 +1911,7 @@ def _run_ble_command(args: argparse.Namespace, config: AppConfig) -> int:
                     on_tick=record_timer_sample,
                     on_measurement=record_trainer_measurement,
                     on_control=_read_trainer_control if interactive else None,
+                    on_pause=report_pause,
                 )
             )
             if ride_started_at is None:
@@ -1917,14 +1924,18 @@ def _run_ble_command(args: argparse.Namespace, config: AppConfig) -> int:
             written_path = write_ride_activity_fit(
                 course.name,
                 ride_started_at,
-                elapsed_time_s,
+                ride_result.elapsed_time_s,
                 telemetry_samples or timer_samples,
                 output_path,
+                timer_time_s=ride_result.timer_time_s,
             )
             registry.update_last_connected(args.address)
             print(f"address={args.address}")
             print(f"course={course.name!r}")
-            print(f"ride_complete=true duration_s={elapsed_time_s:g}")
+            print(
+                f"ride_complete=true elapsed_s={ride_result.elapsed_time_s:g} "
+                f"timer_s={ride_result.timer_time_s:g}"
+            )
             print(f"fit_output={written_path}")
             return 0
 
@@ -1979,7 +1990,7 @@ def _read_trainer_control() -> str | None:
             return None
         key = sys.stdin.readline().strip()
 
-    return {"+": "increase", "-": "decrease", "s": "skip"}.get(key)
+    return {"+": "increase", "-": "decrease", "s": "skip", "p": "pause"}.get(key)
 
 
 def _run_samba_command(args: argparse.Namespace, config: AppConfig) -> int:

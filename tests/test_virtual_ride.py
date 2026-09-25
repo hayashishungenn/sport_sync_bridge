@@ -33,7 +33,7 @@ class VirtualRideTests(unittest.TestCase):
         self.assertEqual(PowerSegment(0, 2, 100, 101).target_power_at(1), 101)
         self.assertEqual(course.target_power_at(150, 1.1), 138)
 
-    def test_session_supports_intensity_skip_and_erg_state(self) -> None:
+    def test_session_supports_intensity_skip_and_pause_state(self) -> None:
         course = RideCourse(
             (
                 PowerSegment(0, 10, 100, 100, "first"),
@@ -49,8 +49,8 @@ class VirtualRideTests(unittest.TestCase):
         self.assertEqual(session.wall_elapsed_s, 2.5)
         self.assertEqual(session.course_elapsed_s, 10)
         self.assertEqual(session.current_target_power_w, 30)
-        self.assertIsNone(session.toggle_erg_mode())
-        self.assertEqual(session.toggle_erg_mode(), 30)
+        self.assertTrue(session.toggle_pause())
+        self.assertFalse(session.toggle_pause())
 
     def test_session_advances_very_short_segments_without_stalling(self) -> None:
         session = RideSession(RideCourse((PowerSegment(0, 1e-10, 100, 100),)))
@@ -136,7 +136,14 @@ class VirtualRideTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             output = Path(directory) / "ride.fit"
 
-            written = write_ride_activity_fit("Indoor ride", start, 10, samples, output)
+            written = write_ride_activity_fit(
+                "Indoor ride",
+                start,
+                10,
+                samples,
+                output,
+                timer_time_s=8,
+            )
             decoded = FitFile.from_file(str(written))
             messages = [record.message for record in decoded.records if not record.is_definition]
             records = [message for message in messages if message.name == "record"]
@@ -147,9 +154,10 @@ class VirtualRideTests(unittest.TestCase):
             self.assertEqual(records[0].heart_rate, 132)
             self.assertIsNone(records[0].position_lat)
             self.assertEqual(session.total_elapsed_time, 10)
+            self.assertEqual(session.total_timer_time, 8)
             before = output.read_bytes()
             with self.assertRaisesRegex(RideCourseError, "already exists"):
-                write_ride_activity_fit("Indoor ride", start, 10, samples, output)
+                write_ride_activity_fit("Indoor ride", start, 10, samples, output, timer_time_s=8)
             self.assertEqual(output.read_bytes(), before)
 
     def test_rejects_bad_course_json_and_invalid_segments(self) -> None:

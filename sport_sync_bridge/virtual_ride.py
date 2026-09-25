@@ -141,7 +141,7 @@ class RideCourse:
 class RideSession:
     course: RideCourse
     intensity: float = 1.0
-    erg_mode: bool = True
+    paused: bool = False
     segment_index: int = 0
     segment_elapsed_s: float = 0.0
     wall_elapsed_s: float = 0.0
@@ -199,9 +199,9 @@ class RideSession:
         self.segment_elapsed_s = 0.0
         return True
 
-    def toggle_erg_mode(self) -> int | None:
-        self.erg_mode = not self.erg_mode
-        return self.current_target_power_w if self.erg_mode else None
+    def toggle_pause(self) -> bool:
+        self.paused = not self.paused
+        return self.paused
 
     def advance(self, seconds: float = 1.0) -> None:
         remaining_time = _finite_number(seconds, "Advance duration")
@@ -274,6 +274,8 @@ def write_ride_activity_fit(
     elapsed_time_s: float,
     samples: Iterable[TrackPoint],
     output_path: Path,
+    *,
+    timer_time_s: float | None = None,
 ) -> Path:
     if not isinstance(name, str) or not name.strip() or len(name) > 160:
         raise RideCourseError("Ride activity name must contain 1 to 160 characters")
@@ -282,6 +284,13 @@ def write_ride_activity_fit(
     duration = _finite_number(elapsed_time_s, "Ride activity duration")
     if duration <= 0 or duration > _MAX_COURSE_DURATION_S:
         raise RideCourseError(f"Ride activity duration must be from 0 to {_MAX_COURSE_DURATION_S} seconds")
+    timer_duration = (
+        duration
+        if timer_time_s is None
+        else _finite_number(timer_time_s, "Ride activity timer duration")
+    )
+    if timer_duration < 0 or timer_duration > duration:
+        raise RideCourseError("Ride activity timer duration must be between 0 and elapsed duration")
     destination = output_path.expanduser().resolve()
     if destination.suffix.lower() != ".fit":
         raise RideCourseError("Ride activity output path must end in .fit")
@@ -328,7 +337,7 @@ def write_ride_activity_fit(
         start_time=start,
         end_time=end,
         elapsed_time_s=duration,
-        timer_time_s=duration,
+        timer_time_s=timer_duration,
         track_points=points,
     )
     activity = ActivityFile(
@@ -337,7 +346,7 @@ def write_ride_activity_fit(
         start_time=start,
         end_time=end,
         elapsed_time_s=duration,
-        timer_time_s=duration,
+        timer_time_s=timer_duration,
         laps=[lap],
     )
     try:

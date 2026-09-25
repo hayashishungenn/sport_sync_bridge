@@ -13,7 +13,7 @@ from unittest.mock import patch
 from fit_tool.fit_file import FitFile
 
 from sport_sync_bridge.ble_sensors import BleError
-from sport_sync_bridge.ble_trainer import run_trainer_course
+from sport_sync_bridge.ble_trainer import RideRunResult, run_trainer_course
 from sport_sync_bridge.cli import main
 from sport_sync_bridge.virtual_ride import PowerSegment, RideCourse
 
@@ -157,6 +157,30 @@ class BleTrainerCourseTests(unittest.TestCase):
         self.assertEqual(state.writes, [b"\x00", b"\x05\xc8\x00", b"\x05\x00\x00"])
         self.assertEqual(targets[0][1:], (1, 200))
 
+    def test_pause_resume_freezes_course_timer_and_reduces_trainer_target(self) -> None:
+        scanner, client, state = self._fake_ble()
+        course = RideCourse((PowerSegment(0, 1.01, 100, 100),))
+        controls = iter((None, "pause", None, "pause"))
+        pause_states: list[bool] = []
+
+        result = asyncio.run(
+            run_trainer_course(
+                "trainer-id",
+                course,
+                scanner_type=scanner,
+                client_type=client,
+                on_control=lambda: next(controls),
+                on_pause=pause_states.append,
+            )
+        )
+
+        self.assertEqual(
+            state.writes,
+            [b"\x00", b"\x05\x64\x00", b"\x05\x00\x00", b"\x05\x64\x00", b"\x05\x00\x00"],
+        )
+        self.assertEqual(pause_states, [True, False])
+        self.assertGreater(result.elapsed_time_s, result.timer_time_s + 0.05)
+
     def test_streams_standard_ftms_indoor_bike_measurements(self) -> None:
         flags = (1 << 2) | (1 << 4) | (1 << 6) | (1 << 9) | (1 << 11)
         payload = struct.pack("<HHH", flags, 250, 180)
@@ -203,7 +227,7 @@ class BleTrainerCourseTests(unittest.TestCase):
                     }
                 )
                 on_tick(1)
-                return 600.0
+                return RideRunResult(600.0, 600.0)
 
             stdout = io.StringIO()
             stderr = io.StringIO()

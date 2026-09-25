@@ -240,10 +240,15 @@ python sync.py ble bigrun-ecg-analyze .\bigrun-ecg-samples.json --output .\bigru
 python sync.py ble bigrun-ecg-decode .\bigrun-ecg.jsonl --normalize --output .\bigrun-ecg-normalized.json
 python sync.py ble bigrun-ecg-mode <设备地址> hrv
 python sync.py ble trainer set-power <训练台地址> --watts 180
+python sync.py ble trainer preview --ftp 250
+python sync.py ble trainer preview .\course.json --ftp 250 --intensity-percent 105
+python sync.py ble trainer ride <训练台地址> .\course.json --ftp 250
 python sync.py ble rename <设备地址> "胸带"
 python sync.py ble prefer <设备地址> --type heart_rate
 python sync.py ble remove <设备地址>
 ```
+
+`trainer preview` 不连接蓝牙，可预览内置示例课程或指定课程文件。课程 JSON 使用顶层 `name` 和 `segments`；每段包含 `start_time_s`、`end_time_s`、`start_power_w`、`end_power_w`，`label` 可选。也可直接把 AI 生成骑行训练对应的 `.fit.meta` 文件作为课程输入。使用 `%FTP` 或缺省功率目标时要提供 `--ftp`。`trainer ride` 连接支持 FTMS 的训练台并生成 FIT 活动，默认保存到 `.data/virtual_rides/`；设备提供标准 Indoor Bike Data 时记录功率、速度、距离、心率和踏频，否则仍保存计时数据。交互终端支持 `+`/`-` 每次调整 5% 强度、`s` 跳过当前间歇、`p` 暂停或继续。暂停时目标功率设为 0 W，暂停时长计入 FIT 经过时间，但不计入计时器时间。
 
 `bigrun-ecg-analyze` 读取 `bigrun-ecg-decode` 生成的 JSON，要求采样率为 100–2000 Hz 且至少有 5 秒样本。它复现 APK 中的 100 ms 移动平均、0.5 Hz 高通、12 Hz 低通、R 峰检测和 R-R 间期计算，并按低于 60 bpm、高于 100 bpm 输出心率阈值状态。该状态只复现设备阈值提示，不是疾病分类；报告包含非医疗声明。
 

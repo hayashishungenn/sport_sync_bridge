@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import time
 from collections.abc import Callable
+from dataclasses import dataclass
 
 from .ble_sensors import (
     BleError,
@@ -28,6 +29,12 @@ _FTMS_RESPONSE_NAMES = {
     0x04: "operation failed",
     0x05: "control not permitted",
 }
+
+
+@dataclass(frozen=True, slots=True)
+class RideRunResult:
+    elapsed_time_s: float
+    timer_time_s: float
 
 
 def encode_target_power_command(watts: int) -> bytes:
@@ -111,7 +118,8 @@ async def run_trainer_course(
     on_tick: Callable[[float], None] | None = None,
     on_measurement: Callable[[dict[str, object]], None] | None = None,
     on_control: Callable[[], str | None] | None = None,
-) -> float:
+    on_pause: Callable[[bool], None] | None = None,
+) -> RideRunResult:
     _validate_timeout(timeout)
     if not isinstance(address, str) or not address.strip():
         raise BleError("BLE device address is required")
@@ -127,6 +135,8 @@ async def run_trainer_course(
         client_type = client_type or loaded_client
 
     started_at: float | None = None
+    active_started_at: float | None = None
+    paused_at: float | None = None
     try:
         device = await scanner_type.find_device_by_address(address, timeout=timeout)
         if device is None:
@@ -161,7 +171,7 @@ async def run_trainer_course(
                 except ValueError as exc:
                     measurements.put_nowait(exc)
 
-            def drain_measurements() -> None:
+            def drain_measurements(*, emit: bool = True) -> None:
                 while True:
                     try:
                         measurement = measurements.get_nowait()
@@ -169,7 +179,7 @@ async def run_trainer_course(
                         return
                     if isinstance(measurement, Exception):
                         raise BleError("FTMS trainer sent malformed Indoor Bike Data") from measurement
-                    if on_measurement is not None:
+                    if emit and on_measurement is not None:
                         on_measurement(measurement)
 
             notifications: list[object] = []
@@ -188,9 +198,10 @@ async def run_trainer_course(
                     timeout,
                 )
                 started_at = time.monotonic()
+                active_started_at = started_at
                 try:
                     while session.current_segment is not None:
-                        drain_measurements()
+                        drain_measurements(emit=not session.paused)
                         control = on_control() if on_control is not None else None
                         if control == "increase":
                             session.increase_intensity()
@@ -198,8 +209,30 @@ async def run_trainer_course(
                             session.decrease_intensity()
                         elif control == "skip":
                             session.skip_interval()
+                        elif control == "pause":
+                            if session.toggle_pause():
+                                paused_at = time.monotonic()
+                                if last_target is not None and last_target > 0:
+                                    await _send_and_check_response(
+                                        client,
+                                        control_point,
+                                        encode_target_power_command(0),
+                                        responses,
+                                        timeout,
+                                    )
+                                    last_target = 0
+                            else:
+                                now = time.monotonic()
+                                if paused_at is not None and active_started_at is not None:
+                                    active_started_at += now - paused_at
+                                paused_at = None
+                            if on_pause is not None:
+                                on_pause(session.paused)
+                        if session.paused:
+                            await asyncio.sleep(0.1)
+                            continue
                         target = session.current_target_power_w
-                        if session.erg_mode and target != last_target:
+                        if target != last_target:
                             await _send_and_check_response(
                                 client,
                                 control_point,
@@ -217,7 +250,8 @@ async def run_trainer_course(
                         if remaining is None:
                             break
                         step = min(1.0, remaining)
-                        deadline = started_at + session.wall_elapsed_s + step
+                        assert active_started_at is not None
+                        deadline = active_started_at + session.wall_elapsed_s + step
                         await asyncio.sleep(max(0.0, deadline - time.monotonic()))
                         session.advance(step)
                     drain_measurements()
@@ -236,9 +270,13 @@ async def run_trainer_course(
         raise
     except Exception as exc:
         raise BleError(f"Could not run FTMS trainer course ({type(exc).__name__})") from exc
-    if started_at is None:
+    if started_at is None or active_started_at is None:
         raise BleError("FTMS trainer course did not start")
-    return max(session.wall_elapsed_s, time.monotonic() - started_at)
+    finished_at = time.monotonic()
+    return RideRunResult(
+        elapsed_time_s=finished_at - started_at,
+        timer_time_s=finished_at - active_started_at,
+    )
 
 
 def _require_writable_indication_characteristic(characteristic: object) -> None:
