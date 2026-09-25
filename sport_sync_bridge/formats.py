@@ -59,6 +59,8 @@ _FIT_LAP_FIELDS = {
     "total_calories",
     "avg_heart_rate",
     "max_heart_rate",
+    "avg_cadence",
+    "max_cadence",
     "sport",
     "message_index",
 }
@@ -149,6 +151,8 @@ class ActivityLap:
     average_heart_rate: float | None = None
     maximum_heart_rate: float | None = None
     track_points: list[TrackPoint] = field(default_factory=list)
+    average_cadence: float | None = None
+    maximum_cadence: float | None = None
 
 
 @dataclass(slots=True)
@@ -306,7 +310,6 @@ def _target_format_losses(activity: ActivityFile, target_format: str) -> list[st
         summary_values = (
             ("activity-level average power", activity.average_power_w),
             ("activity-level maximum power", activity.maximum_power_w),
-            ("activity-level average cadence", activity.average_cadence),
             ("normalized power", activity.normalized_power_w),
             ("intensity factor", activity.intensity_factor),
             ("aerobic training effect", activity.aerobic_training_effect),
@@ -322,6 +325,8 @@ def _target_format_losses(activity: ActivityFile, target_format: str) -> list[st
             losses.append(f"{target_name} does not preserve FIT time-in-zone statistics")
 
     if target_format == "gpx":
+        if activity.average_cadence is not None:
+            losses.append("GPX does not preserve FIT activity-level average cadence")
         if activity.elapsed_time_s is not None or activity.timer_time_s is not None:
             losses.append("GPX does not preserve activity-level elapsed or timer time")
         if activity.distance_m is not None:
@@ -333,6 +338,8 @@ def _target_format_losses(activity: ActivityFile, target_format: str) -> list[st
             "calories": lambda lap: lap.calories,
             "average heart rate": lambda lap: lap.average_heart_rate,
             "maximum heart rate": lambda lap: lap.maximum_heart_rate,
+            "average cadence": lambda lap: lap.average_cadence,
+            "maximum cadence": lambda lap: lap.maximum_cadence,
         }
         omitted = [
             label
@@ -355,6 +362,14 @@ def _target_format_losses(activity: ActivityFile, target_format: str) -> list[st
             losses.append("GPX does not preserve activity-level maximum heart rate")
     elif target_format == "tcx":
         tcx_laps = [lap for lap in activity.laps if any(_has_position(point) for point in lap.track_points)]
+        if activity.average_cadence is not None and (
+            len(tcx_laps) != 1
+            or (
+                tcx_laps[0].average_cadence is not None
+                and not math.isclose(activity.average_cadence, tcx_laps[0].average_cadence, abs_tol=0.5)
+            )
+        ):
+            losses.append("TCX does not preserve FIT activity-level average cadence across multiple or conflicting laps")
         if len(tcx_laps) != 1:
             if (
                 activity.average_heart_rate_bpm is not None
@@ -489,6 +504,8 @@ def _read_fit(path: Path) -> ActivityFile:
                     calories=_optional_int(values.get("total_calories")),
                     average_heart_rate=_optional_float(values.get("avg_heart_rate")),
                     maximum_heart_rate=_optional_float(values.get("max_heart_rate")),
+                    average_cadence=_optional_float(values.get("avg_cadence")),
+                    maximum_cadence=_optional_float(values.get("max_cadence")),
                 )
             )
             unsupported_summary_fields.update(
@@ -730,12 +747,14 @@ def _read_tcx(path: Path) -> ActivityFile:
                     "calories",
                     "averageheartratebpm",
                     "maximumheartratebpm",
+                    "averagecadence",
+                    "maximumcadence",
                     "track",
                     "extensions",
                 },
             )
         )
-        for field_name in ("MaximumSpeed", "AverageCadence", "MaximumCadence", "Intensity", "TriggerMethod"):
+        for field_name in ("MaximumSpeed", "Intensity", "TriggerMethod"):
             if _child_text(lap_element, field_name) is not None:
                 unsupported_lap_fields.add(field_name)
         lap = ActivityLap(
@@ -749,6 +768,8 @@ def _read_tcx(path: Path) -> ActivityFile:
             maximum_heart_rate=_optional_float(
                 _child_text_by_path(lap_element, "MaximumHeartRateBpm", "Value")
             ),
+            average_cadence=_optional_float(_child_text(lap_element, "AverageCadence")),
+            maximum_cadence=_optional_float(_child_text(lap_element, "MaximumCadence")),
         )
         for track in (child for child in lap_element if _local_name(child.tag) == "Track"):
             unsupported_track_fields.update(
@@ -951,6 +972,19 @@ def _write_tcx(activity: ActivityFile) -> bytes:
             maximum_hr = activity.maximum_heart_rate_bpm
         _write_tcx_heart_rate(lap_element, "AverageHeartRateBpm", average_hr)
         _write_tcx_heart_rate(lap_element, "MaximumHeartRateBpm", maximum_hr)
+        average_cadence = lap.average_cadence
+        if average_cadence is None and has_single_position_lap:
+            average_cadence = activity.average_cadence
+        cadence_values = [point.cadence_rpm for point in points if point.cadence_rpm is not None]
+        if average_cadence is None and cadence_values:
+            average_cadence = sum(cadence_values) / len(cadence_values)
+        maximum_cadence = lap.maximum_cadence
+        if maximum_cadence is None and cadence_values:
+            maximum_cadence = max(cadence_values)
+        if average_cadence is not None:
+            _subtext(lap_element, TCX_NS, "AverageCadence", str(round(average_cadence)))
+        if maximum_cadence is not None:
+            _subtext(lap_element, TCX_NS, "MaximumCadence", str(round(maximum_cadence)))
         _subtext(lap_element, TCX_NS, "Intensity", "Active")
         _subtext(lap_element, TCX_NS, "TriggerMethod", "Manual")
         track = ET.SubElement(lap_element, _qname(TCX_NS, "Track"))
@@ -1105,6 +1139,17 @@ def _write_fit(activity: ActivityFile, *, allow_trackless_records: bool = False)
             maximum_hr = activity.maximum_heart_rate_bpm
         _set_field(lap_message, "avg_heart_rate", _rounded(average_hr))
         _set_field(lap_message, "max_heart_rate", _rounded(maximum_hr))
+        average_cadence = lap.average_cadence
+        if average_cadence is None and len(laps) == 1:
+            average_cadence = activity.average_cadence
+        cadence_values = [point.cadence_rpm for point in lap_points if point.cadence_rpm is not None]
+        if average_cadence is None and cadence_values:
+            average_cadence = sum(cadence_values) / len(cadence_values)
+        maximum_cadence = lap.maximum_cadence
+        if maximum_cadence is None and cadence_values:
+            maximum_cadence = max(cadence_values)
+        _set_field(lap_message, "avg_cadence", _rounded(average_cadence))
+        _set_field(lap_message, "max_cadence", _rounded(maximum_cadence))
         _set_field(lap_message, "sport", _sport_fit_value(activity.sport_type))
         _set_field(lap_message, "message_index", lap_index)
         builder.add(lap_message)

@@ -63,6 +63,50 @@ class FormatConversionTests(unittest.TestCase):
         self.assertTrue(any("lap summary" in loss for loss in result.losses))
         self.assertEqual(len(_read_gpx(output_path).laps), 1)
 
+    def test_tcx_lap_cadence_roundtrips_through_fit_and_tcx(self) -> None:
+        tcx_source = create_tcx(
+            self.root / "lap-cadence.tcx",
+            average_cadence=92,
+            maximum_cadence=108,
+        )
+        tcx_activity = _read_tcx(tcx_source)
+        self.assertEqual(tcx_activity.laps[0].average_cadence, 92)
+        self.assertEqual(tcx_activity.laps[0].maximum_cadence, 108)
+        self.assertFalse(any("AverageCadence" in loss for loss in tcx_activity.losses))
+
+        fit_result = convert_activity_file(tcx_source, self.root / "lap-cadence.fit", "fit")
+        fit_lap = _read_fit(fit_result.output_path).laps[0]
+        self.assertEqual(fit_lap.average_cadence, 92)
+        self.assertEqual(fit_lap.maximum_cadence, 108)
+
+        gpx_result = convert_activity_file(tcx_source, self.root / "lap-cadence.gpx", "gpx")
+        self.assertTrue(any("average cadence" in loss for loss in gpx_result.losses))
+        self.assertTrue(any("maximum cadence" in loss for loss in gpx_result.losses))
+
+        fit_source = create_fit(
+            self.root / "fit-lap-cadence.fit",
+            average_cadence=94,
+            lap_average_cadence=93,
+            lap_maximum_cadence=110,
+        )
+        tcx_result = convert_activity_file(fit_source, self.root / "fit-lap-cadence.tcx", "tcx")
+        tcx_lap = _read_tcx(tcx_result.output_path).laps[0]
+        self.assertEqual(tcx_lap.average_cadence, 93)
+        self.assertEqual(tcx_lap.maximum_cadence, 110)
+        self.assertTrue(any("activity-level average cadence" in loss for loss in tcx_result.losses))
+
+        single_lap_source = create_fit(
+            self.root / "fit-session-cadence.fit",
+            average_cadence=94,
+        )
+        single_lap_result = convert_activity_file(
+            single_lap_source,
+            self.root / "fit-session-cadence.tcx",
+            "tcx",
+        )
+        self.assertEqual(_read_tcx(single_lap_result.output_path).laps[0].average_cadence, 94)
+        self.assertFalse(any("activity-level average cadence" in loss for loss in single_lap_result.losses))
+
     def test_unmodeled_tcx_lap_fields_are_reported_as_conversion_losses(self) -> None:
         source_path = self.root / "with-extra-lap-field.tcx"
         source_path.write_text(
@@ -136,7 +180,11 @@ class FormatConversionTests(unittest.TestCase):
                     self.root / f"session-cadence.{target_format}",
                     target_format,
                 )
-                self.assertTrue(any("activity-level average cadence" in loss for loss in result.losses))
+                if target_format == "gpx":
+                    self.assertTrue(any("activity-level average cadence" in loss for loss in result.losses))
+                else:
+                    self.assertEqual(_read_tcx(result.output_path).laps[0].average_cadence, 94)
+                    self.assertFalse(any("activity-level average cadence" in loss for loss in result.losses))
 
     def test_fit_output_writes_average_cadence_from_trackpoints(self) -> None:
         source_path = self.root / "cadence.gpx"

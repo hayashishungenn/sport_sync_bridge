@@ -34,6 +34,8 @@ def create_fit(
     average_heart_rate: int | None = None,
     maximum_heart_rate: int | None = None,
     average_cadence: int | None = None,
+    lap_average_cadence: int | None = None,
+    lap_maximum_cadence: int | None = None,
     average_power: int | None = None,
     maximum_power: int | None = None,
     normalized_power: int | None = None,
@@ -89,6 +91,10 @@ def create_fit(
         if with_heart_rate:
             _set(lap, "avg_heart_rate", 150)
             _set(lap, "max_heart_rate", 151)
+        if lap_average_cadence is not None:
+            _set(lap, "avg_cadence", lap_average_cadence)
+        if lap_maximum_cadence is not None:
+            _set(lap, "max_cadence", lap_maximum_cadence)
         _set(lap, "sport", sport)
         builder.add(lap)
 
@@ -150,12 +156,27 @@ def create_gpx(path: Path, *, with_track: bool = True) -> Path:
     return path
 
 
-def create_tcx(path: Path, *, with_track: bool = True) -> Path:
+def create_tcx(
+    path: Path,
+    *,
+    with_track: bool = True,
+    average_cadence: int | None = None,
+    maximum_cadence: int | None = None,
+) -> Path:
     points = """<Trackpoint><Time>2026-01-02T03:04:00Z</Time><Position><LatitudeDegrees>31.23</LatitudeDegrees><LongitudeDegrees>121.47</LongitudeDegrees></Position><AltitudeMeters>10</AltitudeMeters><DistanceMeters>0</DistanceMeters><HeartRateBpm><Value>150</Value></HeartRateBpm><Cadence>80</Cadence><Extensions><ns3:TPX><ns3:Speed>5</ns3:Speed><ns3:Watts>200</ns3:Watts></ns3:TPX></Extensions></Trackpoint><Trackpoint><Time>2026-01-02T03:05:00Z</Time><Position><LatitudeDegrees>31.231</LatitudeDegrees><LongitudeDegrees>121.471</LongitudeDegrees></Position><AltitudeMeters>11</AltitudeMeters><DistanceMeters>100</DistanceMeters><HeartRateBpm><Value>151</Value></HeartRateBpm><Cadence>81</Cadence><Extensions><ns3:TPX><ns3:Speed>5.1</ns3:Speed><ns3:Watts>201</ns3:Watts></ns3:TPX></Extensions></Trackpoint>""" if with_track else ""
+    lap_cadence = ""
+    if average_cadence is not None:
+        lap_cadence += f"<AverageCadence>{average_cadence}</AverageCadence>"
+    if maximum_cadence is not None:
+        lap_cadence += f"<MaximumCadence>{maximum_cadence}</MaximumCadence>"
     payload = f"""<?xml version="1.0" encoding="UTF-8"?>
 <TrainingCenterDatabase xmlns="http://www.garmin.com/xmlschemas/TrainingCenterDatabase/v2" xmlns:ns3="http://www.garmin.com/xmlschemas/ActivityExtension/v2">
   <Activities><Activity Sport="Biking"><Id>2026-01-02T03:04:00Z</Id><Notes>Evening ride</Notes><Lap StartTime="2026-01-02T03:04:00Z"><TotalTimeSeconds>60</TotalTimeSeconds><DistanceMeters>100</DistanceMeters><Calories>30</Calories><AverageHeartRateBpm><Value>150</Value></AverageHeartRateBpm><MaximumHeartRateBpm><Value>151</Value></MaximumHeartRateBpm><Intensity>Active</Intensity><TriggerMethod>Manual</TriggerMethod><Track>{points}</Track></Lap></Activity></Activities>
 </TrainingCenterDatabase>"""
+    payload = payload.replace(
+        "</MaximumHeartRateBpm><Intensity>",
+        f"</MaximumHeartRateBpm>{lap_cadence}<Intensity>",
+    )
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(payload, encoding="utf-8")
     return path
