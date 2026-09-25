@@ -41,6 +41,14 @@ from .ai_preferences import (
     reset_ai_analysis_preferences,
     save_ai_analysis_preferences,
 )
+from .ai_profile import (
+    AI_ATHLETE_PROFILE_FIELDS,
+    AI_ATHLETE_PROFILE_GENDERS,
+    AI_ATHLETE_PROFILE_INTEGER_FIELDS,
+    load_ai_athlete_profile,
+    reset_ai_athlete_profile,
+    save_ai_athlete_profile,
+)
 from .ble_sensors import (
     BLE_TYPES,
     BleDeviceRegistry,
@@ -658,6 +666,30 @@ def build_parser() -> argparse.ArgumentParser:
     ai_settings_set.add_argument("--detail", choices=list(AI_ANALYSIS_DETAILS))
     ai_settings_actions.add_parser("reset", help="Reset preferences to performance and normal")
 
+    ai_profile_parser = subparsers.add_parser(
+        "ai-profile", help="Show or change the local AI athlete profile"
+    )
+    ai_profile_actions = ai_profile_parser.add_subparsers(
+        dest="ai_profile_action", required=True
+    )
+    ai_profile_actions.add_parser("show", help="Show saved AI athlete profile")
+    ai_profile_set = ai_profile_actions.add_parser("set", help="Save AI athlete profile fields")
+    for field in AI_ATHLETE_PROFILE_FIELDS:
+        option = f"--{field.replace('_', '-')}"
+        if field == "gender":
+            ai_profile_set.add_argument(option, choices=list(AI_ATHLETE_PROFILE_GENDERS))
+        else:
+            value_type = int if field in AI_ATHLETE_PROFILE_INTEGER_FIELDS else float
+            ai_profile_set.add_argument(option, type=value_type)
+    ai_profile_set.add_argument(
+        "--clear",
+        dest="clear_fields",
+        action="append",
+        choices=list(AI_ATHLETE_PROFILE_FIELDS),
+        help="Clear a saved field; may be repeated",
+    )
+    ai_profile_actions.add_parser("reset", help="Clear all saved athlete profile fields")
+
     ai_export_parser = subparsers.add_parser(
         "ai-report-export", help="Export a saved AI analysis as Markdown or PDF"
     )
@@ -918,6 +950,7 @@ def main(argv: list[str] | None = None) -> int:
         "health",
         "ai-analysis",
         "ai-settings",
+        "ai-profile",
         "ai-report-export",
         "receive",
         "ble",
@@ -1785,6 +1818,32 @@ def _run_local_command(args: argparse.Namespace, config: AppConfig) -> int:
         finally:
             state.close()
 
+    if args.command == "ai-profile":
+        state = StateDB(config.db_path)
+        try:
+            if args.ai_profile_action == "show":
+                profile = load_ai_athlete_profile(state)
+            elif args.ai_profile_action == "set":
+                values = {
+                    field: getattr(args, field)
+                    for field in AI_ATHLETE_PROFILE_FIELDS
+                    if getattr(args, field) is not None
+                }
+                profile = save_ai_athlete_profile(
+                    state,
+                    values,
+                    clear_fields=args.clear_fields or (),
+                )
+            else:
+                profile = reset_ai_athlete_profile(state)
+            print(json.dumps(profile, ensure_ascii=False, indent=2))
+            return 0
+        except ValueError as exc:
+            print(f"ai_profile_error={exc}", file=sys.stderr)
+            return 2
+        finally:
+            state.close()
+
     if args.command == "ai-report-export":
         state = StateDB(config.db_path)
         try:
@@ -1919,6 +1978,7 @@ def _run_local_command(args: argparse.Namespace, config: AppConfig) -> int:
                     language=args.language,
                     focus=focus,
                     detail=detail,
+                    athlete_profile=load_ai_athlete_profile(state),
                     speed_samples=speed_samples,
                 )
             if args.prompt_only:

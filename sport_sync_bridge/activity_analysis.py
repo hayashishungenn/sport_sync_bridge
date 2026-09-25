@@ -13,6 +13,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Callable, Iterable, Sequence
 
+from .ai_profile import validate_ai_athlete_profile
 from .formats import ActivityFile, ActivityTimeInZone, ActivityZoneTime, TrackPoint
 from .training_intensity import (
     classify_activity_training_intensity,
@@ -484,6 +485,7 @@ def build_ai_analysis_prompt(
     language: str = "zh-CN",
     focus: str = "performance",
     detail: str = "normal",
+    athlete_profile: dict[str, object] | None = None,
     speed_samples: Sequence[tuple[datetime | None, object]] | None = None,
 ) -> str:
     language = validate_ai_language_code(language)
@@ -502,6 +504,30 @@ def build_ai_analysis_prompt(
     if detail not in detail_instructions:
         raise ValueError(f"Unsupported AI analysis detail: {detail}")
 
+    profile = validate_ai_athlete_profile(
+        athlete_profile if athlete_profile is not None else {}
+    )
+    profile_labels = (
+        ("gender", "gender", ""),
+        ("age", "age", ""),
+        ("weight_kg", "weight", " kg"),
+        ("height_cm", "height", " cm"),
+        ("resting_hr_bpm", "RHR", " bpm"),
+        ("max_hr_bpm", "MaxHR", " bpm"),
+        ("lactate_threshold_hr_bpm", "LTHR", " bpm"),
+        ("vo2_max_run", "VO2max(run)", ""),
+        ("vo2_max_bike", "VO2max(bike)", ""),
+        ("ftp_w", "FTP", " W"),
+        ("threshold_pace_s_per_km", "Threshold Pace", " s/km"),
+    )
+    profile_lines = []
+    for field, label, unit in profile_labels:
+        if field not in profile:
+            continue
+        value = profile[field]
+        rendered = {"female": "Female", "male": "Male"}.get(value, value)
+        profile_lines.append(f"{label}: {rendered}{unit}")
+
     recent = summarize_rows(recent_rows)
     lines = [
         "你是一名注重数据的耐力运动教练。分析下面的运动和健康数据，并给出有依据、可执行的建议。",
@@ -512,6 +538,9 @@ def build_ai_analysis_prompt(
         f"分析侧重点：{focus_instructions[focus]}",
         f"回答详略：{detail_instructions[detail]}",
         "为保护隐私，内容不包含 GPS 坐标，也不请求身份信息。",
+        "",
+        "### Athlete Profile:",
+        *(profile_lines or ["未设置运动员档案。"]),
         "",
         "本次活动：",
         f"运动类型：{activity_summary.get('sport_type') or '未知'}",
