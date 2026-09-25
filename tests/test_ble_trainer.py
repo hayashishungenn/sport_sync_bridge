@@ -13,13 +13,23 @@ from unittest.mock import patch
 from fit_tool.fit_file import FitFile
 
 from sport_sync_bridge.ble_sensors import BleError
-from sport_sync_bridge.ble_trainer import RideRunResult, run_trainer_course
+from sport_sync_bridge.ble_trainer import (
+    RideRunResult,
+    run_trainer_course,
+    set_trainer_resistance_mode,
+)
 from sport_sync_bridge.cli import main
 from sport_sync_bridge.virtual_ride import PowerSegment, RideCourse
 
 
 class BleTrainerCourseTests(unittest.TestCase):
-    def _fake_ble(self, *, response_result: int = 0x01, indoor_data_payload: bytes | None = None):
+    def _fake_ble(
+        self,
+        *,
+        response_result: int = 0x01,
+        command_result: int = 0x01,
+        indoor_data_payload: bytes | None = None,
+    ):
         control_point = SimpleNamespace(uuid="2ad9", properties=["write", "indicate"])
         indoor_data = SimpleNamespace(uuid="2ad2", properties=["notify"])
         characteristics = [control_point]
@@ -57,7 +67,7 @@ class BleTrainerCourseTests(unittest.TestCase):
                 self.assert_ack_write(response)
                 command = bytes(payload)
                 client_state.writes.append(command)
-                result = response_result if command == b"\x00" else 0x01
+                result = response_result if command == b"\x00" else command_result
                 self._callbacks[control_point.uuid](None, bytearray((0x80, command[0], result)))
 
             @staticmethod
@@ -66,6 +76,63 @@ class BleTrainerCourseTests(unittest.TestCase):
                     raise AssertionError("FTMS control point writes must be acknowledged")
 
         return FakeScanner, FakeClient, client_state
+
+    def test_sets_neutral_ftms_resistance_target(self) -> None:
+        scanner, client, state = self._fake_ble()
+
+        asyncio.run(
+            set_trainer_resistance_mode(
+                "trainer-id",
+                scanner_type=scanner,
+                client_type=client,
+            )
+        )
+
+        self.assertEqual(state.writes, [b"\x00", b"\x04\x00\x00"])
+        self.assertEqual(state.stop_count, 1)
+
+    def test_rejected_resistance_command_stops_notifications(self) -> None:
+        scanner, client, state = self._fake_ble(command_result=0x02)
+
+        with self.assertRaisesRegex(BleError, "operation not supported"):
+            asyncio.run(
+                set_trainer_resistance_mode(
+                    "trainer-id",
+                    scanner_type=scanner,
+                    client_type=client,
+                )
+            )
+
+        self.assertEqual(state.writes, [b"\x00", b"\x04\x00\x00"])
+        self.assertEqual(state.stop_count, 1)
+
+    def test_cli_set_resistance_dispatches_explicit_zero_target(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            config = SimpleNamespace(
+                data_dir=root / ".data",
+                log_level="INFO",
+                log_path=root / "sync.log",
+            )
+            calls: list[tuple[str, float]] = []
+
+            async def fake_set_resistance(address: str, timeout: float) -> None:
+                calls.append((address, timeout))
+
+            stdout = io.StringIO()
+            stderr = io.StringIO()
+            with (
+                patch("sport_sync_bridge.cli.AppConfig.load", return_value=config),
+                patch("sport_sync_bridge.cli.configure_logging"),
+                patch("sport_sync_bridge.cli.set_trainer_resistance_mode", new=fake_set_resistance),
+                contextlib.redirect_stdout(stdout),
+                contextlib.redirect_stderr(stderr),
+            ):
+                status = main(["ble", "trainer", "set-resistance", "trainer-id"])
+
+            self.assertEqual(status, 0)
+            self.assertEqual(calls, [("trainer-id", 15.0)])
+            self.assertIn("target_resistance_level=0.0", stdout.getvalue())
 
     def test_runs_course_with_acknowledged_ftms_power_and_resets_target(self) -> None:
         scanner, client, state = self._fake_ble()

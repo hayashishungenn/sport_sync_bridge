@@ -20,6 +20,7 @@ FTMS_CONTROL_POINT_UUID = "2ad9"
 FTMS_INDOOR_BIKE_DATA_UUID = "2ad2"
 FTMS_RESPONSE_CODE = 0x80
 FTMS_REQUEST_CONTROL = 0x00
+FTMS_SET_TARGET_RESISTANCE_LEVEL = 0x04
 FTMS_SET_TARGET_POWER = 0x05
 
 _FTMS_RESPONSE_NAMES = {
@@ -43,6 +44,10 @@ def encode_target_power_command(watts: int) -> bytes:
     return bytes((FTMS_SET_TARGET_POWER,)) + watts.to_bytes(2, "little", signed=True)
 
 
+def encode_zero_resistance_command() -> bytes:
+    return bytes((FTMS_SET_TARGET_RESISTANCE_LEVEL, 0, 0))
+
+
 async def set_trainer_target_power(
     address: str,
     watts: int,
@@ -53,6 +58,43 @@ async def set_trainer_target_power(
 ) -> None:
     _validate_timeout(timeout)
     command = encode_target_power_command(watts)
+    await _send_trainer_control_command(
+        address,
+        command,
+        timeout,
+        "set FTMS trainer target power",
+        scanner_type=scanner_type,
+        client_type=client_type,
+    )
+
+
+async def set_trainer_resistance_mode(
+    address: str,
+    timeout: float = 15.0,
+    *,
+    scanner_type: object | None = None,
+    client_type: object | None = None,
+) -> None:
+    _validate_timeout(timeout)
+    await _send_trainer_control_command(
+        address,
+        encode_zero_resistance_command(),
+        timeout,
+        "set FTMS trainer resistance mode",
+        scanner_type=scanner_type,
+        client_type=client_type,
+    )
+
+
+async def _send_trainer_control_command(
+    address: str,
+    command: bytes,
+    timeout: float,
+    operation: str,
+    *,
+    scanner_type: object | None,
+    client_type: object | None,
+) -> None:
     if not isinstance(address, str) or not address.strip():
         raise BleError("BLE device address is required")
     address = address.strip()
@@ -103,7 +145,7 @@ async def set_trainer_target_power(
     except BleError:
         raise
     except Exception as exc:
-        raise BleError(f"Could not set FTMS trainer target power ({type(exc).__name__})") from exc
+        raise BleError(f"Could not {operation} ({type(exc).__name__})") from exc
 
 
 async def run_trainer_course(

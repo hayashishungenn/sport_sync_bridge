@@ -363,6 +363,7 @@ python sync.py ble bigrun-ecg-analyze .\bigrun-ecg-samples.json --output .\bigru
 python sync.py ble bigrun-ecg-decode .\bigrun-ecg.jsonl --normalize --output .\bigrun-ecg-normalized.json
 python sync.py ble bigrun-ecg-mode <设备地址> hrv
 python sync.py ble trainer set-power <训练台地址> --watts 180
+python sync.py ble trainer set-resistance <训练台地址>
 python sync.py ble trainer preview --ftp 250
 python sync.py ble trainer preview .\course.json --ftp 250 --intensity-percent 105
 python sync.py ble trainer ride <训练台地址> .\course.json --ftp 250
@@ -374,6 +375,8 @@ python sync.py ble remove <设备地址>
 `ble guide` 说明蓝牙传感器所需的系统访问权限，以及不使用传感器时如何跳过。它不会扫描设备、打开系统设置或触发 Android 授权弹窗；实际权限由运行 CLI 的操作系统管理。
 
 `trainer preview` 不连接蓝牙，可预览内置示例课程或指定课程文件。课程 JSON 使用顶层 `name` 和 `segments`；每段包含 `start_time_s`、`end_time_s`、`start_power_w`、`end_power_w`，`label` 可选。也可直接把 AI 生成骑行训练对应的 `.fit.meta` 文件作为课程输入。使用 `%FTP` 或缺省功率目标时要提供 `--ftp`。`trainer ride` 连接支持 FTMS 的训练台并生成 FIT 活动，默认保存到 `.data/virtual_rides/`；设备提供标准 Indoor Bike Data 时记录功率、速度、距离、心率和踏频，否则仍保存计时数据。交互终端支持 `+`/`-` 每次调整 5% 强度、`s` 跳过当前间歇、`p` 暂停或继续。暂停时目标功率设为 0 W，暂停时长计入 FIT 经过时间，但不计入计时器时间。
+
+`trainer set-resistance` 把 FTMS 目标阻力设为 0.0，对应 GarSync 虚拟骑行 ERG 切换中写入阻力目标的分支；`trainer set-power` 设置功率目标，对应另一分支。
 
 `bigrun-ecg-analyze` 读取 `bigrun-ecg-decode` 生成的 JSON，要求采样率为 100–2000 Hz 且至少有 5 秒样本。它复现 APK 中的 100 ms 移动平均、0.5 Hz 高通、12 Hz 低通、R 峰检测和 R-R 间期计算，并按低于 60 bpm、高于 100 bpm 输出心率阈值状态。该状态只复现设备阈值提示，不是疾病分类；报告包含非医疗声明。
 

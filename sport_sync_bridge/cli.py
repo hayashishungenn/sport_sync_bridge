@@ -68,7 +68,12 @@ from .ble_bigrun_ecg import (
     validate_bigrun_ecg_options,
 )
 from .ble_permission_guide import format_ble_permission_guide
-from .ble_trainer import RideRunResult, run_trainer_course, set_trainer_target_power
+from .ble_trainer import (
+    RideRunResult,
+    run_trainer_course,
+    set_trainer_resistance_mode,
+    set_trainer_target_power,
+)
 from .virtual_ride import (
     RideCourse,
     RideCourseError,
@@ -468,6 +473,12 @@ def build_parser() -> argparse.ArgumentParser:
     trainer_power.add_argument("address", help="FTMS trainer BLE address")
     trainer_power.add_argument("--watts", type=int, required=True, help="Target power in watts")
     trainer_power.add_argument("--timeout", type=float, default=15.0, help="Connection timeout in seconds")
+    trainer_resistance = trainer_actions.add_parser(
+        "set-resistance",
+        help="Set the FTMS target resistance level to 0.0",
+    )
+    trainer_resistance.add_argument("address", help="FTMS trainer BLE address")
+    trainer_resistance.add_argument("--timeout", type=float, default=15.0, help="Connection timeout in seconds")
     trainer_preview = trainer_actions.add_parser("preview", help="Preview a virtual ride course without BLE")
     trainer_preview.add_argument("course_file", type=Path, nargs="?", help="Course JSON or AI workout .fit.meta file")
     trainer_preview.add_argument("--ftp", type=float, help="FTP in watts for %%FTP and fallback power targets")
@@ -2511,6 +2522,11 @@ def _run_ble_command(args: argparse.Namespace, config: AppConfig) -> int:
                 asyncio.run(set_trainer_target_power(args.address, args.watts, args.timeout))
                 print(f"address={args.address}")
                 print(f"target_power_w={args.watts}")
+                return 0
+            if args.trainer_action == "set-resistance":
+                asyncio.run(set_trainer_resistance_mode(args.address, args.timeout))
+                print(f"address={args.address}")
+                print("target_resistance_level=0.0")
                 return 0
 
             course = (
