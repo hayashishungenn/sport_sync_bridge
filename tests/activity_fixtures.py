@@ -33,6 +33,7 @@ def create_fit(
     sport: int = Sport.CYCLING.value,
     average_heart_rate: int | None = None,
     maximum_heart_rate: int | None = None,
+    average_cadence: int | None = None,
     average_power: int | None = None,
     maximum_power: int | None = None,
     normalized_power: int | None = None,
@@ -104,6 +105,8 @@ def create_fit(
             _set(session, "avg_heart_rate", average_heart_rate)
         if maximum_heart_rate is not None:
             _set(session, "max_heart_rate", maximum_heart_rate)
+        if average_cadence is not None:
+            _set(session, "avg_cadence", average_cadence)
         if average_power is not None:
             _set(session, "avg_power", average_power)
         if maximum_power is not None:

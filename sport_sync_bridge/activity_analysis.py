@@ -42,6 +42,9 @@ def summarize_activity(activity: ActivityFile) -> dict[str, object]:
     speeds = [point.speed_mps for point in points if point.speed_mps is not None]
     heart_rates = [point.heart_rate_bpm for point in points if point.heart_rate_bpm is not None]
     cadences = [point.cadence_rpm for point in points if point.cadence_rpm is not None]
+    average_cadence = activity.average_cadence
+    if average_cadence is None and cadences:
+        average_cadence = statistics.fmean(cadences)
     powers = [point.power_w for point in points if point.power_w is not None]
     altitudes = [point.elevation_m for point in points if point.elevation_m is not None]
     ascent = sum(max(0.0, current - previous) for previous, current in zip(altitudes, altitudes[1:]))
@@ -77,7 +80,8 @@ def summarize_activity(activity: ActivityFile) -> dict[str, object]:
         "average_heart_rate_bpm": average_hr,
         "maximum_heart_rate_bpm": maximum_hr,
         "training_stress_score": activity.training_stress_score,
-        "average_cadence_rpm": statistics.fmean(cadences) if cadences else None,
+        "average_cadence": average_cadence,
+        "average_cadence_rpm": average_cadence,
         "average_power_w": average_power,
         "maximum_power_w": maximum_power,
         "normalized_power_w": activity.normalized_power_w,

@@ -222,6 +222,30 @@ class PeriodSummaryTests(unittest.TestCase):
         self.assertEqual(result["avg_cadence_activity_count"], 4)
         self.assertIn("平均踏频：110.0（4 次有效活动）", format_period_summary(result, "txt"))
 
+    def test_period_summary_reads_legacy_cadence_summaries(self) -> None:
+        row = self._row(
+            "a" * 64,
+            "cycling",
+            "2026-01-01T08:00:00Z",
+            "fit",
+            20000,
+            3600,
+            150,
+            average_cadence=92,
+        )
+        summary = json.loads(row["summary_json"])
+        summary["average_cadence_rpm"] = summary.pop("average_cadence")
+        row["summary_json"] = json.dumps(summary)
+
+        result = calculate_period_summary(
+            [row],
+            date_from=date(2026, 1, 1),
+            date_to=date(2026, 1, 1),
+        )
+
+        self.assertEqual(result["avg_cadence"], 92)
+        self.assertEqual(result["avg_cadence_activity_count"], 1)
+
     def test_hr_tss_fallback_is_optional_and_fit_tss_takes_precedence(self) -> None:
         rows = [
             self._row("a" * 64, "running", "2026-01-01T08:00:00Z", "fit", 5000, 3600, 150),
@@ -875,7 +899,7 @@ class PeriodSummaryTests(unittest.TestCase):
         if intensity_factor is not None:
             summary["intensity_factor"] = intensity_factor
         if average_cadence is not None:
-            summary["average_cadence_rpm"] = average_cadence
+            summary["average_cadence"] = average_cadence
         if zones is not None:
             summary["time_in_zone_messages"] = zones
         return {

@@ -74,6 +74,7 @@ _FIT_SESSION_FIELDS = {
     "max_power",
     "avg_heart_rate",
     "max_heart_rate",
+    "avg_cadence",
     "total_training_effect",
     "total_anaerobic_training_effect",
     "normalized_power",
@@ -196,6 +197,7 @@ class ActivityFile:
     intensity_factor: float | None = None
     aerobic_training_effect: float | None = None
     anaerobic_training_effect: float | None = None
+    average_cadence: float | None = None
 
     @property
     def track_points(self) -> list[TrackPoint]:
@@ -304,6 +306,7 @@ def _target_format_losses(activity: ActivityFile, target_format: str) -> list[st
         summary_values = (
             ("activity-level average power", activity.average_power_w),
             ("activity-level maximum power", activity.maximum_power_w),
+            ("activity-level average cadence", activity.average_cadence),
             ("normalized power", activity.normalized_power_w),
             ("intensity factor", activity.intensity_factor),
             ("aerobic training effect", activity.aerobic_training_effect),
@@ -509,6 +512,7 @@ def _read_fit(path: Path) -> ActivityFile:
                 activity.distance_m = distance
             activity.average_heart_rate_bpm = _optional_float(values.get("avg_heart_rate"))
             activity.maximum_heart_rate_bpm = _optional_float(values.get("max_heart_rate"))
+            activity.average_cadence = _optional_float(values.get("avg_cadence"))
             activity.average_power_w = _optional_float(values.get("avg_power"))
             activity.maximum_power_w = _optional_float(values.get("max_power"))
             activity.normalized_power_w = _optional_float(values.get("normalized_power"))
@@ -1146,6 +1150,12 @@ def _write_fit(activity: ActivityFile, *, allow_trackless_records: bool = False)
         maximum_hr = _maximum_hr(activity.track_points)
     _set_field(session, "avg_heart_rate", _rounded(average_hr))
     _set_field(session, "max_heart_rate", _rounded(maximum_hr))
+    average_cadence = activity.average_cadence
+    if average_cadence is None:
+        cadence_values = [point.cadence_rpm for point in activity.track_points if point.cadence_rpm is not None]
+        if cadence_values:
+            average_cadence = sum(cadence_values) / len(cadence_values)
+    _set_field(session, "avg_cadence", _rounded(average_cadence))
     _set_field(session, "total_training_effect", activity.aerobic_training_effect)
     _set_field(session, "total_anaerobic_training_effect", activity.anaerobic_training_effect)
     _set_field(session, "normalized_power", _rounded(activity.normalized_power_w))

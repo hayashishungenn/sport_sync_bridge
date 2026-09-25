@@ -111,7 +111,9 @@ def calculate_period_summary(
         if pace is None and average_speed is not None:
             pace = 1000.0 / average_speed
         average_hr = _optional_nonnegative(summary.get("average_heart_rate_bpm"))
-        average_cadence = _optional_nonnegative(summary.get("average_cadence_rpm"))
+        average_cadence = _optional_nonnegative(summary.get("average_cadence"))
+        if average_cadence is None:
+            average_cadence = _optional_nonnegative(summary.get("average_cadence_rpm"))
         average_power = _optional_nonnegative(summary.get("average_power_w"))
         normalized_power = _optional_nonnegative(summary.get("normalized_power_w"))
         intensity_factor = _optional_nonnegative(summary.get("intensity_factor"))

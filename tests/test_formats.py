@@ -5,6 +5,7 @@ import unittest
 from datetime import timedelta
 from pathlib import Path
 
+from sport_sync_bridge.activity_analysis import summarize_activity
 from sport_sync_bridge.formats import convert_activity_file, _read_fit, _read_gpx, _read_tcx
 from tests.activity_fixtures import START, create_fit, create_gpx, create_tcx
 
@@ -114,6 +115,39 @@ class FormatConversionTests(unittest.TestCase):
                     target_format,
                 )
                 self.assertTrue(any("training stress score" in loss for loss in result.losses))
+
+    def test_fit_session_cadence_is_used_for_activity_summary(self) -> None:
+        source_path = create_fit(
+            self.root / "session-cadence.fit",
+            average_cadence=94,
+        )
+        activity = _read_fit(source_path)
+        summary = summarize_activity(activity)
+
+        self.assertEqual(activity.average_cadence, 94)
+        self.assertEqual(summary["average_cadence"], 94)
+        self.assertEqual(summary["average_cadence_rpm"], 94)
+        self.assertEqual(summarize_activity(_read_fit(self.fit_path))["average_cadence"], 80.5)
+
+        for target_format in ("gpx", "tcx"):
+            with self.subTest(target=target_format):
+                result = convert_activity_file(
+                    source_path,
+                    self.root / f"session-cadence.{target_format}",
+                    target_format,
+                )
+                self.assertTrue(any("activity-level average cadence" in loss for loss in result.losses))
+
+    def test_fit_output_writes_average_cadence_from_trackpoints(self) -> None:
+        source_path = self.root / "cadence.gpx"
+        gpx = self.gpx_path.read_text(encoding="utf-8")
+        gpx = gpx.replace("<gpxtpx:cad>80</gpxtpx:cad>", "<gpxtpx:cad>84</gpxtpx:cad>")
+        gpx = gpx.replace("<gpxtpx:cad>81</gpxtpx:cad>", "<gpxtpx:cad>86</gpxtpx:cad>")
+        source_path.write_text(gpx, encoding="utf-8")
+
+        result = convert_activity_file(source_path, self.root / "cadence.fit", "fit")
+
+        self.assertEqual(_read_fit(result.output_path).average_cadence, 85)
 
     def test_fit_session_keeps_power_and_training_effect_metrics(self) -> None:
         source_path = create_fit(
