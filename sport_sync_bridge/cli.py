@@ -151,7 +151,17 @@ def build_parser() -> argparse.ArgumentParser:
     sync_parser.add_argument(
         "--source",
         action="append",
-        choices=["igpsport", "onelap", "intervals_icu", "local", "garmin", "strava", "concept2", "hammerhead"],
+        choices=[
+            "igpsport",
+            "onelap",
+            "intervals_icu",
+            "local",
+            "garmin",
+            "strava",
+            "concept2",
+            "hammerhead",
+            "polar",
+        ],
         help="Repeatable source",
     )
     sync_parser.add_argument(
@@ -644,13 +654,23 @@ def build_parser() -> argparse.ArgumentParser:
     check_parser.add_argument(
         "--source",
         action="append",
-        choices=["igpsport", "onelap", "intervals_icu", "local", "garmin", "strava", "concept2"],
+        choices=[
+            "igpsport",
+            "onelap",
+            "intervals_icu",
+            "local",
+            "garmin",
+            "strava",
+            "concept2",
+            "hammerhead",
+            "polar",
+        ],
         help="Repeatable source",
     )
     check_parser.add_argument(
         "--target",
         action="append",
-        choices=["garmin", "strava", "wahoo"],
+        choices=["garmin", "strava", "wahoo", "hammerhead"],
         help="Repeatable target",
     )
 
@@ -725,6 +745,14 @@ def build_parser() -> argparse.ArgumentParser:
     hammerhead_delete_route_parser.add_argument(
         "--yes", action="store_true", help="Skip the typed-ID confirmation prompt"
     )
+
+    subparsers.add_parser("polar-auth-url", help="Print the Polar AccessLink OAuth URL")
+    polar_exchange_parser = subparsers.add_parser(
+        "polar-exchange", help="Exchange a Polar OAuth code and register this user"
+    )
+    polar_exchange_parser.add_argument("--code", required=True, help="OAuth code returned by Polar")
+    polar_exchange_parser.add_argument("--state", required=True, help="OAuth state returned to the redirect URI")
+    subparsers.add_parser("polar-register", help="Retry Polar AccessLink user registration")
 
     share_parser = subparsers.add_parser("share", help="Build GarSync friend and group invite links")
     share_actions = share_parser.add_subparsers(dest="share_action", required=True)
@@ -978,6 +1006,20 @@ def main(argv: list[str] | None = None) -> int:
                     return 1
             engine.get_hammerhead_target().delete_route(args.route_id)
             print(f"deleted=hammerhead-route:{args.route_id}")
+            return 0
+
+        if args.command == "polar-auth-url":
+            print(engine.polar_client.build_authorize_url())
+            return 0
+
+        if args.command == "polar-exchange":
+            engine.polar_client.exchange_code(args.code, args.state)
+            print("Polar AccessLink token saved to local SQLite; user registration completed.")
+            return 0
+
+        if args.command == "polar-register":
+            engine.polar_client.register_user()
+            print("Polar AccessLink user registration is ready.")
             return 0
 
         selected_sources = args.source or config.sources

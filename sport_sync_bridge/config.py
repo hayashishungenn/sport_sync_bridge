@@ -71,6 +71,11 @@ class AppConfig:
     hammerhead_refresh_token: str | None
     hammerhead_expires_at: str | None
     hammerhead_scope: str
+    polar_client_id: str | None
+    polar_client_secret: str | None
+    polar_redirect_uri: str | None
+    polar_access_token: str | None
+    polar_member_id: str | None
     ai_api_base_url: str | None
     ai_api_key: str | None
     ai_model: str | None
@@ -153,6 +158,11 @@ class AppConfig:
             hammerhead_scope=os.getenv(
                 "HAMMERHEAD_SCOPE", "activity:read route:read route:write"
             ).strip(),
+            polar_client_id=env_or_none("POLAR_CLIENT_ID"),
+            polar_client_secret=env_or_none("POLAR_CLIENT_SECRET"),
+            polar_redirect_uri=env_or_none("POLAR_REDIRECT_URI"),
+            polar_access_token=env_or_none("POLAR_ACCESS_TOKEN"),
+            polar_member_id=env_or_none("POLAR_MEMBER_ID"),
             ai_api_base_url=env_or_none("AI_API_BASE_URL"),
             ai_api_key=env_or_none("AI_API_KEY"),
             ai_model=env_or_none("AI_MODEL"),

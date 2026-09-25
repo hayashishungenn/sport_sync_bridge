@@ -15,6 +15,8 @@ from .hammerhead_api import HammerheadClient
 from .hammerhead_source import HammerheadSource
 from .intervals_icu import IntervalsIcuSource
 from .models import FileBundle, UploadResult
+from .polar_api import PolarClient
+from .polar_source import PolarSource
 from .sources import IGPSportSource, LocalFileSource, OneLapSource, SourceAdapter
 from .strava_source import StravaSource
 from .state import StateDB
@@ -36,6 +38,7 @@ class SyncEngine:
         ensure_directory(config.converted_dir)
         self.state_db = StateDB(config.db_path)
         self.hammerhead_client = HammerheadClient(config, self.state_db)
+        self.polar_client = PolarClient(config, self.state_db)
         self.targets = self._build_targets()
         self.sources = self._build_sources()
 
@@ -310,6 +313,7 @@ class SyncEngine:
             IntervalsIcuSource(self.config),
             Concept2Source(self.config, self.state_db),
             HammerheadSource(self.config, self.hammerhead_client),
+            PolarSource(self.config, self.polar_client),
             LocalFileSource(self.config, self.state_db),
         )
         garmin_target = self.targets.get("garmin")

@@ -7,6 +7,7 @@
 - `iGPSPORT` 大陆版
 - `OneLap / 顽鹿`
 - `Hammerhead`（公开 API 活动来源）
+- `Polar Flow`（AccessLink API 活动来源）
 - 本地活动库（`FIT` / `GPX` / `TCX` / `ZIP` / 轨迹 `JSON` / `CSV`）
 
 当前实现的目标平台:
@@ -26,6 +27,7 @@
 - Strava 官方 `Authentication` / `Uploads` 文档
 - Wahoo 官方 Cloud API 文档
 - Hammerhead 官方 Public API 文档
+- Polar 官方 AccessLink API 文档
 
 ## 设计目标
 
@@ -197,6 +199,18 @@ python sync.py hammerhead-delete-route --route-id 路线ID
 ```
 
 活动列表按 API 页码读取，活动 FIT 从公开活动文件端点下载。同步到 Hammerhead 时，FIT、GPX 或 TCX 会作为路线文件上传，不会创建 Hammerhead 活动。删除只适用于由本 API 客户端创建的路线，并要求输入完整路线 ID 确认。API 许可协议当前写明不收许可费，同时保留今后收费的权利；若之后开始收费，请勿启用此连接器。
+
+### Polar Flow 活动来源
+
+Polar 使用官方 [AccessLink API](https://www.polar.com/accesslink-api/) 读取活动。先用自己的 Polar Flow 账号在 AccessLink 管理页注册应用并接受 API 许可协议，再配置 `POLAR_CLIENT_ID`、`POLAR_CLIENT_SECRET` 和已登记的可选 `POLAR_REDIRECT_URI`。项目不包含 APK 中的凭据；OAuth 用户令牌保存在本地 SQLite。AccessLink 要求授权后先注册用户，`polar-exchange` 会自动完成注册，失败后可运行 `polar-register` 重试。
+
+```powershell
+python sync.py polar-auth-url
+python sync.py polar-exchange --code 回调中的code --state 回调中的state
+python sync.py sync --source polar --target garmin --dry-run
+```
+
+Polar 官方 API 目前只返回用户注册本应用之后上传到 Flow、且最近 30 天内的活动。已授权但未同意必要数据权限时，服务端会拒绝请求。访问令牌被撤销后需重新运行授权流程。
 
 ### 5. 首次同步
 
