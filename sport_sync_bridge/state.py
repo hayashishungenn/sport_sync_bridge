@@ -10,7 +10,7 @@ from .models import Activity
 from .utils import ensure_directory, utcnow
 
 
-DATABASE_SCHEMA_VERSION = 3
+DATABASE_SCHEMA_VERSION = 4
 
 
 class StateDB:
@@ -101,6 +101,16 @@ class StateDB:
                 fingerprint TEXT NOT NULL,
                 source_label TEXT NOT NULL,
                 imported_at TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS garmin_health_details (
+                dataset TEXT NOT NULL,
+                calendar_date TEXT NOT NULL,
+                payload_json TEXT NOT NULL,
+                fingerprint TEXT NOT NULL,
+                source_label TEXT NOT NULL,
+                imported_at TEXT NOT NULL,
+                PRIMARY KEY (dataset, calendar_date)
             );
 
             CREATE TABLE IF NOT EXISTS training_readiness_records (
@@ -476,6 +486,76 @@ class StateDB:
             "WHERE calendar_date >= ? AND calendar_date <= ? "
             "ORDER BY calendar_date",
             (start_date, end_date),
+        ).fetchall()
+
+    def save_garmin_health_details(
+        self,
+        records: list[dict[str, str]],
+        observations: list[tuple[str, str, float | str, str, str, str]],
+    ) -> int:
+        if not records and not observations:
+            return 0
+        imported_at = utcnow().isoformat()
+        snapshots_stored = 0
+        with self.connection:
+            for record in records:
+                existing = self.connection.execute(
+                    "SELECT fingerprint FROM garmin_health_details "
+                    "WHERE dataset = ? AND calendar_date = ?",
+                    (record["dataset"], record["calendar_date"]),
+                ).fetchone()
+                if existing is not None and existing["fingerprint"] == record["fingerprint"]:
+                    continue
+
+                self.connection.execute(
+                    "INSERT INTO garmin_health_details ("
+                    "dataset, calendar_date, payload_json, fingerprint, source_label, imported_at) "
+                    "VALUES (?, ?, ?, ?, ?, ?) "
+                    "ON CONFLICT(dataset, calendar_date) DO UPDATE SET "
+                    "payload_json = excluded.payload_json, "
+                    "fingerprint = excluded.fingerprint, "
+                    "source_label = excluded.source_label, "
+                    "imported_at = excluded.imported_at",
+                    (
+                        record["dataset"],
+                        record["calendar_date"],
+                        record["payload_json"],
+                        record["fingerprint"],
+                        record["source_label"],
+                        imported_at,
+                    ),
+                )
+                self.connection.execute(
+                    "DELETE FROM health_observations "
+                    "WHERE source_label = ? AND substr(observed_at, 1, 10) = ?",
+                    (record["source_label"], record["calendar_date"]),
+                )
+                snapshots_stored += 1
+
+            self.connection.executemany(
+                "INSERT OR IGNORE INTO health_observations ("
+                "observed_at, metric, value, unit, source_label, fingerprint) "
+                "VALUES (?, ?, ?, ?, ?, ?)",
+                observations,
+            )
+        return snapshots_stored
+
+    def list_garmin_health_details(
+        self,
+        start_date: str,
+        end_date: str,
+        dataset: str | None = None,
+    ) -> list[sqlite3.Row]:
+        conditions = ["calendar_date >= ?", "calendar_date <= ?"]
+        values: list[str] = [start_date, end_date]
+        if dataset is not None:
+            conditions.append("dataset = ?")
+            values.append(dataset)
+        where = " AND ".join(conditions)
+        return self.connection.execute(
+            "SELECT * FROM garmin_health_details "
+            f"WHERE {where} ORDER BY calendar_date, dataset",
+            values,
         ).fetchall()
 
     def save_training_readiness_records(self, records: list[dict[str, object]]) -> int:

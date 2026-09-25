@@ -32,6 +32,10 @@ _METRIC_ALIASES = {
     "spo2_percent": "spo2_percent",
     "sleep": "sleep_hours",
     "sleep_hours": "sleep_hours",
+    "deep_sleep_seconds": "deep_sleep_seconds",
+    "light_sleep_seconds": "light_sleep_seconds",
+    "rem_sleep_seconds": "rem_sleep_seconds",
+    "awake_sleep_seconds": "awake_sleep_seconds",
     "steps": "steps",
     "step_count": "steps",
     "step_goal": "step_goal",
@@ -62,10 +66,14 @@ _METRIC_ALIASES = {
     "hrv_weekly_average_ms": "hrv_weekly_average_ms",
     "avg_waking_respiration": "avg_waking_respiration_bpm",
     "avg_waking_respiration_bpm": "avg_waking_respiration_bpm",
+    "avg_sleep_respiration": "avg_sleep_respiration_bpm",
+    "avg_sleep_respiration_bpm": "avg_sleep_respiration_bpm",
     "latest_respiration": "latest_respiration_bpm",
     "latest_respiration_bpm": "latest_respiration_bpm",
     "max_respiration": "max_respiration_bpm",
     "max_respiration_bpm": "max_respiration_bpm",
+    "min_respiration": "min_respiration_bpm",
+    "min_respiration_bpm": "min_respiration_bpm",
     "active_calories": "active_calories_kcal",
     "active_calories_kcal": "active_calories_kcal",
     "bmr_calories": "bmr_calories_kcal",
@@ -102,6 +110,10 @@ _METRIC_ALIASES = {
     "hydration": "hydration_l",
     "hydration_l": "hydration_l",
     "hydration_liters": "hydration_l",
+    "hydration_goal_l": "hydration_goal_l",
+    "hydration_base_goal_l": "hydration_base_goal_l",
+    "hydration_activity_l": "hydration_activity_l",
+    "hydration_sweat_loss_l": "hydration_sweat_loss_l",
     "recovery": "recovery_hours",
     "recovery_hours": "recovery_hours",
     "recovery_time_hours": "recovery_hours",
@@ -116,6 +128,8 @@ _METRIC_ALIASES = {
     "diastolic": "diastolic_bp_mmhg",
     "diastolic_bp": "diastolic_bp_mmhg",
     "diastolic_bp_mmhg": "diastolic_bp_mmhg",
+    "pulse": "pulse_bpm",
+    "pulse_bpm": "pulse_bpm",
 }
 _DEFAULT_UNITS = {
     "weight_kg": "kg",
@@ -126,6 +140,10 @@ _DEFAULT_UNITS = {
     "hrv_sdnn_ms": "ms",
     "spo2_percent": "%",
     "sleep_hours": "h",
+    "deep_sleep_seconds": "s",
+    "light_sleep_seconds": "s",
+    "rem_sleep_seconds": "s",
+    "awake_sleep_seconds": "s",
     "steps": "count",
     "step_goal": "count",
     "floors_goal": "count",
@@ -144,8 +162,10 @@ _DEFAULT_UNITS = {
     "spo2_low_percent": "%",
     "hrv_weekly_average_ms": "ms",
     "avg_waking_respiration_bpm": "brpm",
+    "avg_sleep_respiration_bpm": "brpm",
     "latest_respiration_bpm": "brpm",
     "max_respiration_bpm": "brpm",
+    "min_respiration_bpm": "brpm",
     "active_calories_kcal": "kcal",
     "bmr_calories_kcal": "kcal",
     "wellness_calories_kcal": "kcal",
@@ -160,12 +180,17 @@ _DEFAULT_UNITS = {
     "floors": "count",
     "respiration_bpm": "brpm",
     "hydration_l": "L",
+    "hydration_goal_l": "L",
+    "hydration_base_goal_l": "L",
+    "hydration_activity_l": "L",
+    "hydration_sweat_loss_l": "L",
     "recovery_hours": "h",
     "hrv_status": "status",
     "ready_to_train_status": "status",
     "fully_recovered": "status",
     "systolic_bp_mmhg": "mmHg",
     "diastolic_bp_mmhg": "mmHg",
+    "pulse_bpm": "bpm",
 }
 _STATUS_VALUES = {
     "hrv_status": {
@@ -190,6 +215,10 @@ _HEALTH_DISPLAY_LABELS = {
     "hrv_sdnn_ms": "HRV SDNN",
     "spo2_percent": "血氧饱和度",
     "sleep_hours": "睡眠时长",
+    "deep_sleep_seconds": "深睡时长",
+    "light_sleep_seconds": "浅睡时长",
+    "rem_sleep_seconds": "快速眼动睡眠时长",
+    "awake_sleep_seconds": "清醒时长",
     "steps": "步数",
     "step_goal": "每日步数目标",
     "floors_goal": "每日爬楼目标",
@@ -208,8 +237,10 @@ _HEALTH_DISPLAY_LABELS = {
     "spo2_low_percent": "最低血氧饱和度",
     "hrv_weekly_average_ms": "HRV 七日平均",
     "avg_waking_respiration_bpm": "清醒平均呼吸频率",
+    "avg_sleep_respiration_bpm": "睡眠平均呼吸频率",
     "latest_respiration_bpm": "最新呼吸频率",
     "max_respiration_bpm": "最高呼吸频率",
+    "min_respiration_bpm": "最低呼吸频率",
     "active_calories_kcal": "活动卡路里",
     "bmr_calories_kcal": "基础代谢卡路里",
     "wellness_calories_kcal": "健康卡路里",
@@ -224,12 +255,17 @@ _HEALTH_DISPLAY_LABELS = {
     "floors": "楼层",
     "respiration_bpm": "呼吸频率",
     "hydration_l": "饮水量",
+    "hydration_goal_l": "饮水目标",
+    "hydration_base_goal_l": "基础饮水目标",
+    "hydration_activity_l": "运动饮水量",
+    "hydration_sweat_loss_l": "估算汗液损失",
     "recovery_hours": "恢复时长",
     "hrv_status": "HRV 状态",
     "ready_to_train_status": "训练准备状态",
     "fully_recovered": "完全恢复状态",
     "systolic_bp_mmhg": "收缩压",
     "diastolic_bp_mmhg": "舒张压",
+    "pulse_bpm": "血压测量脉搏",
     "bmi": "BMI",
 }
 _HEALTH_DISPLAY_ORDER = {metric: index for index, metric in enumerate(_HEALTH_DISPLAY_LABELS)}
@@ -281,6 +317,43 @@ _GARMIN_USER_SUMMARY_FIELDS = {
     "bmrKilocalories": ("bmr_calories_kcal", "kcal"),
     "wellnessKilocalories": ("wellness_calories_kcal", "kcal"),
     "hrvStatus": ("hrv_status", "status"),
+}
+_GARMIN_HEALTH_DETAIL_FIELDS = {
+    "sleep": {
+        "sleepTimeSeconds": ("sleep", "s"),
+        "deepSleepSeconds": ("deep_sleep_seconds", "s"),
+        "lightSleepSeconds": ("light_sleep_seconds", "s"),
+        "remSleepSeconds": ("rem_sleep_seconds", "s"),
+        "awakeSleepSeconds": ("awake_sleep_seconds", "s"),
+    },
+    "hrv": {
+        "lastNightAvg": ("hrv", "ms"),
+        "weeklyAverage": ("hrv_weekly_average", "ms"),
+    },
+    "stress": {
+        "avgStressLevel": ("stress", "score"),
+        "maxStressLevel": ("max_stress", "score"),
+    },
+    "body-battery": {},
+    "respiration": {
+        "avgWakingRespirationValue": ("avg_waking_respiration", "brpm"),
+        "avgSleepRespirationValue": ("avg_sleep_respiration", "brpm"),
+        "highestRespirationValue": ("max_respiration", "brpm"),
+        "lowestRespirationValue": ("min_respiration", "brpm"),
+    },
+    "hydration": {
+        "valueInML": ("hydration", "ml"),
+        "goalInML": ("hydration_goal_l", "ml"),
+        "baseGoalInML": ("hydration_base_goal_l", "ml"),
+        "activityIntakeInML": ("hydration_activity_l", "ml"),
+        "sweatLossInML": ("hydration_sweat_loss_l", "ml"),
+    },
+    "blood-pressure": {},
+}
+_GARMIN_BLOOD_PRESSURE_FIELDS = {
+    "systolic": ("systolic", "mmHg"),
+    "diastolic": ("diastolic", "mmHg"),
+    "pulse": ("pulse", "bpm"),
 }
 
 
@@ -471,6 +544,197 @@ def list_garmin_user_summaries(
     return {"record_count": len(records), "records": records}
 
 
+def import_garmin_health_details(
+    state_db: StateDB,
+    records: list[dict[str, object]],
+) -> dict[str, int]:
+    stored_records: list[dict[str, str]] = []
+    pending_observations: list[tuple[str, str, float | str, str, str, str]] = []
+    seen_dates: set[tuple[str, str]] = set()
+
+    for index, record in enumerate(records):
+        if not isinstance(record, dict):
+            raise ValueError(f"Garmin health detail record {index} must be an object")
+        dataset = record.get("dataset")
+        if not isinstance(dataset, str) or dataset not in _GARMIN_HEALTH_DETAIL_FIELDS:
+            raise ValueError(f"Garmin health detail record {index} has an unsupported dataset")
+        calendar_date = _parse_garmin_detail_date(
+            record.get("calendarDate"), f"detail record {index} date"
+        )
+        key = (dataset, calendar_date)
+        if key in seen_dates:
+            raise ValueError(
+                f"Garmin health detail {dataset} date {calendar_date} appears more than once"
+            )
+        seen_dates.add(key)
+        payload = record.get("payload")
+        if payload is not None and not isinstance(payload, (dict, list)):
+            raise ValueError(
+                f"Garmin health detail {dataset} for {calendar_date} must contain an object, list, or null"
+            )
+        try:
+            payload_json = json.dumps(
+                payload,
+                ensure_ascii=False,
+                sort_keys=True,
+                separators=(",", ":"),
+                allow_nan=False,
+            )
+        except (TypeError, ValueError) as exc:
+            raise ValueError(
+                f"Garmin health detail {dataset} for {calendar_date} is not valid JSON data"
+            ) from exc
+        for item in _garmin_health_detail_objects(payload):
+            response_date = item.get("calendarDate")
+            if response_date not in (None, ""):
+                parsed_response_date = _parse_garmin_detail_date(
+                    response_date, f"{dataset} response date for {calendar_date}"
+                )
+                if parsed_response_date != calendar_date:
+                    raise ValueError(
+                        f"Garmin {dataset} response date {parsed_response_date} "
+                        f"does not match requested date {calendar_date}"
+                    )
+
+        fingerprint = hashlib.sha256(
+            f"{dataset}\n{calendar_date}\n{payload_json}".encode("utf-8")
+        ).hexdigest()
+        source_label = f"Garmin Connect {dataset} details"
+        stored_records.append(
+            {
+                "dataset": dataset,
+                "calendar_date": calendar_date,
+                "payload_json": payload_json,
+                "fingerprint": fingerprint,
+                "source_label": source_label,
+            }
+        )
+
+        observed_at = datetime.combine(
+            date.fromisoformat(calendar_date), time.max, tzinfo=timezone.utc
+        ).isoformat()
+        for metric_name, raw_value, unit, observation_fingerprint in (
+            _garmin_health_detail_observations(dataset, payload, fingerprint)
+        ):
+            parsed = _normalize_metric(metric_name, raw_value, unit)
+            if parsed is None:
+                continue
+            metric, value, normalized_unit = parsed
+            pending_observations.append(
+                (
+                    observed_at,
+                    metric,
+                    value,
+                    normalized_unit,
+                    source_label,
+                    observation_fingerprint,
+                )
+            )
+
+    snapshots_stored = state_db.save_garmin_health_details(
+        stored_records, pending_observations
+    )
+    return {
+        "snapshots_stored": snapshots_stored,
+        "observations_processed": len(pending_observations),
+    }
+
+
+def list_garmin_health_details(
+    state_db: StateDB,
+    start_date: str,
+    end_date: str,
+    dataset: str | None = None,
+) -> dict[str, object]:
+    start = _parse_garmin_detail_date(start_date, "start-date")
+    end = _parse_garmin_detail_date(end_date, "end-date")
+    if end < start:
+        raise ValueError("Garmin health detail end date must be on or after the start date")
+    if dataset is not None and dataset not in _GARMIN_HEALTH_DETAIL_FIELDS:
+        raise ValueError(f"Unsupported Garmin health detail dataset: {dataset}")
+
+    rows = state_db.list_garmin_health_details(start, end, dataset)
+    records: list[dict[str, object]] = []
+    for row in rows:
+        try:
+            payload = json.loads(str(row["payload_json"]))
+        except (TypeError, ValueError) as exc:
+            raise ValueError(
+                f"Stored Garmin health detail for {row['dataset']} on {row['calendar_date']} is invalid JSON"
+            ) from exc
+        records.append(
+            {
+                "dataset": str(row["dataset"]),
+                "calendar_date": str(row["calendar_date"]),
+                "source_label": str(row["source_label"]),
+                "payload": payload,
+            }
+        )
+    return {"record_count": len(records), "records": records}
+
+
+def _garmin_health_detail_observations(
+    dataset: str,
+    payload: object,
+    fingerprint: str,
+) -> list[tuple[str, object, str, str]]:
+    if dataset == "blood-pressure":
+        if not isinstance(payload, dict):
+            return []
+        measurements = payload.get("bloodPressureMeasurements")
+        if measurements is None:
+            return []
+        if not isinstance(measurements, list):
+            raise ValueError("Garmin blood-pressure measurements must be a list")
+        pending: list[tuple[str, object, str, str]] = []
+        for index, measurement in enumerate(measurements):
+            if not isinstance(measurement, dict):
+                raise ValueError(f"Garmin blood-pressure measurement {index} must be an object")
+            for api_field, (metric_name, unit) in _GARMIN_BLOOD_PRESSURE_FIELDS.items():
+                if measurement.get(api_field) is None:
+                    continue
+                measurement_fingerprint = hashlib.sha256(
+                    f"{fingerprint}\n{index}\n{api_field}".encode("utf-8")
+                ).hexdigest()
+                pending.append(
+                    (metric_name, measurement[api_field], unit, measurement_fingerprint)
+                )
+        return pending
+
+    fields = _GARMIN_HEALTH_DETAIL_FIELDS[dataset]
+    if not fields:
+        return []
+    if dataset == "sleep":
+        if not isinstance(payload, dict):
+            return []
+        sleep_data = payload.get("dailySleepDTO")
+        nodes = _garmin_health_detail_objects(sleep_data)
+    else:
+        nodes = _garmin_health_detail_objects(payload)
+
+    pending = []
+    for api_field, (metric_name, unit) in fields.items():
+        for node in nodes:
+            raw_value = node.get(api_field)
+            if raw_value is not None:
+                pending.append((metric_name, raw_value, unit, fingerprint))
+                break
+    return pending
+
+
+def _garmin_health_detail_objects(value: object) -> list[dict[str, object]]:
+    objects: list[dict[str, object]] = []
+    pending = [value]
+    while pending:
+        current = pending.pop()
+        if isinstance(current, dict):
+            objects.append(current)
+            pending.extend(current.values())
+        elif isinstance(current, list):
+            pending.extend(current)
+    return objects
+
+
 def summarize_health(state_db: StateDB) -> dict[str, object]:
     grouped: dict[str, list[object]] = {}
     for row in state_db.list_health_observations():
@@ -636,7 +900,13 @@ def _normalize_metric(name: object, raw_value: object, raw_unit: object) -> tupl
     elif metric == "sleep_hours" and lowered_unit in {"s", "sec", "secs", "second", "seconds"}:
         value /= 3600
         unit = "h"
-    elif metric == "hydration_l" and lowered_unit in {"ml", "milliliter", "milliliters"}:
+    elif metric in {
+        "hydration_l",
+        "hydration_goal_l",
+        "hydration_base_goal_l",
+        "hydration_activity_l",
+        "hydration_sweat_loss_l",
+    } and lowered_unit in {"ml", "milliliter", "milliliters"}:
         value /= 1000
         unit = "L"
     elif metric == "distance_km" and lowered_unit in {"m", "meter", "meters"}:
@@ -674,6 +944,16 @@ def _parse_garmin_summary_date(value: object, field: object) -> str:
         ) from exc
     if parsed.isoformat() != str(value):
         raise ValueError(f"Garmin user summary {field} must use YYYY-MM-DD")
+    return parsed.isoformat()
+
+
+def _parse_garmin_detail_date(value: object, field: object) -> str:
+    try:
+        parsed = date.fromisoformat(str(value))
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"Garmin health detail {field} must use YYYY-MM-DD") from exc
+    if parsed.isoformat() != str(value):
+        raise ValueError(f"Garmin health detail {field} must use YYYY-MM-DD")
     return parsed.isoformat()
 
 
