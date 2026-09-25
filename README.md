@@ -271,6 +271,8 @@ python sync.py library smooth-gps ride.fit --output ride.smoothed.fit --accuracy
 
 ## 本地活动库与 GarSync 离线功能
 
+`library period` 会从 FIT 的 NP 和正 IF 生成 `ftp_estimate_from_np_if_w`，并汇总成 `ftp_trend`。有效样本少于两条时没有趋势；恰好两条时采用时间较早的估值；其他情况分别取首尾窗口和整个区间的最高值。跨度不足 14 天时窗口使用跨度天数，达到 14 天时使用跨度的 20% 四舍五入，最终限制在 7 至 30 天。该行为依据 APK AOT 静态分析恢复，尚未与 GarSync 运行结果逐项对照。
+
 从本地文件或目录导入活动。目录需要显式指定 `--recursive`；ZIP 会在内存中读取，不会按压缩包路径解压到磁盘。加密 ZIP 可通过 `ACTIVITY_ARCHIVE_PASSWORD` 提供密码。
 
 Huawei Health 历史数据 ZIP 可直接预览或导入。活动库会读取 `Motion path detail data & description` 中的运动记录 JSON，并把其中多条活动分别加入本地库；同一归档里的其他 JSON 不会当作活动导入。

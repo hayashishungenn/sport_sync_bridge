@@ -104,6 +104,12 @@ def calculate_period_summary(
         average_cadence = _optional_nonnegative(summary.get("average_cadence_rpm"))
         average_power = _optional_nonnegative(summary.get("average_power_w"))
         normalized_power = _optional_nonnegative(summary.get("normalized_power_w"))
+        intensity_factor = _optional_nonnegative(summary.get("intensity_factor"))
+        ftp_estimate_from_np_if = (
+            normalized_power / intensity_factor
+            if normalized_power is not None and intensity_factor is not None and intensity_factor > 0
+            else None
+        )
         ascent = _optional_nonnegative(summary.get("total_ascent_m"))
         tss = _optional_nonnegative(summary.get("training_stress_score"))
         if tss is None and threshold is not None and average_hr is not None and duration is not None:
@@ -133,7 +139,8 @@ def calculate_period_summary(
                 "average_cadence": average_cadence,
                 "average_power_w": average_power,
                 "normalized_power_w": normalized_power,
-                "intensity_factor": _optional_nonnegative(summary.get("intensity_factor")),
+                "intensity_factor": intensity_factor,
+                "ftp_estimate_from_np_if_w": ftp_estimate_from_np_if,
                 "time_in_zone_messages": _zone_messages(summary.get("time_in_zone_messages")),
                 "training_stress_score": tss,
                 "vdot": vdot,
@@ -171,6 +178,7 @@ def calculate_period_summary(
         activities, parsed_activity_files
     )
     pr_changes = _find_pr_changes(pr_history, start_day, end_day)
+    ftp_trend = _build_ftp_trend(activities)
 
     weekly_slices = _build_weekly_slices(activities)
     return {
@@ -187,6 +195,7 @@ def calculate_period_summary(
         "vdot_start": vdot_values[0] if vdot_values else None,
         "vdot_end": vdot_values[-1] if vdot_values else None,
         "vdot_max": max(vdot_values) if vdot_values else None,
+        "ftp_trend": ftp_trend,
         "avg_norm_power_w": (
             sum(normalized_power_values) / len(normalized_power_values)
             if normalized_power_values
@@ -244,6 +253,23 @@ def format_period_summary(summary: dict[str, object], output_format: str) -> str
                 else 0
             )
             lines.append(f"轨迹重算{label}分区：{values}（{activity_count} 次活动）")
+    ftp_trend = summary.get("ftp_trend")
+    if isinstance(ftp_trend, Mapping):
+        if ftp_trend.get("single_value_w") is not None:
+            lines.append(
+                f"FTP估算：{_format_optional(ftp_trend['single_value_w'])} W"
+                "（2 个有效样本，单值结果）"
+            )
+        else:
+            lines.append(
+                f"FTP趋势：{float(ftp_trend['first_window_best_w']):.0f} W → "
+                f"{float(ftp_trend['last_window_best_w']):.0f} W"
+                f"（{int(ftp_trend['window_days'])} 天窗口，区间最大 "
+                f"{float(ftp_trend['period_best_w']):.0f} W，变化 "
+                f"{float(ftp_trend['change_w']):+.0f} W）"
+            )
+    else:
+        lines.append("FTP估算：暂无 NP / 正 IF 有效样本")
     pr_changes = summary.get("pr_changes")
     if isinstance(pr_changes, list) and pr_changes:
         for record in pr_changes:
@@ -437,6 +463,7 @@ def _activity_log_entry(item: dict[str, object]) -> dict[str, object]:
         "average_power_w": item["average_power_w"],
         "normalized_power_w": item["normalized_power_w"],
         "intensity_factor": item["intensity_factor"],
+        "ftp_estimate_from_np_if_w": item["ftp_estimate_from_np_if_w"],
         "training_stress_score": item["training_stress_score"],
         "vdot": item["vdot"],
         "functional_threshold_power_w": item["ftp"],
@@ -445,6 +472,43 @@ def _activity_log_entry(item: dict[str, object]) -> dict[str, object]:
         "total_ascent_m": item["total_ascent_m"],
         "sport_type": item["sport_type"],
         "name": item["name"],
+    }
+
+
+def _build_ftp_trend(activities: list[dict[str, object]]) -> dict[str, object] | None:
+    samples = [
+        (item["start_time"], float(estimate))
+        for item in activities
+        if (estimate := _optional_nonnegative(item.get("ftp_estimate_from_np_if_w"))) is not None
+    ]
+    if not samples:
+        return None
+    if len(samples) == 2:
+        return {
+            "sample_count": 2,
+            "window_days": None,
+            "single_value_w": samples[0][1],
+        }
+
+    span_days = max(0, (samples[-1][0] - samples[0][0]).days)
+    requested_window_days = (
+        math.floor(span_days * 0.2 + 0.5)
+        if span_days >= 14
+        else span_days
+    )
+    window_days = min(30, max(7, requested_window_days))
+    first_window_end = samples[0][0] + timedelta(days=window_days)
+    last_window_start = samples[-1][0] - timedelta(days=window_days)
+    first_window_best = max(value for timestamp, value in samples if timestamp <= first_window_end)
+    last_window_best = max(value for timestamp, value in samples if timestamp >= last_window_start)
+    period_best = max(value for _, value in samples)
+    return {
+        "sample_count": len(samples),
+        "window_days": window_days,
+        "first_window_best_w": first_window_best,
+        "last_window_best_w": last_window_best,
+        "period_best_w": period_best,
+        "change_w": last_window_best - first_window_best,
     }
 
 

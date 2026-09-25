@@ -5,7 +5,7 @@ import io
 import json
 import tempfile
 import unittest
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -482,6 +482,117 @@ class PeriodSummaryTests(unittest.TestCase):
         self.assertLess(result["vdot_start"], result["vdot_end"])
         self.assertEqual(result["vdot_max"], result["vdot_end"])
 
+    def test_ftp_trend_uses_np_if_and_adaptive_window_maxima(self) -> None:
+        rows = [
+            self._row(
+                "a" * 64, "cycling", "2026-01-01T08:00:00Z", "fit", 20000, 3600, 150,
+                normalized_power=220, intensity_factor=1.1,
+            ),
+            self._row(
+                "b" * 64, "cycling", "2026-01-21T08:00:00Z", "fit", 20000, 3600, 150,
+                normalized_power=330, intensity_factor=1.1,
+            ),
+            self._row(
+                "c" * 64, "cycling", "2026-04-10T08:00:00Z", "fit", 20000, 3600, 150,
+                normalized_power=286, intensity_factor=1.1,
+            ),
+            self._row(
+                "d" * 64, "cycling", "2026-04-11T08:00:00Z", "fit", 20000, 3600, 150,
+                normalized_power=308, intensity_factor=1.1,
+            ),
+        ]
+
+        result = calculate_period_summary(
+            rows,
+            date_from=date(2026, 1, 1),
+            date_to=date(2026, 4, 11),
+        )
+
+        self.assertEqual(
+            result["ftp_trend"],
+            {
+                "sample_count": 4,
+                "window_days": 20,
+                "first_window_best_w": 300.0,
+                "last_window_best_w": 280.0,
+                "period_best_w": 300.0,
+                "change_w": -20.0,
+            },
+        )
+        estimates = {
+            item["activity_id"]: item["ftp_estimate_from_np_if_w"]
+            for item in result["activity_log"]
+        }
+        self.assertAlmostEqual(estimates["a" * 64], 200.0)
+        self.assertAlmostEqual(estimates["d" * 64], 280.0)
+        self.assertIn("FTP趋势：300 W → 280 W（20 天窗口", format_period_summary(result, "txt"))
+
+    def test_ftp_trend_filters_nonpositive_or_missing_intensity_factor(self) -> None:
+        rows = [
+            self._row(
+                "a" * 64, "cycling", "2026-01-02T08:00:00Z", "fit", 20000, 3600, 150,
+                normalized_power=275, intensity_factor=1.1,
+            ),
+            self._row(
+                "b" * 64, "cycling", "2026-01-01T08:00:00Z", "fit", 20000, 3600, 150,
+                normalized_power=220, intensity_factor=1.1,
+            ),
+            self._row(
+                "c" * 64, "cycling", "2026-01-03T08:00:00Z", "fit", 20000, 3600, 150,
+                normalized_power=300, intensity_factor=0,
+            ),
+            self._row(
+                "d" * 64, "cycling", "2026-01-04T08:00:00Z", "fit", 20000, 3600, 150,
+                normalized_power=300,
+            ),
+            self._row(
+                "e" * 64, "cycling", "2026-01-05T08:00:00Z", "fit", 20000, 3600, 150,
+                intensity_factor=1.1,
+            ),
+        ]
+
+        result = calculate_period_summary(
+            rows,
+            date_from=date(2026, 1, 1),
+            date_to=date(2026, 1, 5),
+        )
+
+        self.assertEqual(result["ftp_trend"]["sample_count"], 2)
+        self.assertIsNone(result["ftp_trend"]["window_days"])
+        self.assertAlmostEqual(result["ftp_trend"]["single_value_w"], 200.0)
+        self.assertIn("2 个有效样本，单值结果", format_period_summary(result, "txt"))
+
+        no_estimates = calculate_period_summary(
+            [self._row("f" * 64, "cycling", "2026-01-01T08:00:00Z", "fit", 20000, 3600, 150)],
+            date_from=date(2026, 1, 1),
+            date_to=date(2026, 1, 1),
+        )
+        self.assertIsNone(no_estimates["ftp_trend"])
+
+    def test_ftp_trend_uses_full_span_for_periods_under_fourteen_days(self) -> None:
+        rows = [
+            self._row(
+                "a" * 64, "cycling", "2026-01-01T08:00:00Z", "fit", 20000, 3600, 150,
+                normalized_power=220, intensity_factor=1.1,
+            ),
+            self._row(
+                "b" * 64, "cycling", "2026-01-06T08:00:00Z", "fit", 20000, 3600, 150,
+                normalized_power=330, intensity_factor=1.1,
+            ),
+            self._row(
+                "c" * 64, "cycling", "2026-01-11T08:00:00Z", "fit", 20000, 3600, 150,
+                normalized_power=286, intensity_factor=1.1,
+            ),
+        ]
+
+        result = calculate_period_summary(
+            rows,
+            date_from=date(2026, 1, 1),
+            date_to=date(2026, 1, 11),
+        )
+
+        self.assertEqual(result["ftp_trend"]["window_days"], 10)
+
     def test_invalid_period_and_heart_rate_settings_fail(self) -> None:
         with self.assertRaisesRegex(ValueError, "positive integer"):
             calculate_period_summary([], days=0)
@@ -543,6 +654,55 @@ class PeriodSummaryTests(unittest.TestCase):
             self.assertEqual(payload["pr_changes"][0]["prType"], "5K")
             self.assertEqual(payload["pr_changes"][0]["newValue"], 1500.0)
 
+    def test_library_period_cli_uses_np_if_from_imported_fit_files(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            data_dir = root / ".data"
+            fit_paths = [
+                create_fit(
+                    root / f"ride-{index}.fit",
+                    start=datetime(2026, 1, day, 8, tzinfo=timezone.utc),
+                    normalized_power=power,
+                    intensity_factor=1.1,
+                )
+                for index, (day, power) in enumerate(
+                    ((1, 220), (6, 330), (11, 286)),
+                    start=1,
+                )
+            ]
+            config = SimpleNamespace(
+                data_dir=data_dir,
+                db_path=data_dir / "sync_state.db",
+                log_level="ERROR",
+                log_path=data_dir / "sync.log",
+            )
+            state = StateDB(config.db_path)
+            LocalActivityLibrary(state, data_dir).import_paths(fit_paths)
+            state.close()
+
+            output = io.StringIO()
+            with patch("sport_sync_bridge.cli.AppConfig.load", return_value=config):
+                with patch("sport_sync_bridge.cli.configure_logging"):
+                    with contextlib.redirect_stdout(output):
+                        status = main(
+                            [
+                                "library",
+                                "period",
+                                "--from",
+                                "2026-01-01",
+                                "--to",
+                                "2026-01-11",
+                                "--format",
+                                "json",
+                            ]
+                        )
+
+            self.assertEqual(status, 0)
+            payload = json.loads(output.getvalue())
+            self.assertEqual(payload["ftp_trend"]["window_days"], 10)
+            self.assertEqual(payload["ftp_trend"]["first_window_best_w"], 300.0)
+            self.assertEqual(payload["activity_log"][0]["ftp_estimate_from_np_if_w"], 260.0)
+
     def test_library_period_cli_rejects_invalid_dates(self) -> None:
         error = io.StringIO()
         with contextlib.redirect_stderr(error):
@@ -564,6 +724,7 @@ class PeriodSummaryTests(unittest.TestCase):
         *,
         tss: float | None = None,
         normalized_power: float | None = None,
+        intensity_factor: float | None = None,
         average_cadence: float | None = None,
         zones: list[dict[str, object]] | None = None,
         file_path: Path | None = None,
@@ -578,6 +739,8 @@ class PeriodSummaryTests(unittest.TestCase):
             summary["training_stress_score"] = tss
         if normalized_power is not None:
             summary["normalized_power_w"] = normalized_power
+        if intensity_factor is not None:
+            summary["intensity_factor"] = intensity_factor
         if average_cadence is not None:
             summary["average_cadence_rpm"] = average_cadence
         if zones is not None:
