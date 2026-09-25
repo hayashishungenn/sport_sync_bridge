@@ -20,7 +20,6 @@ from .activity_analysis import (
     write_activity_report_pdf,
     write_ai_analysis_markdown,
 )
-from .ai_training_plan import build_ai_training_plan_prompt, normalize_ai_training_plan
 from .ai_workout import (
     build_ai_single_workout_prompts,
     make_workout_output_path,
@@ -384,43 +383,6 @@ def build_parser() -> argparse.ArgumentParser:
     plans_install.add_argument("template_id")
     plans_install.add_argument("--locale", default="zh", choices=["en", "es", "fr", "it", "pt", "zh"])
     plans_install.add_argument("--start-date", required=True, help="Plan week 1 Monday, YYYY-MM-DD")
-    plans_generate = plans_actions.add_parser(
-        "generate", help="Generate and install a training plan with the configured AI"
-    )
-    plans_generate.add_argument(
-        "--sport",
-        required=True,
-        choices=["running", "cycling", "swimming", "triathlon", "duathlon"],
-    )
-    plans_generate.add_argument("--weeks", type=int, required=True, help="Plan length, 2 to 52 weeks")
-    plans_generate.add_argument(
-        "--weekly-days", type=int, required=True, help="Number of active training days per week, 1 to 7"
-    )
-    plans_generate.add_argument("--goal", required=True, help="Training goal")
-    plans_generate.add_argument("--start-date", required=True, help="Plan week 1 Monday, YYYY-MM-DD")
-    plans_generate.add_argument("--event-name", help="Optional target event name")
-    plans_generate.add_argument("--goal-time", help="Optional target finish time")
-    plans_generate.add_argument("--event-date", help="Optional event date, YYYY-MM-DD")
-    plans_generate.add_argument("--target-distance-km", type=float, help="Optional target event distance")
-    plans_generate.add_argument("--target-elevation-m", type=int, help="Optional target elevation gain")
-    plans_generate.add_argument("--current-level", help="Optional current training level")
-    plans_generate.add_argument("--longest-session", help="Optional longest recent session")
-    plans_generate.add_argument("--preferences", help="Optional training preferences")
-    plans_generate.add_argument("--weakest-discipline", help="Optional weakest multisport discipline")
-    plans_generate.add_argument("--strongest-discipline", help="Optional strongest multisport discipline")
-    plans_generate.add_argument("--personal-note", help="Optional note for the plan")
-    plans_generate.add_argument(
-        "--language", default="zh-CN", type=validate_ai_language_code, help="Plan language (default: zh-CN)"
-    )
-    plans_generate.add_argument(
-        "--include-history",
-        action="store_true",
-        help="Send an aggregate of the last 12 weeks of local activity summaries",
-    )
-    plans_generate.add_argument("--output", type=Path, help="Generated plan JSON path (default: data directory)")
-    plans_generate.add_argument(
-        "--prompt-only", action="store_true", help="Print the plan prompt without contacting the AI service"
-    )
     plans_installed = plans_actions.add_parser("installed", help="List local plan schedules")
     plans_export = plans_actions.add_parser("export", help="Export an installed plan as iCalendar")
     plans_export.add_argument("plan_id")
@@ -1157,9 +1119,6 @@ def _run_local_command(args: argparse.Namespace, config: AppConfig) -> int:
             print(json.dumps(template, ensure_ascii=False, indent=2))
             return 0
 
-        if args.plans_action == "generate":
-            return _run_ai_training_plan_generation(args, config)
-
         state = StateDB(config.db_path)
         try:
             if args.plans_action == "install":
@@ -1795,145 +1754,6 @@ def _run_samba_command(args: argparse.Namespace, config: AppConfig) -> int:
     except ValueError as exc:
         print(f"samba_error={exc}", file=sys.stderr)
         return 2
-
-
-def _run_ai_training_plan_generation(args: argparse.Namespace, config: AppConfig) -> int:
-    try:
-        start_date = date.fromisoformat(args.start_date)
-    except ValueError as exc:
-        raise ValueError("--start-date must use YYYY-MM-DD") from exc
-    if start_date.weekday() != 0:
-        raise ValueError("--start-date must be a Monday")
-    if args.event_date is not None:
-        try:
-            args.event_date = date.fromisoformat(args.event_date).isoformat()
-        except ValueError as exc:
-            raise ValueError("--event-date must use YYYY-MM-DD") from exc
-
-    requested_output = args.output.expanduser().resolve() if args.output is not None else None
-    if requested_output is not None:
-        if requested_output.suffix.lower() != ".json":
-            raise ValueError("Generated plan output path must end in .json")
-        if requested_output.exists():
-            raise FileExistsError(f"Generated plan output already exists: {requested_output}")
-
-    recent_training = None
-    if args.include_history:
-        state = StateDB(config.db_path)
-        try:
-            now = datetime.now(timezone.utc)
-            cutoff = now - timedelta(weeks=12)
-            recent_rows = []
-            for row in state.list_local_activities():
-                start_time = parse_datetime(row["start_time"])
-                if start_time is None:
-                    continue
-                if start_time.tzinfo is None:
-                    start_time = start_time.replace(tzinfo=timezone.utc)
-                else:
-                    start_time = start_time.astimezone(timezone.utc)
-                if cutoff <= start_time <= now:
-                    recent_rows.append(row)
-            recent_training = summarize_rows(recent_rows)
-        finally:
-            state.close()
-
-    prompt = build_ai_training_plan_prompt(
-        sport=args.sport,
-        weeks=args.weeks,
-        weekly_days=args.weekly_days,
-        goal=args.goal,
-        start_date=start_date,
-        language=args.language,
-        event_name=args.event_name,
-        goal_time=args.goal_time,
-        event_date=args.event_date,
-        target_distance_km=args.target_distance_km,
-        target_elevation_m=args.target_elevation_m,
-        current_level=args.current_level,
-        longest_session=args.longest_session,
-        preferences=args.preferences,
-        weakest_discipline=args.weakest_discipline,
-        strongest_discipline=args.strongest_discipline,
-        personal_note=args.personal_note,
-        recent_training=recent_training,
-    )
-    if args.prompt_only:
-        print(prompt)
-        return 0
-    if not config.ai_api_base_url or not config.ai_model:
-        raise ValueError("Set AI_API_BASE_URL and AI_MODEL before requesting an AI training plan")
-
-    from .activity_analysis import request_ai_analysis
-
-    response = request_ai_analysis(
-        base_url=config.ai_api_base_url,
-        model=config.ai_model,
-        api_key=config.ai_api_key,
-        prompt=prompt,
-        timeout_seconds=180,
-        system_prompt="你是运动训练计划助手。遵守用户提供的事实，按要求只返回 JSON。",
-        temperature=0.4,
-    )
-    plan = normalize_ai_training_plan(
-        response,
-        sport=args.sport,
-        weeks=args.weeks,
-        weekly_days=args.weekly_days,
-        goal=args.goal,
-    )
-    output_path = requested_output or (
-        config.data_dir / "generated_plans" / f"{plan['id']}.json"
-    ).resolve()
-    if output_path.exists():
-        raise FileExistsError(f"Generated plan output already exists: {output_path}")
-    ensure_directory(output_path.parent)
-    temporary_path: Path | None = None
-    try:
-        with tempfile.NamedTemporaryFile(
-            mode="w",
-            encoding="utf-8",
-            newline="\n",
-            dir=output_path.parent,
-            prefix=f".{output_path.name}.",
-            suffix=".tmp",
-            delete=False,
-        ) as temporary:
-            temporary_path = Path(temporary.name)
-            temporary.write(json.dumps(plan, ensure_ascii=False, indent=2) + "\n")
-        temporary_path.replace(output_path)
-    finally:
-        if temporary_path is not None:
-            temporary_path.unlink(missing_ok=True)
-
-    state = StateDB(config.db_path)
-    try:
-        plan_id, schedule = install_training_plan(
-            state,
-            plan,
-            locale=args.language.split("-")[0].lower(),
-            start_date=start_date,
-        )
-    except Exception as exc:
-        raise RuntimeError(
-            f"Plan JSON was saved to {output_path}, but the local schedule could not be installed: {exc}"
-        ) from exc
-    finally:
-        state.close()
-
-    print(
-        json.dumps(
-            {
-                "plan_id": plan_id,
-                "plan_name": plan["trainingPlan"]["name"],
-                "scheduled_items": len(schedule),
-                "workout_items": sum(item["item_type"] == "workout" for item in schedule),
-                "plan_json": str(output_path),
-            },
-            ensure_ascii=False,
-        )
-    )
-    return 0
 
 
 def _run_ai_workout_generation(args: argparse.Namespace, config: AppConfig) -> int:

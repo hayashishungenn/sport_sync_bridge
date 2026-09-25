@@ -268,7 +268,6 @@ AI 活动分析还会读取 FIT session 中的平均/最大功率、标准化功
 python sync.py plans list --locale zh
 python sync.py plans show 8w_beginner_run --locale zh
 python sync.py plans install 8w_beginner_run --locale zh --start-date 2026-10-05
-python sync.py plans generate --sport running --weeks 12 --weekly-days 4 --goal "完成半程马拉松" --start-date 2026-10-05 --prompt-only
 python sync.py plans installed
 python sync.py plans export <计划ID前缀> --output .\training-plan.ics
 python sync.py workouts list --sport CYCLING
@@ -276,8 +275,6 @@ python sync.py workouts show <课表ID>
 python sync.py workouts export <课表ID> --output .\workout.fit
 python sync.py workouts generate --sport running --task "节奏跑，间歇后放松" --target-mode pace --target-duration 45min --prompt-only
 ```
-
-`plans generate` 使用已配置的 OpenAI 兼容 Chat Completions 接口生成并安装本地训练计划，JSON 副本默认保存到 `.data/generated_plans/`。支持跑步、骑行、游泳、铁人三项和冬季两项；可补充赛事、目标时间、当前水平及个人偏好。命令会校验完整周数、每周训练日和运动类型。`--prompt-only` 不调用模型；默认不会发送本地活动历史，只有指定 `--include-history` 才发送最近 12 周的汇总数据，不含活动名称、路线或坐标。
 
 `workouts generate` 用同一个 AI 接口按跑步、骑行或游泳请求生成一个结构化课表，并写成 Garmin FIT workout 文件。默认文件和可浏览的 JSON 元数据保存在 `.data/generated_workouts/`；`workouts list/show/export` 也会读取这些生成文件。可用 `--target-mode`、目标时长/距离/配速/心率/TSS、`--athlete-context` 和重复的 `--feedback` 提供训练要求。`--prompt-only` 只打印 system/user 提示词；FIT 无法直接编码的目标会保留在步骤备注和元数据中，重复组使用 FIT repeat 控制步骤。
 
@@ -333,7 +330,7 @@ python sync.py receive --host 0.0.0.0 --port 8765
 
 接收页不设访问口令，只应在可信的本地网络中临时开启。
 
-未移植到 Python CLI 的 APK 功能包括其余云平台的私有认证/同步协议、手机 BLE 配对引导界面、训练台其他控制命令、BigRun ECG 诊断分类规则、设备侧训练准备度评分算法（JSON 快照可导入和查看，通用 HR-TSS/CTL/ATL/TSB 训练负荷指标已实现）、在线健康数据源、AI 聊天及 AI 单次课表定义生成。标准 FTMS 目标功率控制已实现；BLE 测量通知也支持心率、跑步步频、骑行速度/踏频、功率计测量与功率向量、室内单车数据。BigRun ECG 已支持原始通知采集、波形解码、工作模式切换、波形归一化及非诊断性 R 峰、R-R 间期和心率指标计算；诊断分类规则尚未移植。Samba 默认使用 SMB2/3；旧协议需要显式添加 `--legacy-smb`，导入始终只读。GarSync 健康状态数值可从本地 CSV 导入，但项目不从手表或云端读取这些数据。当前天气功能需要显式坐标和 GarSync 天气服务令牌；AI 活动分析和训练计划生成使用本地汇总与可配置模型接口。静态 AOT 索引不足以确认这些云端接口的运行期请求、服务端校验或设备交互行为。
+未移植到 Python CLI 的 APK 功能包括其余云平台的私有认证/同步协议、手机 BLE 配对引导界面、训练台其他控制命令、BigRun ECG 诊断分类规则、设备侧训练准备度评分算法（JSON 快照可导入和查看，通用 HR-TSS/CTL/ATL/TSB 训练负荷指标已实现）及在线健康数据源。GarSync 的周期 AI 教练界面受 Pro 权限限制，AI 周计划生成会扣除 gems，按当前范围未接入；单次 AI 课表生成和 AI 活动分析保留为本项目可配置模型功能。标准 FTMS 目标功率控制已实现；BLE 测量通知也支持心率、跑步步频、骑行速度/踏频、功率计测量与功率向量、室内单车数据。BigRun ECG 已支持原始通知采集、波形解码、工作模式切换、波形归一化及非诊断性 R 峰、R-R 间期和心率指标计算；诊断分类规则尚未移植。Samba 默认使用 SMB2/3；旧协议需要显式添加 `--legacy-smb`，导入始终只读。GarSync 健康状态数值可从本地 CSV 导入，但项目不从手表或云端读取这些数据。当前天气功能需要显式坐标和 GarSync 天气服务令牌；AI 活动分析使用本地汇总与可配置模型接口，单次 AI 课表生成只发送命令提供的训练要求。静态 AOT 索引不足以确认这些云端接口的运行期请求、服务端校验或设备交互行为。
 
 常用参数:
 
