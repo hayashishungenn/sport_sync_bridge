@@ -70,6 +70,14 @@ class AISingleWorkoutTests(unittest.TestCase):
         self.assertEqual(workout["estimatedDistance"], 2000.0)
         self.assertEqual(workout["steps"][1]["repeat"], 2)
 
+    def test_repairs_ai_json_code_fences_and_trailing_commas(self) -> None:
+        valid_json = _workout_response()
+        response = "```json\n" + valid_json[:-1] + ",}\n```"
+
+        workout = normalize_ai_workout(response, sport="running")
+
+        self.assertEqual(workout["workoutId"], "tempo_run")
+
     def test_rejects_multiple_workouts_invalid_sport_and_bad_steps(self) -> None:
         with self.assertRaisesRegex(ValueError, "exactly one"):
             normalize_ai_workout(
@@ -192,12 +200,13 @@ class AISingleWorkoutTests(unittest.TestCase):
             self.assertIn("USER PROMPT", prompt_output.getvalue())
             self.assertFalse((config.data_dir / "generated_workouts").exists())
 
+            response_with_repairs = "```json\n" + _workout_response()[:-1] + ",}\n```"
             with (
                 patch("sport_sync_bridge.cli.AppConfig.load", return_value=config),
                 patch("sport_sync_bridge.cli.configure_logging"),
                 patch(
                     "sport_sync_bridge.activity_analysis.request_ai_analysis",
-                    return_value=_workout_response(),
+                    return_value=response_with_repairs,
                 ) as request,
                 contextlib.redirect_stdout(io.StringIO()),
             ):

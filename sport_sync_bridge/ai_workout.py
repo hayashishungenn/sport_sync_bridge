@@ -107,15 +107,16 @@ def normalize_ai_workout(response: str, *, sport: str) -> dict[str, Any]:
         raise ValueError("AI workout response exceeds the 2 MB limit")
     sport = _validate_sport(sport)
     text = response.strip()
-    if text.startswith("```"):
-        match = re.fullmatch(r"```(?:json)?\s*(.*?)\s*```", text, flags=re.IGNORECASE | re.DOTALL)
-        if match is None:
-            raise ValueError("AI workout response has an invalid JSON code fence")
-        text = match.group(1).strip()
     try:
         payload = json.loads(text)
     except json.JSONDecodeError as exc:
-        raise ValueError("AI workout response is not valid JSON") from exc
+        repaired = _repair_ai_json_response(text)
+        if repaired == text:
+            raise ValueError("AI workout response is not valid JSON") from exc
+        try:
+            payload = json.loads(repaired)
+        except json.JSONDecodeError as repair_exc:
+            raise ValueError("AI workout response is not valid JSON") from repair_exc
     if not isinstance(payload, dict):
         raise ValueError("AI workout response must be a JSON object")
 
@@ -165,6 +166,15 @@ def normalize_ai_workout(response: str, *, sport: str) -> dict[str, Any]:
         "estimatedDistance": distance,
         "steps": steps,
     }
+
+
+def _repair_ai_json_response(text: str) -> str:
+    repaired = text.strip()
+    if repaired.startswith("```"):
+        repaired = re.sub(r"^```\w*\s*", "", repaired, count=1)
+        if repaired.endswith("```"):
+            repaired = repaired[:-3].rstrip()
+    return re.sub(r",(\s*[}\]])", r"\1", repaired)
 
 
 def write_ai_workout_fit(workout: dict[str, Any], output_path: Path) -> Path:
