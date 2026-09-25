@@ -28,6 +28,11 @@ RECORDED_ZONE_FIELDS = {
 }
 POWER_CURVE_DURATIONS_S = (10, 60, 120, 360, 600, 2400, 3600, 7200, 14400, 21600)
 POWER_FILE_FORMATS = {"fit", "gpx", "tcx"}
+SAMPLED_ZONE_FIELDS = {
+    "heart_rate": ("heart_rate_zones", "heart_rate_bpm"),
+    "speed": ("speed_zones", "speed_mps"),
+}
+SAMPLE_ZONE_MAX_GAP_SECONDS = 30.0
 CADENCE_SPORTS = RUNNING_SPORTS | {"cycling"}
 CYCLING_SPORTS = {"cycling", "ride", "virtual_ride", "indoor_cycling", "mountain_biking"}
 PR_DISTANCE_TARGETS = {
@@ -158,7 +163,13 @@ def calculate_period_summary(
     total_duration = sum(float(item["duration_s"]) for item in activities if item["duration_s"] is not None)
     total_tss = sum(float(item["training_stress_score"]) for item in scored)
     fit_count = sum(item["file_format"] == "fit" for item in activities)
-    power_curve, power_sample_activity_count, power_curve_unavailable_count = _aggregate_power_curves(activities)
+    parsed_activity_files = _read_period_activity_files(activities)
+    power_curve, power_sample_activity_count, power_curve_unavailable_count = _aggregate_power_curves(
+        activities, parsed_activity_files
+    )
+    sampled_zone_time, sampled_zone_activity_count = _aggregate_sampled_zone_times(
+        activities, parsed_activity_files
+    )
     pr_changes = _find_pr_changes(pr_history, start_day, end_day)
 
     weekly_slices = _build_weekly_slices(activities)
@@ -187,6 +198,8 @@ def calculate_period_summary(
         "pr_changes": pr_changes,
         "weekly_slices": weekly_slices,
         "recorded_zone_time_s": _aggregate_recorded_zone_time(activities),
+        "sampled_zone_time_s": sampled_zone_time,
+        "sampled_zone_activity_count": sampled_zone_activity_count,
         "power_curve_w": power_curve,
         "power_curve_sample_activity_count": power_sample_activity_count,
         "power_curve_unavailable_activity_count": power_curve_unavailable_count,
@@ -214,6 +227,23 @@ def format_period_summary(summary: dict[str, object], output_format: str) -> str
         f"平均 NP：{_format_optional(summary['avg_norm_power_w'])} W（{summary['avg_norm_power_activity_count']} 次有效活动）",
         "个人纪录变化：",
     ]
+    sampled_zones = summary.get("sampled_zone_time_s")
+    sampled_zone_counts = summary.get("sampled_zone_activity_count")
+    if isinstance(sampled_zones, Mapping):
+        for metric, label in (("heart_rate", "心率"), ("speed", "速度")):
+            zone_times = sampled_zones.get(metric)
+            if not isinstance(zone_times, Mapping) or not zone_times:
+                continue
+            values = "，".join(
+                f"Z{int(zone)} {float(seconds):g}秒"
+                for zone, seconds in sorted(zone_times.items(), key=lambda item: int(item[0]))
+            )
+            activity_count = (
+                sampled_zone_counts.get(metric, 0)
+                if isinstance(sampled_zone_counts, Mapping)
+                else 0
+            )
+            lines.append(f"轨迹重算{label}分区：{values}（{activity_count} 次活动）")
     pr_changes = summary.get("pr_changes")
     if isinstance(pr_changes, list) and pr_changes:
         for record in pr_changes:
@@ -418,23 +448,42 @@ def _activity_log_entry(item: dict[str, object]) -> dict[str, object]:
     }
 
 
+def _read_period_activity_files(activities: list[dict[str, object]]) -> dict[int, object]:
+    parsed_files: dict[int, object] = {}
+    for index, activity in enumerate(activities):
+        file_format = str(activity.get("file_format") or "").lower()
+        raw_path = activity.get("file_path")
+        if (
+            file_format not in POWER_FILE_FORMATS
+            or not isinstance(raw_path, (str, Path))
+            or not raw_path
+        ):
+            continue
+        path = Path(raw_path)
+        if path.is_file():
+            parsed_files[index] = read_activity_file(path)
+    return parsed_files
+
+
 def _aggregate_power_curves(
     activities: list[dict[str, object]],
+    parsed_files: Mapping[int, object] | None = None,
 ) -> tuple[dict[int, int], int, int]:
+    if parsed_files is None:
+        parsed_files = _read_period_activity_files(activities)
     curve: dict[int, int] = {}
     sample_activity_count = 0
     unavailable_activity_count = 0
-    for activity in activities:
+    for index, activity in enumerate(activities):
         file_format = str(activity.get("file_format") or "").lower()
         raw_path = activity.get("file_path")
         if file_format not in POWER_FILE_FORMATS or not isinstance(raw_path, (str, Path)) or not raw_path:
             unavailable_activity_count += 1
             continue
-        path = Path(raw_path)
-        if not path.is_file():
+        parsed = parsed_files.get(index)
+        if parsed is None:
             unavailable_activity_count += 1
             continue
-        parsed = read_activity_file(path)
         if any(
             isinstance(getattr(point, "timestamp", None), datetime)
             and _optional_nonnegative(getattr(point, "power_w", None)) is not None
@@ -445,6 +494,142 @@ def _aggregate_power_curves(
         for duration, watts in samples.items():
             curve[duration] = max(curve.get(duration, watts), watts)
     return dict(sorted(curve.items())), sample_activity_count, unavailable_activity_count
+
+
+def _aggregate_sampled_zone_times(
+    activities: list[dict[str, object]],
+    parsed_files: Mapping[int, object],
+) -> tuple[dict[str, dict[int, float]], dict[str, int]]:
+    totals: dict[str, dict[int, float]] = {metric: defaultdict(float) for metric in SAMPLED_ZONE_FIELDS}
+    activity_counts = {metric: 0 for metric in SAMPLED_ZONE_FIELDS}
+    for index, activity in enumerate(activities):
+        parsed = parsed_files.get(index)
+        if parsed is None:
+            continue
+        track_points = getattr(parsed, "track_points", [])
+        messages = activity["time_in_zone_messages"]
+        for metric, (zone_field, sample_field) in SAMPLED_ZONE_FIELDS.items():
+            zone_config = _consistent_zone_thresholds(messages, zone_field)
+            if zone_config is None:
+                continue
+            boundaries, overflow_zone = zone_config
+            activity_zones = calculate_activity_sampled_zone_time(
+                track_points,
+                sample_field,
+                boundaries,
+                overflow_zone,
+                reject_zero=metric == "heart_rate",
+            )
+            if not activity_zones:
+                continue
+            activity_counts[metric] += 1
+            for zone, seconds in activity_zones.items():
+                totals[metric][zone] += seconds
+    return (
+        {
+            metric: dict(sorted(zone_times.items()))
+            for metric, zone_times in totals.items()
+        },
+        activity_counts,
+    )
+
+
+def _consistent_zone_thresholds(
+    messages: list[Mapping[str, object]],
+    zone_field: str,
+) -> tuple[tuple[tuple[int, float], ...], int] | None:
+    candidates: set[tuple[tuple[tuple[int, float], ...], int]] = set()
+    for message in messages:
+        raw_zones = message.get(zone_field)
+        if raw_zones is None:
+            continue
+        if not isinstance(raw_zones, list):
+            raise ValueError(f"Activity {zone_field} must be a list")
+
+        zone_ids: list[int] = []
+        boundaries: dict[int, float] = {}
+        for zone in raw_zones:
+            if not isinstance(zone, Mapping):
+                raise ValueError(f"Activity {zone_field} entry must be an object")
+            zone_id = _optional_finite(zone.get("zone"))
+            if zone_id is None or zone_id < 0 or not zone_id.is_integer():
+                raise ValueError(f"Activity {zone_field} entry has an invalid zone")
+            zone_number = int(zone_id)
+            zone_ids.append(zone_number)
+            boundary = _optional_nonnegative(zone.get("high_boundary"))
+            if boundary is not None and boundary > 0:
+                boundaries[zone_number] = boundary
+
+        if len(zone_ids) != len(set(zone_ids)):
+            continue
+        ordered_boundaries = tuple(sorted(boundaries.items()))
+        if not ordered_boundaries:
+            continue
+        boundary_zone_ids = [zone for zone, _ in ordered_boundaries]
+        if boundary_zone_ids != list(range(1, len(boundary_zone_ids) + 1)):
+            continue
+        if any(
+            current[1] <= previous[1]
+            for previous, current in zip(ordered_boundaries, ordered_boundaries[1:])
+        ):
+            continue
+        highest_zone = max(zone_ids, default=0)
+        last_boundary_zone = boundary_zone_ids[-1]
+        if highest_zone not in {last_boundary_zone, last_boundary_zone + 1}:
+            continue
+        candidates.add((ordered_boundaries, highest_zone))
+
+    if len(candidates) != 1:
+        return None
+    return next(iter(candidates))
+
+
+def calculate_activity_sampled_zone_time(
+    points: Iterable[object],
+    sample_field: str,
+    boundaries: tuple[tuple[int, float], ...],
+    overflow_zone: int,
+    *,
+    reject_zero: bool = False,
+) -> dict[int, float]:
+    samples: list[tuple[datetime, float]] = []
+    for point in points:
+        timestamp = getattr(point, "timestamp", None)
+        if not isinstance(timestamp, datetime):
+            continue
+        value = _optional_nonnegative(getattr(point, sample_field, None))
+        if value is None or (reject_zero and value == 0):
+            continue
+        timestamp = (
+            timestamp.replace(tzinfo=timezone.utc)
+            if timestamp.tzinfo is None
+            else timestamp.astimezone(timezone.utc)
+        )
+        samples.append((timestamp, value))
+    samples.sort(key=lambda item: item[0])
+    if len(samples) < 2:
+        return {}
+
+    seconds_by_zone: dict[int, float] = defaultdict(float)
+    for (start_time, start_value), (end_time, end_value) in zip(samples, samples[1:]):
+        interval = (end_time - start_time).total_seconds()
+        if interval <= 0 or interval > SAMPLE_ZONE_MAX_GAP_SECONDS:
+            continue
+        cuts = [0.0, 1.0]
+        if end_value != start_value:
+            for _, boundary in boundaries:
+                fraction = (boundary - start_value) / (end_value - start_value)
+                if 0.0 < fraction < 1.0:
+                    cuts.append(fraction)
+        cuts.sort()
+        for left, right in zip(cuts, cuts[1:]):
+            midpoint = start_value + (end_value - start_value) * (left + right) / 2
+            zone = next(
+                (zone_id for zone_id, boundary in boundaries if midpoint <= boundary),
+                overflow_zone,
+            )
+            seconds_by_zone[zone] += interval * (right - left)
+    return dict(sorted(seconds_by_zone.items()))
 
 
 def calculate_activity_power_curve(points: Iterable[object]) -> dict[int, int]:

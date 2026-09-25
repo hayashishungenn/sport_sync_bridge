@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from fit_tool.fit_file_builder import FitFileBuilder
@@ -27,6 +27,9 @@ def create_fit(
     with_position: bool = True,
     with_timestamps: bool = True,
     with_heart_rate: bool = True,
+    track_point_interval_seconds: int = 60,
+    heart_rate_values: tuple[int, int] = (150, 151),
+    speed_values: tuple[float, float] = (5.0, 5.1),
     sport: int = Sport.CYCLING.value,
     average_heart_rate: int | None = None,
     maximum_heart_rate: int | None = None,
@@ -58,15 +61,19 @@ def create_fit(
         for index in range(2):
             point = RecordMessage()
             if with_timestamps:
-                _set(point, "timestamp", _timestamp(start.replace(minute=start.minute + index)))
+                _set(
+                    point,
+                    "timestamp",
+                    _timestamp(start + timedelta(seconds=track_point_interval_seconds * index)),
+                )
             if with_position:
                 _set(point, "position_lat", 31.2300 + index * 0.001)
                 _set(point, "position_long", 121.4700 + index * 0.001)
             _set(point, "altitude", 10.0 + index)
             _set(point, "distance", 100.0 * index)
-            _set(point, "speed", 5.0 + index * 0.1)
+            _set(point, "speed", speed_values[index])
             if with_heart_rate:
-                _set(point, "heart_rate", 150 + index)
+                _set(point, "heart_rate", heart_rate_values[index])
             _set(point, "cadence", 80 + index)
             _set(point, "power", 200 + index)
             builder.add(point)

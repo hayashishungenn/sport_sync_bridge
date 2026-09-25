@@ -19,7 +19,7 @@ from sport_sync_bridge.period_summary import (
     format_period_summary,
 )
 from sport_sync_bridge.state import StateDB
-from tests.activity_fixtures import create_gpx
+from tests.activity_fixtures import create_fit, create_gpx
 
 
 class PeriodSummaryTests(unittest.TestCase):
@@ -293,6 +293,109 @@ class PeriodSummaryTests(unittest.TestCase):
         self.assertEqual(result["recorded_zone_time_s"]["cadence"], {3: 800.0})
         self.assertEqual(result["recorded_zone_time_s"]["power"], {1: 450.0})
 
+    def test_period_recalculates_heart_rate_and_speed_zones_from_fit_samples(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            activity_path = create_fit(
+                Path(temporary) / "zones.fit",
+                track_point_interval_seconds=1,
+                heart_rate_values=(90, 110),
+                speed_values=(5.0, 7.0),
+                time_in_zone={
+                    "hr_zone_high_boundary": [100, 150],
+                    "speed_zone_high_boundary": [6, 8],
+                },
+            )
+            zone_messages = [
+                {
+                    "heart_rate_zones": [
+                        {"zone": 1, "high_boundary": 100},
+                        {"zone": 2, "high_boundary": 150},
+                    ],
+                    "speed_zones": [
+                        {"zone": 1, "high_boundary": 6},
+                        {"zone": 2, "high_boundary": 8},
+                    ],
+                }
+            ]
+            result = calculate_period_summary(
+                [
+                    self._row(
+                        "d" * 64,
+                        "running",
+                        "2026-01-02T03:04:00Z",
+                        "fit",
+                        100,
+                        1,
+                        100,
+                        zones=zone_messages,
+                        file_path=activity_path,
+                    )
+                ],
+                date_from=date(2026, 1, 2),
+                date_to=date(2026, 1, 2),
+            )
+
+        self.assertEqual(result["sampled_zone_time_s"]["heart_rate"], {1: 0.5, 2: 0.5})
+        self.assertEqual(result["sampled_zone_time_s"]["speed"], {1: 0.5, 2: 0.5})
+        self.assertEqual(result["sampled_zone_activity_count"], {"heart_rate": 1, "speed": 1})
+        self.assertEqual(result["recorded_zone_time_s"]["heart_rate"], {})
+        report = format_period_summary(result, "txt")
+        self.assertIn("轨迹重算心率分区：Z1 0.5秒，Z2 0.5秒（1 次活动）", report)
+        self.assertIn("轨迹重算速度分区：Z1 0.5秒，Z2 0.5秒（1 次活动）", report)
+
+    def test_period_skips_ambiguous_thresholds_and_long_sample_gaps(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            activity_path = create_fit(
+                Path(temporary) / "gap.fit",
+                track_point_interval_seconds=31,
+                time_in_zone={
+                    "hr_zone_high_boundary": [100, 150],
+                    "speed_zone_high_boundary": [6, 8],
+                },
+            )
+            conflicting_zones = [
+                {
+                    "heart_rate_zones": [
+                        {"zone": 1, "high_boundary": 100},
+                        {"zone": 2, "high_boundary": 150},
+                    ],
+                    "speed_zones": [
+                        {"zone": 1, "high_boundary": 6},
+                        {"zone": 2, "high_boundary": 8},
+                    ],
+                },
+                {
+                    "heart_rate_zones": [
+                        {"zone": 1, "high_boundary": 100},
+                        {"zone": 2, "high_boundary": 160},
+                    ],
+                    "speed_zones": [
+                        {"zone": 1, "high_boundary": 6},
+                        {"zone": 2, "high_boundary": 8},
+                    ],
+                },
+            ]
+            result = calculate_period_summary(
+                [
+                    self._row(
+                        "e" * 64,
+                        "running",
+                        "2026-01-02T03:04:00Z",
+                        "fit",
+                        100,
+                        31,
+                        100,
+                        zones=conflicting_zones,
+                        file_path=activity_path,
+                    )
+                ],
+                date_from=date(2026, 1, 2),
+                date_to=date(2026, 1, 2),
+            )
+
+        self.assertEqual(result["sampled_zone_time_s"], {"heart_rate": {}, "speed": {}})
+        self.assertEqual(result["sampled_zone_activity_count"], {"heart_rate": 0, "speed": 0})
+
     def test_period_merges_sampled_power_curves_from_activity_files(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -435,6 +538,8 @@ class PeriodSummaryTests(unittest.TestCase):
             payload = json.loads(output.getvalue())
             self.assertEqual(payload["activity_count"], 1)
             self.assertAlmostEqual(payload["vdot_max"], 38.3, places=1)
+            self.assertEqual(payload["sampled_zone_time_s"], {"heart_rate": {}, "speed": {}})
+            self.assertEqual(payload["sampled_zone_activity_count"], {"heart_rate": 0, "speed": 0})
             self.assertEqual(payload["pr_changes"][0]["prType"], "5K")
             self.assertEqual(payload["pr_changes"][0]["newValue"], 1500.0)
 
