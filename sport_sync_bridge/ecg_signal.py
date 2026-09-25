@@ -12,11 +12,28 @@ ECG_MIN_SAMPLE_RATE_HZ = 100.0
 ECG_MAX_SAMPLE_RATE_HZ = 2000.0
 ECG_MIN_ANALYSIS_SECONDS = 5.0
 ECG_MOVING_AVERAGE_WINDOW_MS = 100.0
-ECG_R_PEAK_REFRACTORY_MS = 300.0
+ECG_R_PEAK_REFRACTORY_MS = 100.0
 ECG_BRADYCARDIA_THRESHOLD_BPM = 60.0
 ECG_TACHYCARDIA_THRESHOLD_BPM = 100.0
 ECG_LOW_PASS_RC_SECONDS = 0.013262911924324612
 ECG_HIGH_PASS_RC_SECONDS = 0.3183098861837907
+ECG_WAVE_BOUNDARY_RELATIVE_AMPLITUDE = 0.3
+ECG_WAVE_BOUNDARY_WINDOW_MS = 80.0
+ECG_QRS_WIDE_THRESHOLD_MS = 120.0
+ECG_ST_BASELINE_WINDOW_MS = 80.0
+ECG_ST_WINDOW_AFTER_QRS_MS = 60.0
+ECG_ST_ELEVATION_THRESHOLD = 0.2
+ECG_ST_DEPRESSION_THRESHOLD = -0.1
+ECG_PATHOLOGICAL_Q_MIN_SAMPLES = 30
+ECG_PATHOLOGICAL_Q_RELATIVE_AMPLITUDE = 0.25
+ECG_PREMATURE_BEAT_SHORT_RR_RATIO = 0.8
+ECG_PREMATURE_BEAT_LONG_RR_RATIO = 1.2
+ECG_AF_MIN_RR_INTERVALS = 5
+ECG_AF_RR_STANDARD_DEVIATION_THRESHOLD_MS = 120.0
+ECG_PVC_LOOKBACK_MS = 150.0
+ECG_PVC_RELATIVE_AMPLITUDE = 0.15
+ECG_VT_CONSECUTIVE_QRS_COUNT = 3
+ECG_ISCHEMIA_CONSECUTIVE_COUNT = 5
 ECG_ANALYSIS_DISCLAIMER = "免责声明：此分析仅供参考，不能替代专业的医疗诊断。"
 
 
@@ -31,6 +48,7 @@ class EcgAnalysisMetrics:
     heart_rate_bpm: float | None
     heart_rate_threshold_status: str | None
     disclaimer: str = ECG_ANALYSIS_DISCLAIMER
+    pattern_labels: tuple[str, ...] = ()
 
 
 class EcgSignalNormalizer:
@@ -93,7 +111,8 @@ def analyze_bigrun_ecg_signal(
     if duration < ECG_MIN_ANALYSIS_SECONDS:
         raise ValueError("ECG analysis requires at least 5 seconds of samples")
 
-    processed = _preprocess_bigrun_ecg_signal(values, sample_rate)
+    normalized = normalize_ecg_signal(values)
+    processed = _preprocess_bigrun_ecg_signal(normalized, sample_rate)
     peaks = _detect_bigrun_ecg_r_peaks(processed, sample_rate)
     rr_intervals = tuple(
         (right - left) * 1000.0 / sample_rate
@@ -114,7 +133,200 @@ def analyze_bigrun_ecg_signal(
         average_rr_ms=average_rr,
         heart_rate_bpm=heart_rate,
         heart_rate_threshold_status=_heart_rate_threshold_status(heart_rate),
+        pattern_labels=_classify_bigrun_ecg_patterns(processed, peaks, sample_rate),
     )
+
+
+def _classify_bigrun_ecg_patterns(
+    samples: tuple[float, ...],
+    r_peak_indices: tuple[int, ...],
+    sample_rate_hz: float,
+) -> tuple[str, ...]:
+    if len(r_peak_indices) < 2:
+        return ()
+
+    rr_intervals_ms = tuple(
+        (right - left) * 1000.0 / sample_rate_hz
+        for left, right in zip(r_peak_indices, r_peak_indices[1:])
+    )
+    average_rr_ms = math.fsum(rr_intervals_ms) / len(rr_intervals_ms)
+    average_heart_rate = 60000.0 / average_rr_ms if average_rr_ms > 0 else None
+    labels: list[str] = []
+
+    if average_heart_rate is not None:
+        if average_heart_rate > ECG_TACHYCARDIA_THRESHOLD_BPM:
+            labels.append("tachycardia")
+        if average_heart_rate < ECG_BRADYCARDIA_THRESHOLD_BPM:
+            labels.append("bradycardia")
+
+    has_atrial_fibrillation = False
+    if len(rr_intervals_ms) >= ECG_AF_MIN_RR_INTERVALS:
+        rr_mean = math.fsum(rr_intervals_ms) / len(rr_intervals_ms)
+        rr_variance = (
+            math.fsum((value - rr_mean) ** 2 for value in rr_intervals_ms)
+            / len(rr_intervals_ms)
+        )
+        if math.sqrt(rr_variance) > ECG_AF_RR_STANDARD_DEVIATION_THRESHOLD_MS:
+            labels.append("atrialFibrillation")
+            has_atrial_fibrillation = True
+
+    if not has_atrial_fibrillation and average_rr_ms > 0:
+        short_rr_limit = average_rr_ms * ECG_PREMATURE_BEAT_SHORT_RR_RATIO
+        long_rr_limit = average_rr_ms * ECG_PREMATURE_BEAT_LONG_RR_RATIO
+        if any(
+            rr_intervals_ms[index] < short_rr_limit
+            and rr_intervals_ms[index - 1] > long_rr_limit
+            for index in range(1, len(rr_intervals_ms))
+        ):
+            labels.append("pac")
+
+    qrs_is_wide: list[bool] = []
+    st_elevation: list[bool] = []
+    st_depression: list[bool] = []
+    pathological_q: list[bool] = []
+
+    for peak_index in r_peak_indices:
+        qrs_start = _find_ecg_wave_boundary(samples, peak_index, -1, sample_rate_hz)
+        qrs_end = _find_ecg_wave_boundary(samples, peak_index, 1, sample_rate_hz)
+        qrs_duration_ms = abs(qrs_end - qrs_start) * 1000.0 / sample_rate_hz
+        is_wide = qrs_duration_ms > ECG_QRS_WIDE_THRESHOLD_MS
+        qrs_is_wide.append(is_wide)
+
+        if is_wide and _is_pvc_pattern(samples, peak_index, sample_rate_hz):
+            labels.append("pvc")
+
+        pathological_q.append(
+            _has_pathological_q(samples, peak_index, qrs_start, sample_rate_hz)
+        )
+        st_flags = _measure_st_segment(samples, qrs_start, qrs_end, sample_rate_hz)
+        if st_flags is None:
+            st_elevation.append(False)
+            st_depression.append(False)
+        else:
+            st_elevation.append(st_flags[0])
+            st_depression.append(st_flags[1])
+
+    if _has_consecutive_values(qrs_is_wide, ECG_VT_CONSECUTIVE_QRS_COUNT):
+        labels.append("vt")
+    if _has_consecutive_pairs(
+        st_elevation,
+        pathological_q,
+        ECG_ISCHEMIA_CONSECUTIVE_COUNT,
+    ):
+        labels.append("myocardialInfarction")
+    if _has_consecutive_values(st_depression, ECG_ISCHEMIA_CONSECUTIVE_COUNT):
+        labels.append("myocardialIschemia")
+
+    if not labels:
+        labels.append("normal")
+    return tuple(dict.fromkeys(labels))
+
+
+def _find_ecg_wave_boundary(
+    samples: tuple[float, ...],
+    peak_index: int,
+    direction: int,
+    sample_rate_hz: float,
+) -> int:
+    if direction not in {-1, 1} or not 0 <= peak_index < len(samples):
+        raise ValueError("ECG wave boundary requires a valid peak and direction")
+
+    threshold = samples[peak_index] * ECG_WAVE_BOUNDARY_RELATIVE_AMPLITUDE
+    maximum_distance = _samples_for_ms(ECG_WAVE_BOUNDARY_WINDOW_MS, sample_rate_hz)
+    index = peak_index
+    while 0 <= index < len(samples):
+        value = samples[index]
+        if abs(value) < threshold:
+            return index
+        if direction < 0 and index + 1 < len(samples) and samples[index + 1] > value:
+            return index
+        if direction > 0 and index - 1 >= 0 and samples[index - 1] > value:
+            return index
+        if abs(index - peak_index) > maximum_distance:
+            return peak_index
+        index += direction
+    return peak_index
+
+
+def _has_pathological_q(
+    samples: tuple[float, ...],
+    peak_index: int,
+    qrs_start: int,
+    sample_rate_hz: float,
+) -> bool:
+    lookback = _samples_for_ms(20.0, sample_rate_hz)
+    end = min(len(samples), peak_index - lookback)
+    start = max(0, qrs_start)
+    minimum = 0.0
+    minimum_index = 0
+    for index in range(start, end):
+        if samples[index] < minimum:
+            minimum = samples[index]
+            minimum_index = index
+    distance = peak_index - minimum_index
+    return (
+        distance >= ECG_PATHOLOGICAL_Q_MIN_SAMPLES
+        and abs(minimum) >= samples[peak_index] * ECG_PATHOLOGICAL_Q_RELATIVE_AMPLITUDE
+    )
+
+
+def _measure_st_segment(
+    samples: tuple[float, ...],
+    qrs_start: int,
+    qrs_end: int,
+    sample_rate_hz: float,
+) -> tuple[bool, bool] | None:
+    st_end = qrs_end + _samples_for_ms(ECG_ST_WINDOW_AFTER_QRS_MS, sample_rate_hz)
+    if st_end >= len(samples):
+        return None
+
+    baseline_start = max(
+        0,
+        qrs_start - _samples_for_ms(ECG_ST_BASELINE_WINDOW_MS, sample_rate_hz),
+    )
+    baseline = _mean(samples[baseline_start:qrs_start])
+    st_level = _mean(samples[qrs_end:st_end])
+    difference = st_level - baseline
+    return (
+        difference > ECG_ST_ELEVATION_THRESHOLD,
+        difference < ECG_ST_DEPRESSION_THRESHOLD,
+    )
+
+
+def _is_pvc_pattern(samples: tuple[float, ...], peak_index: int, sample_rate_hz: float) -> bool:
+    start = max(0, peak_index - _samples_for_ms(ECG_PVC_LOOKBACK_MS, sample_rate_hz))
+    threshold = samples[peak_index] * ECG_PVC_RELATIVE_AMPLITUDE
+    return all(value <= threshold for value in samples[start:peak_index])
+
+
+def _has_consecutive_values(values: list[bool], minimum: int) -> bool:
+    run = 0
+    for value in values:
+        run = run + 1 if value else 0
+        if run >= minimum:
+            return True
+    return False
+
+
+def _has_consecutive_pairs(
+    first: list[bool],
+    second: list[bool],
+    minimum: int,
+) -> bool:
+    run = 0
+    for first_value, second_value in zip(first, second):
+        run = run + 1 if first_value and second_value else 0
+        if run >= minimum:
+            return True
+    return False
+
+
+def _samples_for_ms(milliseconds: float, sample_rate_hz: float) -> int:
+    return _round_positive(milliseconds * sample_rate_hz / 1000.0)
+
+
+def _mean(values: tuple[float, ...] | list[float]) -> float:
+    return math.fsum(values) / len(values) if values else 0.0
 
 
 def _heart_rate_threshold_status(heart_rate_bpm: float | None) -> str | None:

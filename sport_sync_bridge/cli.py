@@ -345,7 +345,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     ble_bigrun_ecg_analyze = ble_actions.add_parser(
         "bigrun-ecg-analyze",
-        help="Calculate non-diagnostic metrics from decoded BigRun ECG samples",
+        help="Calculate non-clinical metrics and recovered pattern flags from BigRun ECG samples",
     )
     ble_bigrun_ecg_analyze.add_argument(
         "input",
@@ -1662,6 +1662,7 @@ def _run_ble_command(args: argparse.Namespace, config: AppConfig) -> int:
                 print(f"heart_rate_bpm={metrics.heart_rate_bpm:.2f}")
             if metrics.heart_rate_threshold_status is not None:
                 print(f"heart_rate_threshold_status={metrics.heart_rate_threshold_status}")
+            print(f"pattern_labels={','.join(metrics.pattern_labels)}")
             print(f"output={output_path}")
             return 0
 
