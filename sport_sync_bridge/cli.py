@@ -7,6 +7,8 @@ import json
 import os
 import sys
 import tempfile
+import time
+import uuid
 from collections.abc import Iterator
 from dataclasses import asdict
 from datetime import date, datetime, timedelta, timezone
@@ -56,7 +58,15 @@ from .ble_bigrun_ecg import (
     stream_bigrun_ecg,
     validate_bigrun_ecg_options,
 )
-from .ble_trainer import set_trainer_target_power
+from .ble_trainer import run_trainer_course, set_trainer_target_power
+from .virtual_ride import (
+    RideCourse,
+    RideCourseError,
+    demo_ride_course,
+    intensity_multiplier_from_percent,
+    load_ride_course,
+    write_ride_activity_fit,
+)
 from .config import AppConfig
 from .ecg_signal import EcgSignalNormalizer, analyze_bigrun_ecg_signal
 from .engine import SyncEngine
@@ -73,7 +83,7 @@ from .health_sources import (
 )
 from .targets import GarminTarget
 from .fit_tools import normalize_fit_coordinates
-from .formats import SUPPORTED_FORMATS, convert_activity_file, read_activity_file
+from .formats import SUPPORTED_FORMATS, TrackPoint, convert_activity_file, read_activity_file
 from .force_vector_analysis import (
     FORCE_VECTOR_FOCUSES,
     build_force_vector_analysis_prompt,
@@ -379,6 +389,31 @@ def build_parser() -> argparse.ArgumentParser:
     trainer_power.add_argument("address", help="FTMS trainer BLE address")
     trainer_power.add_argument("--watts", type=int, required=True, help="Target power in watts")
     trainer_power.add_argument("--timeout", type=float, default=15.0, help="Connection timeout in seconds")
+    trainer_preview = trainer_actions.add_parser("preview", help="Preview a virtual ride course without BLE")
+    trainer_preview.add_argument("course_file", type=Path, nargs="?", help="Course JSON or AI workout .fit.meta file")
+    trainer_preview.add_argument("--ftp", type=float, help="FTP in watts for %%FTP and fallback power targets")
+    trainer_preview.add_argument(
+        "--intensity-percent",
+        type=float,
+        default=100.0,
+        help="Starting power multiplier as a percentage",
+    )
+    trainer_ride = trainer_actions.add_parser(
+        "ride",
+        help="Run an FTMS power course; interactive terminals accept +, -, and s controls",
+        description="Run a FIT-backed FTMS ride. Interactive keys: + and - change intensity by 5%; s skips an interval.",
+    )
+    trainer_ride.add_argument("address", help="FTMS trainer BLE address")
+    trainer_ride.add_argument("course_file", type=Path, nargs="?", help="Course JSON or AI workout .fit.meta file")
+    trainer_ride.add_argument("--ftp", type=float, help="FTP in watts for %%FTP and fallback power targets")
+    trainer_ride.add_argument(
+        "--intensity-percent",
+        type=float,
+        default=100.0,
+        help="Starting power multiplier as a percentage",
+    )
+    trainer_ride.add_argument("--timeout", type=float, default=15.0, help="Connection timeout in seconds")
+    trainer_ride.add_argument("--output", type=Path, help="Output FIT activity path")
 
     plans_parser = subparsers.add_parser("plans", help="Use bundled training plan templates")
     plans_actions = plans_parser.add_subparsers(dest="plans_action", required=True)
@@ -1784,10 +1819,113 @@ def _run_ble_command(args: argparse.Namespace, config: AppConfig) -> int:
             return 0
 
         if args.ble_action == "trainer":
-            asyncio.run(set_trainer_target_power(args.address, args.watts, args.timeout))
+            if args.trainer_action == "set-power":
+                asyncio.run(set_trainer_target_power(args.address, args.watts, args.timeout))
+                print(f"address={args.address}")
+                print(f"target_power_w={args.watts}")
+                return 0
+
+            course = (
+                load_ride_course(args.course_file, ftp_watts=args.ftp)
+                if args.course_file is not None
+                else demo_ride_course()
+            )
+            intensity = intensity_multiplier_from_percent(args.intensity_percent)
+            if args.trainer_action == "preview":
+                _print_trainer_course_preview(course, intensity)
+                return 0
+
+            last_reported_segment: int | None = None
+            last_reported_target: int | None = None
+
+            def report_target(elapsed_s: float, segment_index: int, target_w: int) -> None:
+                nonlocal last_reported_segment, last_reported_target
+                if (
+                    last_reported_segment == segment_index
+                    and last_reported_target is not None
+                    and abs(target_w - last_reported_target) < 5
+                ):
+                    return
+                print(
+                    f"elapsed_s={elapsed_s:g} segment={segment_index + 1}/{len(course.segments)} "
+                    f"target_power_w={target_w}"
+                )
+                last_reported_segment = segment_index
+                last_reported_target = target_w
+
+            ride_started_at: datetime | None = None
+            ride_started_monotonic: float | None = None
+            timer_samples: list[TrackPoint] = []
+            telemetry_samples: list[TrackPoint] = []
+
+            def sample_timestamp() -> datetime:
+                nonlocal ride_started_at, ride_started_monotonic
+                if ride_started_at is None:
+                    ride_started_at = datetime.now(timezone.utc)
+                    ride_started_monotonic = time.monotonic()
+                assert ride_started_monotonic is not None
+                elapsed = max(0.0, time.monotonic() - ride_started_monotonic)
+                return ride_started_at + timedelta(seconds=elapsed)
+
+            def record_timer_sample(_elapsed_s: float) -> None:
+                timer_samples.append(TrackPoint(timestamp=sample_timestamp()))
+
+            def record_trainer_measurement(measurement: dict[str, object]) -> None:
+                sample = TrackPoint(
+                    timestamp=sample_timestamp(),
+                    distance_m=measurement.get("distance_m"),
+                    speed_mps=measurement.get("speed_mps"),
+                    heart_rate_bpm=measurement.get("heart_rate_bpm"),
+                    cadence_rpm=measurement.get("cadence_rpm"),
+                    power_w=measurement.get("power_w"),
+                )
+                if any(
+                    value is not None
+                    for value in (
+                        sample.distance_m,
+                        sample.speed_mps,
+                        sample.heart_rate_bpm,
+                        sample.cadence_rpm,
+                        sample.power_w,
+                    )
+                ):
+                    telemetry_samples.append(sample)
+
+            interactive = sys.stdin.isatty()
+            if interactive:
+                print("controls: + increase intensity, - decrease intensity, s skip interval", file=sys.stderr)
+
+            elapsed_time_s = asyncio.run(
+                run_trainer_course(
+                    args.address,
+                    course,
+                    intensity=intensity,
+                    timeout=args.timeout,
+                    on_target=report_target,
+                    on_tick=record_timer_sample,
+                    on_measurement=record_trainer_measurement,
+                    on_control=_read_trainer_control if interactive else None,
+                )
+            )
+            if ride_started_at is None:
+                raise RideCourseError("Ride finished before activity recording started")
+            output_path = args.output or (
+                config.data_dir
+                / "virtual_rides"
+                / f"ride-{ride_started_at:%Y%m%dT%H%M%SZ}-{uuid.uuid4().hex[:8]}.fit"
+            )
+            written_path = write_ride_activity_fit(
+                course.name,
+                ride_started_at,
+                elapsed_time_s,
+                telemetry_samples or timer_samples,
+                output_path,
+            )
             registry.update_last_connected(args.address)
             print(f"address={args.address}")
-            print(f"target_power_w={args.watts}")
+            print(f"course={course.name!r}")
+            print(f"ride_complete=true duration_s={elapsed_time_s:g}")
+            print(f"fit_output={written_path}")
             return 0
 
         if args.ble_action == "rename":
@@ -1803,9 +1941,45 @@ def _run_ble_command(args: argparse.Namespace, config: AppConfig) -> int:
         registry.set_preferred_device(args.address, args.type)
         print(f"preferred_{args.type}={args.address}")
         return 0
-    except BleError as exc:
+    except (BleError, RideCourseError) as exc:
         print(f"ble_error={exc}", file=sys.stderr)
         return 2
+
+
+def _print_trainer_course_preview(course: RideCourse, intensity: float) -> None:
+    print(f"course={course.name!r}")
+    print(f"duration_s={course.duration_s:g}")
+    print(f"intensity_percent={intensity * 100:g}")
+    for warning in course.warnings:
+        print(f"course_warning={warning}", file=sys.stderr)
+    for index, segment in enumerate(course.segments, 1):
+        start_w = segment.target_power_at(0, intensity)
+        end_w = segment.target_power_at(segment.duration_s, intensity)
+        print(
+            f"segment={index} start_s={segment.start_time_s:g} end_s={segment.end_time_s:g} "
+            f"start_power_w={start_w} end_power_w={end_w} label={segment.label!r}"
+        )
+
+
+def _read_trainer_control() -> str | None:
+    if os.name == "nt":
+        import msvcrt
+
+        if not msvcrt.kbhit():
+            return None
+        key = msvcrt.getwch()
+        if key in {"\x00", "\xe0"}:
+            msvcrt.getwch()
+            return None
+    else:
+        import select
+
+        ready, _, _ = select.select([sys.stdin], [], [], 0)
+        if not ready:
+            return None
+        key = sys.stdin.readline().strip()
+
+    return {"+": "increase", "-": "decrease", "s": "skip"}.get(key)
 
 
 def _run_samba_command(args: argparse.Namespace, config: AppConfig) -> int:
