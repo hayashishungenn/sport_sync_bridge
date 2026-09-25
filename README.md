@@ -229,9 +229,10 @@ python sync.py google-health-exchange --code 回调中的code --state 回调中�
 python sync.py check --source fitbit --target garmin
 python sync.py sync --source fitbit --target garmin --dry-run
 python sync.py health fetch-fitbit --dataset sleep --dataset weight --start-date 2026-08-01 --end-date 2026-08-31
+python sync.py health fetch-fitbit --dataset daily-summary --start-date 2026-08-01 --end-date 2026-08-31
 ```
 
-`health fetch-fitbit` 支持重复 `--dataset` 选择 `sleep`、`weight`、`steps`、`heart-rate`，日期范围包含首尾两天；睡眠阶段、体重、步数和心率样本会进入本地健康记录，并供健康摘要和活动分析使用。授权刷新令牌只保存在本地 SQLite。Google Health API 使用独立 OAuth 客户端，[旧 Fitbit Web API 令牌不能直接复用](https://developers.google.com/health/migration/data-access)。公开分发受限数据权限需要 Google 应用验证；Google 可能要求 CASA 第三方安全评估，官方列出的费用为 500–4,500 美元，取决于应用复杂度，详见[验证说明](https://developers.google.com/health/app-verification)。本项目只说明个人测试用法，不包含该发布流程。
+`health fetch-fitbit` 支持重复 `--dataset` 选择 `sleep`、`weight`、`steps`、`heart-rate`、`daily-resting-heart-rate` 或 `daily-summary`，日期范围包含首尾两天。每日摘要使用 Google Health `dailyRollUp` 获取步数、距离、总卡路里和活动能量，并读取每日静息心率；这些汇总按 Google Health 的 first-party 数据源聚合，可能合并 Fitbit 与 Google 来源。Google 的 `active-energy-burned` 不含基础代谢，因此它不等同于 Fitbit Web API 的 `activityCalories`。睡眠阶段、体重及健康指标写入本地健康记录，供健康摘要和活动分析使用。授权刷新令牌只保存在本地 SQLite。Google Health API 使用独立 OAuth 客户端，[旧 Fitbit Web API 令牌不能直接复用](https://developers.google.com/health/migration/data-access)。公开分发受限数据权限需要 Google 应用验证；Google 可能要求 CASA 第三方安全评估，官方列出的费用为 500–4,500 美元，取决于应用复杂度，详见[验证说明](https://developers.google.com/health/app-verification)。本项目只说明个人测试用法，不包含该发布流程。
 
 ### 5. 首次同步
 

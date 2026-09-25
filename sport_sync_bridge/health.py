@@ -513,6 +513,7 @@ def import_google_health_data_points(
         "weight": "weight",
         "steps": "steps",
         "heart-rate": "heartRate",
+        "daily-resting-heart-rate": "dailyRestingHeartRate",
     }
     pending: list[tuple[str, str, float | str, str, str, str]] = []
     for data_type, records in data_points_by_type.items():
@@ -558,6 +559,146 @@ def import_google_health_data_points(
     return len(pending)
 
 
+def import_google_health_daily_summary(
+    state_db: StateDB,
+    data_points_by_type: dict[str, list[dict[str, object]]],
+) -> int:
+    if not isinstance(data_points_by_type, dict):
+        raise ValueError("Google Health daily summary data must be grouped by data type")
+
+    rollup_fields = {
+        "steps": ("steps", "countSum", "steps", "count", "integer"),
+        "distance": ("distance", "millimetersSum", "distance", "km", "distance"),
+        "total-calories": ("totalCalories", "kcalSum", "calories", "kcal", "number"),
+        "active-energy-burned": (
+            "activeEnergyBurned",
+            "kcalSum",
+            "active_calories_kcal",
+            "kcal",
+            "number",
+        ),
+    }
+    pending: list[tuple[str, str, float | str, str, str, str]] = []
+    for data_type, records in data_points_by_type.items():
+        if data_type == "daily-resting-heart-rate":
+            if not isinstance(records, list):
+                raise ValueError("Google Health daily-resting-heart-rate data points must be a list")
+            for index, record in enumerate(records):
+                if not isinstance(record, dict):
+                    raise ValueError(
+                        f"Google Health daily-resting-heart-rate data point {index} must be an object"
+                    )
+                try:
+                    canonical_record = json.dumps(
+                        record,
+                        ensure_ascii=False,
+                        sort_keys=True,
+                        separators=(",", ":"),
+                        allow_nan=False,
+                    )
+                except (TypeError, ValueError) as exc:
+                    raise ValueError(
+                        f"Google Health daily-resting-heart-rate data point {index} is not valid JSON data"
+                    ) from exc
+                fingerprint = hashlib.sha256(
+                    f"{data_type}\n{canonical_record}".encode("utf-8")
+                ).hexdigest()
+                observed_at, metrics = _google_health_point_observations(
+                    data_type,
+                    record,
+                    "dailyRestingHeartRate",
+                    index,
+                )
+                for metric_name, raw_value, raw_unit in metrics:
+                    parsed = _normalize_metric(metric_name, raw_value, raw_unit)
+                    if parsed is None:
+                        continue
+                    metric, value, unit = parsed
+                    pending.append(
+                        (
+                            observed_at,
+                            metric,
+                            value,
+                            unit,
+                            "Google Health daily summary",
+                            fingerprint,
+                        )
+                    )
+            continue
+
+        config = rollup_fields.get(data_type)
+        if config is None:
+            raise ValueError(f"Unsupported Google Health daily summary data type: {data_type}")
+        if not isinstance(records, list):
+            raise ValueError(f"Google Health {data_type} rollup data points must be a list")
+        payload_field, value_field, metric_name, unit, value_kind = config
+        for index, record in enumerate(records):
+            if not isinstance(record, dict):
+                raise ValueError(f"Google Health {data_type} rollup point {index} must be an object")
+            try:
+                canonical_record = json.dumps(
+                    record,
+                    ensure_ascii=False,
+                    sort_keys=True,
+                    separators=(",", ":"),
+                    allow_nan=False,
+                )
+            except (TypeError, ValueError) as exc:
+                raise ValueError(
+                    f"Google Health {data_type} rollup point {index} is not valid JSON data"
+                ) from exc
+            fingerprint = hashlib.sha256(
+                f"daily-summary:{data_type}\n{canonical_record}".encode("utf-8")
+            ).hexdigest()
+            civil_start = _google_health_object(
+                record.get("civilStartTime"), f"{data_type} civilStartTime"
+            )
+            calendar_date = _google_health_civil_date(
+                civil_start.get("date"), f"{data_type} civilStartTime date"
+            )
+            observed_at = datetime.combine(
+                calendar_date, time.max, tzinfo=timezone.utc
+            ).isoformat()
+            payload_value = record.get(payload_field)
+            if payload_value is None:
+                continue
+            payload = _google_health_object(payload_value, f"{data_type} rollup")
+            raw_value = payload.get(value_field)
+            if value_kind == "integer":
+                value: float | int = _google_health_integer(
+                    raw_value, f"{data_type} {value_field}", 0, 1_000_000
+                )
+            elif value_kind == "distance":
+                millimeters = _google_health_integer(
+                    raw_value, f"{data_type} {value_field}", 0, 1_000_000_000
+                )
+                value = millimeters / 1_000_000
+            else:
+                value = _google_health_number(
+                    raw_value,
+                    f"{data_type} {value_field}",
+                    minimum=0,
+                    maximum=100_000,
+                )
+            parsed = _normalize_metric(metric_name, value, unit)
+            if parsed is None:
+                continue
+            metric, normalized_value, normalized_unit = parsed
+            pending.append(
+                (
+                    observed_at,
+                    metric,
+                    normalized_value,
+                    normalized_unit,
+                    "Google Health daily summary",
+                    fingerprint,
+                )
+            )
+
+    state_db.upsert_health_observations(pending)
+    return len(pending)
+
+
 def _google_health_point_observations(
     data_type: str,
     record: dict[str, object],
@@ -597,6 +738,18 @@ def _google_health_point_observations(
             raise ValueError(f"Google Health steps data point {index} has an invalid interval")
         count = _google_health_integer(payload.get("count"), "steps count", 0, 1_000_000)
         return end.isoformat(), [("steps", count, "count")]
+
+    if data_type == "daily-resting-heart-rate":
+        calendar_date = _google_health_civil_date(
+            payload.get("date"), "daily resting heart rate date"
+        )
+        observed_at = datetime.combine(
+            calendar_date, time.max, tzinfo=timezone.utc
+        ).isoformat()
+        beats_per_minute = _google_health_integer(
+            payload.get("beatsPerMinute"), "daily resting heart rate beatsPerMinute", 1, 300
+        )
+        return observed_at, [("resting_heart_rate", beats_per_minute, "bpm")]
 
     sample_time = _google_health_object(payload.get("sampleTime"), "heart-rate sampleTime")
     observed_at = _google_health_timestamp(
@@ -736,6 +889,17 @@ def _google_health_timestamp(value: object, field: str) -> datetime:
     if parsed is None:
         raise ValueError(f"Google Health {field} must be an RFC 3339 timestamp")
     return parsed.astimezone(timezone.utc)
+
+
+def _google_health_civil_date(value: object, field: str) -> date:
+    calendar = _google_health_object(value, field)
+    year = _google_health_integer(calendar.get("year"), f"{field} year", 1, 9999)
+    month = _google_health_integer(calendar.get("month"), f"{field} month", 1, 12)
+    day = _google_health_integer(calendar.get("day"), f"{field} day", 1, 31)
+    try:
+        return date(year, month, day)
+    except ValueError as exc:
+        raise ValueError(f"Google Health {field} must be a valid date") from exc
 
 
 def _google_health_optional_integer(

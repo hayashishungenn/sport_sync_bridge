@@ -86,7 +86,7 @@ from .config import AppConfig
 from .ecg_signal import EcgSignalNormalizer, analyze_bigrun_ecg_signal
 from .engine import SyncEngine
 from .google_health import (
-    GOOGLE_HEALTH_HEALTH_DATA_TYPES,
+    GOOGLE_HEALTH_FITBIT_DATASETS,
     GoogleHealthClient,
     validate_google_health_date_range,
 )
@@ -116,6 +116,7 @@ from .force_vector_analysis import (
 from .health import (
     import_garmin_health_details,
     import_garmin_user_summaries,
+    import_google_health_daily_summary,
     import_google_health_data_points,
     import_intervals_icu_wellness,
     format_health_summary_text,
@@ -653,9 +654,9 @@ def build_parser() -> argparse.ArgumentParser:
     health_fitbit_fetch.add_argument(
         "--dataset",
         action="append",
-        choices=GOOGLE_HEALTH_HEALTH_DATA_TYPES,
+        choices=GOOGLE_HEALTH_FITBIT_DATASETS,
         required=True,
-        help="Repeat for each Google Health dataset to import",
+        help="Repeat for each Google Health dataset, or select daily-summary",
     )
     health_fitbit_fetch.add_argument("--start-date", required=True, help="Start date, YYYY-MM-DD")
     health_fitbit_fetch.add_argument("--end-date", required=True, help="End date, YYYY-MM-DD")
@@ -1465,18 +1466,30 @@ def _run_fitbit_health_fetch(args: argparse.Namespace, config: AppConfig) -> int
     state = StateDB(config.db_path)
     try:
         client = GoogleHealthClient(config, state)
-        data_points = {
-            dataset: client.list_health_data_points(
-                dataset,
-                start_date.isoformat(),
-                end_date.isoformat(),
-            )
-            for dataset in dict.fromkeys(args.dataset)
-        }
-        imported = import_google_health_data_points(state, data_points)
+        data_points: dict[str, list[dict[str, object]]] = {}
+        daily_summary: dict[str, list[dict[str, object]]] | None = None
+        for dataset in dict.fromkeys(args.dataset):
+            if dataset == "daily-summary":
+                daily_summary = client.list_fitbit_daily_summary(
+                    start_date.isoformat(),
+                    end_date.isoformat(),
+                )
+            else:
+                data_points[dataset] = client.list_health_data_points(
+                    dataset,
+                    start_date.isoformat(),
+                    end_date.isoformat(),
+                )
+        imported = 0
+        if data_points:
+            imported += import_google_health_data_points(state, data_points)
+        if daily_summary is not None:
+            imported += import_google_health_daily_summary(state, daily_summary)
     finally:
         state.close()
     fetched = sum(len(records) for records in data_points.values())
+    if daily_summary is not None:
+        fetched += sum(len(records) for records in daily_summary.values())
     print(f"data_points_fetched={fetched}")
     print(f"observations_processed={imported}")
     return 0

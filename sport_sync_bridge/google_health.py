@@ -25,7 +25,14 @@ GOOGLE_HEALTH_SCOPES = (
     "https://www.googleapis.com/auth/googlehealth.sleep.readonly",
     "https://www.googleapis.com/auth/googlehealth.health_metrics_and_measurements.readonly",
 )
-GOOGLE_HEALTH_HEALTH_DATA_TYPES = ("sleep", "weight", "steps", "heart-rate")
+GOOGLE_HEALTH_HEALTH_DATA_TYPES = (
+    "sleep",
+    "weight",
+    "steps",
+    "heart-rate",
+    "daily-resting-heart-rate",
+)
+GOOGLE_HEALTH_FITBIT_DATASETS = (*GOOGLE_HEALTH_HEALTH_DATA_TYPES, "daily-summary")
 _GOOGLE_HEALTH_HEALTH_DATA_TYPE_CONFIG = {
     "sleep": (
         "sleep.interval.civil_end_time",
@@ -46,6 +53,20 @@ _GOOGLE_HEALTH_HEALTH_DATA_TYPE_CONFIG = {
         "heart_rate.sample_time.civil_time",
         10000,
         "https://www.googleapis.com/auth/googlehealth.health_metrics_and_measurements.readonly",
+    ),
+    "daily-resting-heart-rate": (
+        "daily_resting_heart_rate.date",
+        10000,
+        "https://www.googleapis.com/auth/googlehealth.health_metrics_and_measurements.readonly",
+    ),
+}
+_GOOGLE_HEALTH_DAILY_ROLLUP_CONFIG = {
+    "steps": (90, "https://www.googleapis.com/auth/googlehealth.activity_and_fitness.readonly"),
+    "distance": (90, "https://www.googleapis.com/auth/googlehealth.activity_and_fitness.readonly"),
+    "total-calories": (14, "https://www.googleapis.com/auth/googlehealth.activity_and_fitness.readonly"),
+    "active-energy-burned": (
+        90,
+        "https://www.googleapis.com/auth/googlehealth.activity_and_fitness.readonly",
     ),
 }
 
@@ -155,6 +176,16 @@ class GoogleHealthClient:
             raise RuntimeError(f"Google Health response for {path} must be a JSON object")
         return payload
 
+    def post_json(self, path: str, body: dict[str, object]) -> dict[str, Any]:
+        response = self._post(path, body=body, timeout=30)
+        try:
+            payload = response.json()
+        except ValueError as exc:
+            raise RuntimeError(f"Google Health response for {path} is not valid JSON") from exc
+        if not isinstance(payload, dict):
+            raise RuntimeError(f"Google Health response for {path} must be a JSON object")
+        return payload
+
     def get_bytes(self, path: str, *, params: dict[str, str] | None = None) -> bytes:
         response = self._get(path, params=params, timeout=120)
         content = response.content
@@ -214,6 +245,92 @@ class GoogleHealthClient:
             page_token = next_page_token
         return rows
 
+    def list_daily_rollup_data_points(
+        self,
+        data_type: str,
+        start_date: str,
+        end_date: str,
+    ) -> list[dict[str, Any]]:
+        config = _GOOGLE_HEALTH_DAILY_ROLLUP_CONFIG.get(data_type)
+        if config is None:
+            raise ValueError(f"Unsupported Google Health daily rollup data type: {data_type}")
+        start, end = validate_google_health_date_range(start_date, end_date)
+        maximum_days, required_scope = config
+        self._require_scopes({required_scope})
+
+        rows: list[dict[str, Any]] = []
+        range_start = start
+        range_end = end + timedelta(days=1)
+        while range_start < range_end:
+            chunk_end = min(range_start + timedelta(days=maximum_days), range_end)
+            base_body: dict[str, object] = {
+                "range": {
+                    "start": _google_health_civil_datetime(range_start),
+                    "end": _google_health_civil_datetime(chunk_end),
+                },
+                "windowSizeDays": 1,
+                "pageSize": 10000,
+                "dataSourceFamily": "users/me/dataSourceFamilies/google-sources",
+            }
+            page_token: str | None = None
+            seen_page_tokens: set[str] = set()
+            while True:
+                body = dict(base_body)
+                if page_token:
+                    body["pageToken"] = page_token
+                payload = self.post_json(
+                    f"/users/me/dataTypes/{data_type}/dataPoints:dailyRollUp",
+                    body,
+                )
+                page_rows = payload.get("rollupDataPoints")
+                if not isinstance(page_rows, list):
+                    raise RuntimeError(
+                        f"Google Health {data_type} rollup response must include a rollupDataPoints list"
+                    )
+                for index, row in enumerate(page_rows):
+                    if not isinstance(row, dict):
+                        raise RuntimeError(
+                            f"Google Health {data_type} rollup point {index} must be a JSON object"
+                        )
+                    if not isinstance(row.get("civilStartTime"), dict):
+                        raise RuntimeError(
+                            f"Google Health {data_type} rollup point {index} is missing its daily fields"
+                        )
+                    rows.append(row)
+
+                next_page_token = payload.get("nextPageToken")
+                if next_page_token in (None, ""):
+                    break
+                if not isinstance(next_page_token, str):
+                    raise RuntimeError("Google Health nextPageToken must be a string")
+                if next_page_token in seen_page_tokens:
+                    raise RuntimeError("Google Health returned a repeated pagination token")
+                seen_page_tokens.add(next_page_token)
+                page_token = next_page_token
+            range_start = chunk_end
+        return rows
+
+    def list_fitbit_daily_summary(
+        self,
+        start_date: str,
+        end_date: str,
+    ) -> dict[str, list[dict[str, Any]]]:
+        summary_data: dict[str, list[dict[str, Any]]] = {
+            data_type: self.list_daily_rollup_data_points(data_type, start_date, end_date)
+            for data_type in (
+                "steps",
+                "distance",
+                "total-calories",
+                "active-energy-burned",
+            )
+        }
+        summary_data["daily-resting-heart-rate"] = self.list_health_data_points(
+            "daily-resting-heart-rate",
+            start_date,
+            end_date,
+        )
+        return summary_data
+
     def _require_scopes(self, required_scopes: set[str]) -> None:
         missing_scopes = required_scopes - self._stored_scopes()
         if missing_scopes:
@@ -252,6 +369,39 @@ class GoogleHealthClient:
 
         try:
             response = session.get(f"{self.api_root}{path}", params=params, timeout=timeout)
+            if response.status_code >= 400:
+                message = _error_message(response)
+                detail = f": {message}" if message else ""
+                raise RuntimeError(f"Google Health API request failed ({response.status_code}){detail}")
+            return response
+        except Exception as exc:
+            if _is_invalid_grant(exc):
+                raise RuntimeError(
+                    "Google Health refresh token expired or was revoked; run "
+                    "`python sync.py google-health-auth-url` and authorize again"
+                ) from exc
+            raise
+        finally:
+            self._save_credentials(credentials)
+            session.close()
+
+    def _post(
+        self,
+        path: str,
+        *,
+        body: dict[str, object],
+        timeout: int,
+    ) -> Any:
+        credentials = self._load_credentials()
+        try:
+            from google.auth.transport.requests import AuthorizedSession
+
+            session = AuthorizedSession(credentials)
+        except ImportError as exc:
+            raise RuntimeError("google-auth is required for Google Health API access") from exc
+
+        try:
+            response = session.post(f"{self.api_root}{path}", json=body, timeout=timeout)
             if response.status_code >= 400:
                 message = _error_message(response)
                 detail = f": {message}" if message else ""
@@ -537,3 +687,10 @@ def validate_google_health_date_range(start_date: str, end_date: str) -> tuple[d
     if end < start:
         raise ValueError("Google Health end date must be on or after the start date")
     return start, end
+
+
+def _google_health_civil_datetime(value: date) -> dict[str, object]:
+    return {
+        "date": {"year": value.year, "month": value.month, "day": value.day},
+        "time": {"hours": 0, "minutes": 0, "seconds": 0, "nanos": 0},
+    }

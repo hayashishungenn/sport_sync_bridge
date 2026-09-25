@@ -21,12 +21,14 @@ from sport_sync_bridge.engine import SyncEngine
 from sport_sync_bridge.formats import read_activity_file
 from sport_sync_bridge.google_health import (
     GOOGLE_HEALTH_ACTIVITY_SCOPES,
+    GOOGLE_HEALTH_FITBIT_DATASETS,
     GOOGLE_HEALTH_HEALTH_DATA_TYPES,
     GOOGLE_HEALTH_SCOPES,
     GoogleHealthClient,
     GoogleHealthSource,
 )
 from sport_sync_bridge.health import (
+    import_google_health_daily_summary,
     import_google_health_data_points,
     summarize_health_for_activity,
 )
@@ -191,6 +193,204 @@ class GoogleHealthTests(unittest.TestCase):
         self.assertEqual(stored["refresh_token"], "refresh-token")
         self.assertNotIn("client_secret", stored)
 
+    def test_post_json_uses_google_authorized_session(self) -> None:
+        state_db = self._state_db()
+        client = self._client(state_db)
+        state_db.set_value(
+            client.credentials_key,
+            json.dumps(
+                {
+                    "token": "access-token",
+                    "refresh_token": "refresh-token",
+                    "expiry": None,
+                    "scopes": list(GOOGLE_HEALTH_ACTIVITY_SCOPES),
+                }
+            ),
+        )
+        response = SimpleNamespace(status_code=200, json=lambda: {"rollupDataPoints": []})
+        captured: dict[str, object] = {}
+
+        class FakeAuthorizedSession:
+            def __init__(self, credentials: object):
+                self.credentials = credentials
+
+            def post(self, url: str, *, json: object, timeout: int) -> SimpleNamespace:
+                captured["request"] = (url, json, timeout)
+                return response
+
+            def close(self) -> None:
+                captured["closed"] = True
+
+        body = {"windowSizeDays": 1}
+        with patch("google.auth.transport.requests.AuthorizedSession", FakeAuthorizedSession):
+            payload = client.post_json(
+                "/users/me/dataTypes/steps/dataPoints:dailyRollUp",
+                body,
+            )
+
+        self.assertEqual(payload, {"rollupDataPoints": []})
+        self.assertEqual(
+            captured["request"],
+            (
+                "https://health.googleapis.com/v4/users/me/dataTypes/steps/dataPoints:dailyRollUp",
+                body,
+                30,
+            ),
+        )
+        self.assertTrue(captured["closed"])
+
+    def test_daily_rollup_paginates_and_splits_total_calorie_ranges(self) -> None:
+        state_db = self._state_db()
+        client = self._client(state_db)
+        activity_scope = next(
+            scope for scope in GOOGLE_HEALTH_SCOPES if scope.endswith("activity_and_fitness.readonly")
+        )
+        state_db.set_value(client.credentials_key, json.dumps({"scopes": [activity_scope]}))
+        client.post_json = Mock(
+            side_effect=[
+                {"rollupDataPoints": [{"civilStartTime": {"date": {"day": 1}}}], "nextPageToken": "p2"},
+                {"rollupDataPoints": [{"civilStartTime": {"date": {"day": 2}}}]},
+                {"rollupDataPoints": [{"civilStartTime": {"date": {"day": 15}}}]},
+            ]
+        )
+
+        rows = client.list_daily_rollup_data_points(
+            "total-calories", "2026-01-01", "2026-01-15"
+        )
+
+        self.assertEqual(len(rows), 3)
+        self.assertEqual(client.post_json.call_count, 3)
+        path = "/users/me/dataTypes/total-calories/dataPoints:dailyRollUp"
+        first_body = client.post_json.call_args_list[0].args[1]
+        self.assertEqual(client.post_json.call_args_list[0].args[0], path)
+        self.assertEqual(
+            first_body["range"],
+            {
+                "start": {
+                    "date": {"year": 2026, "month": 1, "day": 1},
+                    "time": {"hours": 0, "minutes": 0, "seconds": 0, "nanos": 0},
+                },
+                "end": {
+                    "date": {"year": 2026, "month": 1, "day": 15},
+                    "time": {"hours": 0, "minutes": 0, "seconds": 0, "nanos": 0},
+                },
+            },
+        )
+        self.assertEqual(client.post_json.call_args_list[1].args[1]["pageToken"], "p2")
+        self.assertEqual(
+            client.post_json.call_args_list[2].args[1]["range"]["start"]["date"]["day"],
+            15,
+        )
+        self.assertEqual(
+            client.post_json.call_args_list[2].args[1]["range"]["end"]["date"]["day"],
+            16,
+        )
+
+    def test_daily_rollup_requires_scope_and_valid_date_range(self) -> None:
+        state_db = self._state_db()
+        client = self._client(state_db)
+        state_db.set_value(client.credentials_key, json.dumps({"scopes": []}))
+
+        with self.assertRaisesRegex(RuntimeError, "missing Google Health read-only permissions"):
+            client.list_daily_rollup_data_points("steps", "2026-01-01", "2026-01-01")
+
+        with self.assertRaisesRegex(ValueError, "on or after"):
+            client.list_daily_rollup_data_points("steps", "2026-01-02", "2026-01-01")
+
+    def test_fitbit_daily_summary_imports_rollups_and_is_idempotent(self) -> None:
+        state_db = self._state_db()
+        records: dict[str, list[dict[str, object]]] = {
+            "steps": [
+                {
+                    "civilStartTime": {"date": {"year": 2026, "month": 1, "day": 4}},
+                    "steps": {"countSum": "1234"},
+                }
+            ],
+            "distance": [
+                {
+                    "civilStartTime": {"date": {"year": 2026, "month": 1, "day": 4}},
+                    "distance": {"millimetersSum": "4219500"},
+                }
+            ],
+            "total-calories": [
+                {
+                    "civilStartTime": {"date": {"year": 2026, "month": 1, "day": 4}},
+                    "totalCalories": {"kcalSum": 2380},
+                }
+            ],
+            "active-energy-burned": [
+                {
+                    "civilStartTime": {"date": {"year": 2026, "month": 1, "day": 4}},
+                    "activeEnergyBurned": {"kcalSum": 650},
+                }
+            ],
+            "daily-resting-heart-rate": [
+                {
+                    "dailyRestingHeartRate": {
+                        "date": {"year": 2026, "month": 1, "day": 4},
+                        "beatsPerMinute": "58",
+                    }
+                }
+            ],
+        }
+
+        processed = import_google_health_daily_summary(state_db, records)
+        duplicate_processed = import_google_health_daily_summary(state_db, records)
+        observations = state_db.list_health_observations()
+        by_metric = {str(row["metric"]): row for row in observations}
+
+        self.assertEqual(processed, 5)
+        self.assertEqual(duplicate_processed, 5)
+        self.assertEqual(len(observations), 5)
+        self.assertEqual(by_metric["steps"]["value"], 1234)
+        self.assertAlmostEqual(by_metric["distance_km"]["value"], 4.2195)
+        self.assertEqual(by_metric["calories_kcal"]["value"], 2380)
+        self.assertEqual(by_metric["active_calories_kcal"]["value"], 650)
+        self.assertEqual(by_metric["resting_hr_bpm"]["value"], 58)
+
+    def test_invalid_fitbit_daily_summary_batch_is_rejected_before_writing(self) -> None:
+        state_db = self._state_db()
+        records: dict[str, list[dict[str, object]]] = {
+            "steps": [
+                {
+                    "civilStartTime": {"date": {"year": 2026, "month": 1, "day": 4}},
+                    "steps": {"countSum": "42"},
+                }
+            ],
+            "total-calories": [
+                {
+                    "civilStartTime": {"date": {"year": 2026, "month": 1, "day": 4}},
+                    "totalCalories": {"kcalSum": -1},
+                }
+            ],
+        }
+
+        with self.assertRaisesRegex(ValueError, "outside the supported range"):
+            import_google_health_daily_summary(state_db, records)
+
+        self.assertEqual(state_db.list_health_observations(), [])
+
+    def test_daily_resting_heart_rate_can_be_imported_as_a_dataset(self) -> None:
+        state_db = self._state_db()
+        imported = import_google_health_data_points(
+            state_db,
+            {
+                "daily-resting-heart-rate": [
+                    {
+                        "dailyRestingHeartRate": {
+                            "date": {"year": 2026, "month": 1, "day": 4},
+                            "beatsPerMinute": "57",
+                        }
+                    }
+                ]
+            },
+        )
+
+        self.assertEqual(imported, 1)
+        observation = state_db.list_health_observations("resting_hr_bpm")[0]
+        self.assertEqual(observation["value"], 57)
+        self.assertEqual(observation["observed_at"], "2026-01-04T23:59:59.999999+00:00")
+
     def test_expired_or_revoked_refresh_token_prompts_for_reauthorization(self) -> None:
         state_db = self._state_db()
         client = self._client(state_db)
@@ -301,6 +501,12 @@ class GoogleHealthTests(unittest.TestCase):
                 "heart-rate",
                 "health_metrics_and_measurements.readonly",
                 "heart_rate.sample_time.civil_time",
+                10000,
+            ),
+            (
+                "daily-resting-heart-rate",
+                "health_metrics_and_measurements.readonly",
+                "daily_resting_heart_rate.date",
                 10000,
             ),
         )
@@ -518,6 +724,46 @@ class GoogleHealthTests(unittest.TestCase):
             finally:
                 state_db.close()
 
+    def test_fitbit_daily_summary_cli_fetches_and_imports_daily_rollups(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            config = cast(AppConfig, SimpleNamespace(db_path=Path(directory) / "state.db"))
+            args = build_parser().parse_args(
+                [
+                    "health",
+                    "fetch-fitbit",
+                    "--dataset",
+                    "daily-summary",
+                    "--start-date",
+                    "2026-01-01",
+                    "--end-date",
+                    "2026-01-02",
+                ]
+            )
+            client = Mock()
+            client.list_fitbit_daily_summary.return_value = {
+                "steps": [
+                    {
+                        "civilStartTime": {"date": {"year": 2026, "month": 1, "day": 1}},
+                        "steps": {"countSum": "42"},
+                    }
+                ]
+            }
+            output = io.StringIO()
+            with patch("sport_sync_bridge.cli.GoogleHealthClient", return_value=client):
+                with redirect_stdout(output):
+                    result = _run_fitbit_health_fetch(args, config)
+
+            self.assertEqual(result, 0)
+            client.list_fitbit_daily_summary.assert_called_once_with(
+                "2026-01-01", "2026-01-02"
+            )
+            self.assertIn("data_points_fetched=1", output.getvalue())
+            state_db = StateDB(config.db_path)
+            try:
+                self.assertEqual(state_db.list_health_observations("steps")[0]["value"], 42)
+            finally:
+                state_db.close()
+
     def test_activity_listing_pages_and_stops_after_the_requested_start_time(self) -> None:
         source, client = self._source()
         client.get_json = Mock(
@@ -613,8 +859,9 @@ class GoogleHealthTests(unittest.TestCase):
         self.assertEqual(health_args.dataset, ["sleep"])
         self.assertEqual(
             set(GOOGLE_HEALTH_HEALTH_DATA_TYPES),
-            {"sleep", "weight", "steps", "heart-rate"},
+            {"sleep", "weight", "steps", "heart-rate", "daily-resting-heart-rate"},
         )
+        self.assertIn("daily-summary", GOOGLE_HEALTH_FITBIT_DATASETS)
 
     def test_engine_registers_fitbit_after_local_oauth_credentials_are_saved(self) -> None:
         with tempfile.TemporaryDirectory() as directory, patch.dict(
