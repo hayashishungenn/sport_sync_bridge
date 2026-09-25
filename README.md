@@ -223,6 +223,15 @@ python sync.py sync --source local --target strava --format strava=tcx
 
 `library samba list` 浏览 SMB 共享中的单层目录，`library samba import` 将指定 FIT、GPX、TCX、JSON、CSV 或 ZIP 文件导入本地活动库。SMB 密码只从 `SAMBA_PASSWORD`（或 `--password-env` 指定的变量）读取；加密 ZIP 密码使用 `ACTIVITY_ARCHIVE_PASSWORD`（或 `--archive-password-env` 指定的变量）。默认后端使用 SMB2/3 直连 TCP。显式添加 `--legacy-smb` 会改用 PySMB，优先协商 SMB2，并在服务器不支持时兼容 SMB1；指定 `:139` 可使用 NetBIOS over TCP，`--server-name` 可覆盖从主机名推导的 NetBIOS 名称。旧协议只在显式选择时启用。两种后端都只浏览和读取，不会修改或删除共享文件。
 
+### 社交邀请链接
+
+GarSync 好友和群组邀请可在分享菜单中生成。CLI 用 `share friend-invite` 和 `share group-invite` 输出对应邀请 URL；可提供显示名称，URL 参数会按 UTF-8 编码。CLI 不会调用手机系统分享面板。
+
+```powershell
+python sync.py share friend-invite <用户UUID> --name "显示名称"
+python sync.py share group-invite <群组UUID> --group-name "周末骑行" --name "邀请人"
+```
+
 ### BLE 运动传感器
 
 BLE 命令可扫描附近设备、保存设备名称和首选类型、读取标准电量服务，并记录心率、跑步步频、骑行速度/踏频、功率计测量与功率向量、室内单车的标准通知。`heart-rate` 命令输出 CSV；`record` 可将发现的标准测量通知输出到终端或 JSON Lines 文件。CSC 和功率计的轮速传感数据只有在提供轮周长时才会推算速度和距离；设备只提供计数器时仍保留原始计数。普通测量采集只订阅并读取测量数据。BigRun ECG 命令会启动心电带并将原始通知字节以十六进制写入 JSON Lines；`bigrun-ecg-decode` 可将其中的 `0x41` 波形帧解码为 125 Hz 样本，并保留每帧采集时间；`bigrun-ecg-mode` 可设置 `standard`、`hrv` 或 `ecg` 工作模式。波形解码命令可加 --normalize，将整段样本按全局振幅范围映射至 -5 到 5；幅度范围小于 1e-9 时输出零值。该步骤仅处理波形显示尺度，不生成诊断结论。

@@ -113,6 +113,7 @@ from .running_dynamics import (
     format_running_dynamics,
 )
 from .samba import import_samba_activity, list_samba_directory
+from .share_links import build_friend_invite_url, build_group_invite_url
 from .state import StateDB
 from .training_balance import calculate_training_balance, format_training_balance
 from .swim_css import calculate_swim_css, format_swim_css, parse_swim_time
@@ -628,6 +629,16 @@ def build_parser() -> argparse.ArgumentParser:
     exchange_parser = subparsers.add_parser("strava-exchange", help="Exchange Strava OAuth code for tokens")
     exchange_parser.add_argument("--code", required=True, help="OAuth code returned by Strava")
 
+    share_parser = subparsers.add_parser("share", help="Build GarSync friend and group invite links")
+    share_actions = share_parser.add_subparsers(dest="share_action", required=True)
+    friend_invite = share_actions.add_parser("friend-invite", help="Build a friend invite link")
+    friend_invite.add_argument("user_id", help="GarSync user UUID")
+    friend_invite.add_argument("--name", help="Optional display name included in the link")
+    group_invite = share_actions.add_parser("group-invite", help="Build a group invite link")
+    group_invite.add_argument("group_id", help="GarSync group UUID")
+    group_invite.add_argument("--group-name", help="Optional group name included in the link")
+    group_invite.add_argument("--name", help="Optional inviter name included in the link")
+
     parser.set_defaults(command="sync")
     return parser
 
@@ -647,6 +658,9 @@ def main(argv: list[str] | None = None) -> int:
         target_formats = _target_format_map(getattr(args, "target_formats", None))
     except ValueError as exc:
         parser.error(str(exc))
+
+    if args.command == "share":
+        return _run_share_command(args)
 
     config = AppConfig.load(root_dir)
     ensure_directory(config.data_dir)
@@ -1543,6 +1557,24 @@ def _run_local_command(args: argparse.Namespace, config: AppConfig) -> int:
             state.close()
 
     raise ValueError(f"Unsupported local command: {args.command}")
+
+
+def _run_share_command(args: argparse.Namespace) -> int:
+    try:
+        if args.share_action == "friend-invite":
+            invite_url = build_friend_invite_url(args.user_id, name=args.name)
+        else:
+            invite_url = build_group_invite_url(
+                args.group_id,
+                group_name=args.group_name,
+                inviter_name=args.name,
+            )
+    except ValueError as exc:
+        print(f"share_error={exc}", file=sys.stderr)
+        return 2
+
+    print(invite_url)
+    return 0
 
 
 def _run_ble_command(args: argparse.Namespace, config: AppConfig) -> int:
