@@ -12,6 +12,7 @@ from .formats import SUPPORTED_FORMATS, convert_activity_file
 from .intervals_icu import IntervalsIcuSource
 from .models import FileBundle, UploadResult
 from .sources import IGPSportSource, LocalFileSource, OneLapSource, SourceAdapter
+from .strava_source import StravaSource
 from .state import StateDB
 from .targets import GarminTarget, StravaTarget, TargetAdapter
 from .utils import ensure_directory, safe_filename, sha1_file, utcnow
@@ -28,8 +29,8 @@ class SyncEngine:
         ensure_directory(config.repaired_dir)
         ensure_directory(config.converted_dir)
         self.state_db = StateDB(config.db_path)
-        self.sources = self._build_sources()
         self.targets = self._build_targets()
+        self.sources = self._build_sources()
 
     def close(self) -> None:
         self.state_db.close()
@@ -74,7 +75,8 @@ class SyncEngine:
                 pending_targets = [
                     target_name
                     for target_name in selected_targets
-                    if not self.state_db.is_target_done(activity.source, activity.source_id, target_name)
+                    if target_name != activity.source
+                    and not self.state_db.is_target_done(activity.source, activity.source_id, target_name)
                 ]
                 if not pending_targets:
                     continue
@@ -276,6 +278,9 @@ class SyncEngine:
             IntervalsIcuSource(self.config),
             LocalFileSource(self.config, self.state_db),
         )
+        strava_target = self.targets.get("strava")
+        if isinstance(strava_target, StravaTarget):
+            adapters += (StravaSource(self.config, strava_target),)
         for adapter in adapters:
             if adapter.is_configured():
                 sources[adapter.name] = adapter

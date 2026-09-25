@@ -118,7 +118,7 @@ python sync.py sync --source intervals_icu --target garmin --dry-run
 python sync.py strava-auth-url
 ```
 
-浏览器打开后，同意 `activity:write` 权限。回调 URL 里会带一个 `code=...`。
+浏览器打开后，同意 `activity:read_all` 和 `activity:write` 权限。回调 URL 里会带一个 `code=...`。
 
 拿到 code 之后执行:
 
@@ -127,6 +127,13 @@ python sync.py strava-exchange --code 你的code
 ```
 
 新的 `access_token` / `refresh_token` 会写进本地 SQLite，不需要每次再手填。
+
+Strava 也可以作为活动来源向 Garmin 同步：
+
+```powershell
+python sync.py check --source strava --target garmin
+python sync.py sync --source strava --target garmin --dry-run
+```
 
 ### 5. 首次同步
 

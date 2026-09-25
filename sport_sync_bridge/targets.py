@@ -125,6 +125,9 @@ class StravaTarget(TargetAdapter):
     def authenticate(self) -> None:
         self._ensure_access_token()
 
+    def get_access_token(self, *, force_refresh: bool = False) -> str:
+        return self._refresh_access_token() if force_refresh else self._ensure_access_token()
+
     def build_authorize_url(self, force_prompt: bool = False) -> str:
         if not self.is_configured():
             raise RuntimeError("Strava client_id/client_secret are not configured")
