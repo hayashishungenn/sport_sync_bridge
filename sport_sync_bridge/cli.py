@@ -83,7 +83,7 @@ from .health_sources import (
     fetch_intervals_icu_wellness,
 )
 from .targets import GarminTarget
-from .fit_tools import normalize_fit_coordinates
+from .fit_tools import normalize_fit_coordinates, repair_fit_track_continuity
 from .formats import SUPPORTED_FORMATS, TrackPoint, convert_activity_file, read_activity_file
 from .force_vector_analysis import (
     FORCE_VECTOR_FOCUSES,
@@ -175,6 +175,12 @@ def build_parser() -> argparse.ArgumentParser:
 
     library_parser = subparsers.add_parser("library", help="Import and manage local activity files")
     library_actions = library_parser.add_subparsers(dest="library_action", required=True)
+    library_repair_fit = library_actions.add_parser(
+        "repair-fit-continuity",
+        help="Remove FIT track records with backward timestamps or gaps over 48 hours",
+    )
+    library_repair_fit.add_argument("input", type=Path, help="Input FIT file")
+    library_repair_fit.add_argument("--output", required=True, type=Path, help="Repaired FIT output path")
     library_import = library_actions.add_parser("import", help="Import FIT, GPX, TCX, JSON, CSV, or ZIP files")
     library_import.add_argument("paths", nargs="+", type=Path, help="Files or directories to import")
     library_import.add_argument("--recursive", action="store_true", help="Scan directories recursively")
@@ -1108,6 +1114,14 @@ def _run_local_command(args: argparse.Namespace, config: AppConfig) -> int:
             print(f"output={result.output_path}")
             for loss in result.losses:
                 print(f"loss={loss}")
+            return 0
+
+        if args.library_action == "repair-fit-continuity":
+            input_path = args.input.expanduser().resolve()
+            repaired_path, removed_records = repair_fit_track_continuity(args.input, args.output)
+            print(f"records_removed={removed_records}")
+            print(f"already_repaired={'yes' if repaired_path == input_path else 'no'}")
+            print(f"output={repaired_path}")
             return 0
 
         state = StateDB(config.db_path)

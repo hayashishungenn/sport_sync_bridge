@@ -180,6 +180,14 @@ python sync.py convert ride.gpx --to fit --output ride.fit
 
 `convert --source` 只影响 FIT 输入，并为未命中设备规则的文件指定 iGPSPORT 或 OneLap 的坐标模式。转换不会覆盖输入文件。输出文件会报告未能保留的字段；FIT 输出要求每个 GPS 轨迹点都带时间，TCX 输出也要求轨迹点带时间。
 
+也可以把 GarSync 中可确认的 FIT 轨迹连续性修复用于本地文件。它会删除时间倒退或与前一个保留轨迹点相隔超过 48 小时的记录，并生成独立文件：
+
+```powershell
+python sync.py library repair-fit-continuity ride.fit --output ride.repaired.fit
+```
+
+没有时间戳的记录会保留。输入文件不变，修复产物旁会保存校验标记，重复处理时会识别已修复文件。
+
 ## 本地活动库与 GarSync 离线功能
 
 从本地文件或目录导入活动。目录需要显式指定 `--recursive`；ZIP 会在内存中读取，不会按压缩包路径解压到磁盘。加密 ZIP 可通过 `ACTIVITY_ARCHIVE_PASSWORD` 提供密码。

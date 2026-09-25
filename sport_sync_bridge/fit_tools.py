@@ -4,12 +4,14 @@ import hashlib
 import json
 import math
 import os
+import shutil
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Sequence
 
 from .coordinate_rules import CoordinateRule, COORDINATE_MODES
+from .formats import _copy_coordinate_marker, _fit_datetime
 
 
 @dataclass(frozen=True, slots=True)
@@ -90,6 +92,101 @@ def normalize_fit_coordinates(
     return output_path, changed_pairs
 
 
+def repair_fit_track_continuity(input_path: Path, output_path: Path) -> tuple[Path, int]:
+    input_path = input_path.expanduser().resolve()
+    output_path = output_path.expanduser().resolve()
+    if input_path.suffix.lower() != ".fit":
+        raise ValueError("FIT continuity repair requires a .fit input file")
+    if output_path.suffix.lower() != ".fit":
+        raise ValueError("FIT continuity repair output must use the .fit extension")
+    if input_path == output_path:
+        raise ValueError("FIT continuity repair requires a different output path")
+    if not input_path.is_file():
+        raise RuntimeError(f"FIT input file does not exist: {input_path}")
+    if _has_valid_fit_repair_marker(input_path):
+        return input_path, 0
+
+    try:
+        from fit_tool.fit_file import FitFile
+        from fit_tool.fit_file_builder import FitFileBuilder
+    except ImportError as exc:
+        raise RuntimeError("fit-tool is required for FIT continuity repair") from exc
+
+    try:
+        fit_file = FitFile.from_file(str(input_path))
+    except Exception as exc:
+        raise RuntimeError(f"Could not decode FIT file {input_path}: {exc}") from exc
+
+    builder = FitFileBuilder(auto_define=False)
+    previous_timestamp = None
+    removed_records = 0
+    for record in fit_file.records:
+        message = getattr(record, "message", None)
+        if getattr(message, "name", None) != "record":
+            builder.add(message)
+            continue
+
+        timestamp_field = message.get_field_by_name("timestamp")
+        timestamp = (
+            _fit_datetime(timestamp_field.get_value())
+            if timestamp_field is not None and timestamp_field.is_valid()
+            else None
+        )
+        if timestamp is None:
+            builder.add(message)
+            continue
+
+        if previous_timestamp is not None:
+            elapsed_seconds = (timestamp - previous_timestamp).total_seconds()
+            if elapsed_seconds < 0 or elapsed_seconds > 172_800:
+                removed_records += 1
+                continue
+        builder.add(message)
+        previous_timestamp = timestamp
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    temporary_path = _temporary_sibling(output_path)
+    temporary_coordinate_marker = _marker_path(temporary_path)
+    temporary_repair_marker = _fit_repair_marker_path(temporary_path)
+    output_coordinate_marker = _marker_path(output_path)
+    output_repair_marker = _fit_repair_marker_path(output_path)
+    try:
+        if removed_records:
+            builder.build().to_file(str(temporary_path))
+        else:
+            shutil.copyfile(input_path, temporary_path)
+        FitFile.from_file(str(temporary_path))
+
+        has_coordinate_marker = _copy_coordinate_marker(
+            input_path,
+            temporary_path,
+            temporary_path.read_bytes(),
+        )
+        _write_json_atomically(
+            temporary_repair_marker,
+            {
+                "format": 1,
+                "operation": "track_continuity",
+                "input_sha256": _sha256(input_path),
+                "output_sha256": _sha256(temporary_path),
+                "removed_records": removed_records,
+            },
+        )
+        os.replace(temporary_path, output_path)
+        if has_coordinate_marker:
+            os.replace(temporary_coordinate_marker, output_coordinate_marker)
+        else:
+            output_coordinate_marker.unlink(missing_ok=True)
+        os.replace(temporary_repair_marker, output_repair_marker)
+    except Exception:
+        temporary_path.unlink(missing_ok=True)
+        temporary_coordinate_marker.unlink(missing_ok=True)
+        temporary_repair_marker.unlink(missing_ok=True)
+        raise
+
+    return output_path, removed_records
+
+
 def _resolve_coordinate_mode(
     metadata: FitDeviceMetadata,
     fallback_mode: str,
@@ -162,6 +259,31 @@ def _to_int(value: object) -> int | None:
 
 def _marker_path(path: Path) -> Path:
     return Path(f"{path}.coord.json")
+
+
+def _fit_repair_marker_path(path: Path) -> Path:
+    return Path(f"{path}.fit-repair.json")
+
+
+def _has_valid_fit_repair_marker(path: Path) -> bool:
+    marker_path = _fit_repair_marker_path(path)
+    if not marker_path.exists():
+        return False
+    try:
+        marker = json.loads(marker_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise RuntimeError(f"Could not read FIT repair marker {marker_path}: {exc}") from exc
+    if (
+        not isinstance(marker, dict)
+        or marker.get("format") != 1
+        or marker.get("operation") != "track_continuity"
+        or not isinstance(marker.get("output_sha256"), str)
+        or marker["output_sha256"] != _sha256(path)
+    ):
+        raise RuntimeError(
+            f"FIT repair marker does not match {path}; use the original FIT file or remove the marker"
+        )
+    return True
 
 
 def _has_valid_coordinate_marker(path: Path) -> bool:
