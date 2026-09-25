@@ -180,7 +180,7 @@ def build_parser() -> argparse.ArgumentParser:
     sync_parser.add_argument(
         "--target",
         action="append",
-        choices=["garmin", "strava", "wahoo", "hammerhead"],
+        choices=["garmin", "strava", "wahoo", "hammerhead", "intervals_icu"],
         help="Repeatable target",
     )
     sync_parser.add_argument("--from", dest="date_from", help="Start date, e.g. 2026-01-01")
@@ -730,7 +730,7 @@ def build_parser() -> argparse.ArgumentParser:
     check_parser.add_argument(
         "--target",
         action="append",
-        choices=["garmin", "strava", "wahoo", "hammerhead"],
+        choices=["garmin", "strava", "wahoo", "hammerhead", "intervals_icu"],
         help="Repeatable target",
     )
 
@@ -1149,9 +1149,9 @@ def _parse_target_format(value: str) -> tuple[str, str]:
     target, separator, activity_format = value.partition("=")
     target = target.strip().lower()
     activity_format = activity_format.strip().lower()
-    if not separator or target not in {"garmin", "strava", "wahoo", "hammerhead"}:
+    if not separator or target not in {"garmin", "strava", "wahoo", "hammerhead", "intervals_icu"}:
         raise argparse.ArgumentTypeError(
-            "format must use TARGET=FORMAT with target garmin, strava, wahoo, or hammerhead"
+            "format must use TARGET=FORMAT with target garmin, strava, wahoo, hammerhead, or intervals_icu"
         )
     if activity_format not in SUPPORTED_FORMATS:
         supported = ", ".join(sorted(SUPPORTED_FORMATS))

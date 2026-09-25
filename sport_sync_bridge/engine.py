@@ -14,6 +14,7 @@ from .garmin_source import GarminSource
 from .hammerhead_api import HammerheadClient
 from .hammerhead_source import HammerheadSource
 from .intervals_icu import IntervalsIcuSource
+from .intervals_icu_target import IntervalsIcuTarget
 from .models import FileBundle, UploadResult
 from .polar_api import PolarClient
 from .polar_source import PolarSource
@@ -62,7 +63,7 @@ class SyncEngine:
         invalid_formats = {
             target: value
             for target, value in target_formats.items()
-            if target not in {"garmin", "strava", "wahoo", "hammerhead"}
+            if target not in {"garmin", "strava", "wahoo", "hammerhead", "intervals_icu"}
             or not isinstance(value, str)
             or value.lower() not in SUPPORTED_FORMATS
             or (target == "wahoo" and value.lower() != "fit")
@@ -340,6 +341,10 @@ class SyncEngine:
         strava = StravaTarget(self.config, self.state_db)
         if strava.is_configured():
             targets[strava.name] = strava
+
+        intervals_icu = IntervalsIcuTarget(self.config)
+        if intervals_icu.is_configured():
+            targets[intervals_icu.name] = intervals_icu
 
         wahoo = WahooTarget(self.config, self.state_db)
         if wahoo.is_configured():

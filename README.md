@@ -112,11 +112,13 @@ Copy-Item .env.example .env
 - `GARMIN_EMAIL` / `GARMIN_PASSWORD`
 - `STRAVA_CLIENT_ID` / `STRAVA_CLIENT_SECRET`
 
-Intervals.icu 是可选活动来源。配置 `INTERVALS_ICU_ATHLETE_ID` 和 `INTERVALS_ICU_API_KEY` 后，可以用 `--source intervals_icu` 选择它；该来源只下载 FIT，不向 Intervals.icu 上传：
+Intervals.icu 可作为活动来源和上传目标。配置 `INTERVALS_ICU_ATHLETE_ID` 和 `INTERVALS_ICU_API_KEY` 后，可以读取 FIT 活动，也可以上传 FIT、GPX 或 TCX：
 
 ```powershell
 python sync.py check --source intervals_icu --target garmin
 python sync.py sync --source intervals_icu --target garmin --dry-run
+python sync.py check --target intervals_icu
+python sync.py sync --source igpsport --target intervals_icu --format intervals_icu=fit --dry-run
 ```
 
 Garmin Connect 国际区也可以作为可选活动来源，使用 `GARMIN_EMAIL` 和 `GARMIN_PASSWORD` 配置的同一登录会话。来源下载原始 ZIP 并读取其中的 FIT 文件：
