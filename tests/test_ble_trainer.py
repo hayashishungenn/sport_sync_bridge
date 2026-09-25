@@ -251,8 +251,11 @@ class BleTrainerCourseTests(unittest.TestCase):
                 for record in decoded.records
                 if not record.is_definition and record.message.name == "record"
             ]
-            self.assertEqual(records[0].power, 175)
-            self.assertEqual(records[0].heart_rate, 138)
+            telemetry_records = [record for record in records if record.power is not None]
+            self.assertEqual(len(telemetry_records), 1)
+            self.assertEqual(telemetry_records[0].power, 175)
+            self.assertEqual(telemetry_records[0].heart_rate, 138)
+            self.assertEqual(telemetry_records[0].cadence, 88)
 
     def test_rejects_unrepresentable_power_before_scanning(self) -> None:
         scanner, client, state = self._fake_ble()
