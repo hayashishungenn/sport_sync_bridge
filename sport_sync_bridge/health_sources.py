@@ -8,6 +8,10 @@ class TrainingReadinessClient(Protocol):
     def get_training_readiness(self, cdate: str) -> object: ...
 
 
+class IntervalsWellnessClient(Protocol):
+    def list_wellness(self, start_date: str, end_date: str) -> object: ...
+
+
 def validate_training_readiness_date_range(start_date: str, end_date: str) -> tuple[date, date]:
     start = _parse_iso_date(start_date, "start-date")
     end = _parse_iso_date(end_date, "end-date")
@@ -50,6 +54,43 @@ def fetch_garmin_training_readiness(
     return records
 
 
+def validate_intervals_wellness_date_range(start_date: str, end_date: str) -> tuple[date, date]:
+    start = _parse_wellness_date(start_date, "start-date")
+    end = _parse_wellness_date(end_date, "end-date")
+    if end < start:
+        raise ValueError("Intervals.icu wellness end date must be on or after the start date")
+    return start, end
+
+
+def fetch_intervals_icu_wellness(
+    client: IntervalsWellnessClient,
+    start_date: str,
+    end_date: str,
+) -> list[dict[str, object]]:
+    start, end = validate_intervals_wellness_date_range(start_date, end_date)
+    fetch = getattr(client, "list_wellness", None)
+    if not callable(fetch):
+        raise RuntimeError("Intervals.icu client does not support wellness data")
+    response = fetch(start.isoformat(), end.isoformat())
+    if not isinstance(response, list):
+        raise ValueError("Intervals.icu wellness response must be a list")
+
+    records: list[dict[str, object]] = []
+    for index, item in enumerate(response):
+        if not isinstance(item, dict):
+            raise ValueError(f"Intervals.icu wellness record {index} must be an object")
+        record_id = item.get("id")
+        if not isinstance(record_id, str) or not record_id:
+            raise ValueError(f"Intervals.icu wellness record {index} is missing its date ID")
+        record_date = _parse_wellness_date(record_id, f"record {index} date ID")
+        if not start <= record_date <= end:
+            raise ValueError(
+                f"Intervals.icu wellness record {record_id} is outside the requested date range"
+            )
+        records.append(dict(item))
+    return records
+
+
 def _parse_iso_date(value: str, field: str) -> date:
     try:
         parsed = date.fromisoformat(value)
@@ -57,4 +98,14 @@ def _parse_iso_date(value: str, field: str) -> date:
         raise ValueError(f"Training readiness {field} must use YYYY-MM-DD") from exc
     if parsed.isoformat() != value:
         raise ValueError(f"Training readiness {field} must use YYYY-MM-DD")
+    return parsed
+
+
+def _parse_wellness_date(value: str, field: str) -> date:
+    try:
+        parsed = date.fromisoformat(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"Intervals.icu wellness {field} must use YYYY-MM-DD") from exc
+    if parsed.isoformat() != value:
+        raise ValueError(f"Intervals.icu wellness {field} must use YYYY-MM-DD")
     return parsed

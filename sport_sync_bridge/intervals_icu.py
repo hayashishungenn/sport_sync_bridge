@@ -122,6 +122,30 @@ class IntervalsIcuSource(SourceAdapter):
 
         return sorted(activities, key=_activity_sort_key)
 
+    def list_wellness(self, start_date: str, end_date: str) -> list[dict[str, object]]:
+        self.authenticate()
+        response = self.session.get(
+            self._athlete_url("/wellness.json"),
+            params={"oldest": start_date, "newest": end_date},
+            auth=self._auth(),
+            timeout=30,
+        )
+        response.raise_for_status()
+        try:
+            payload = response.json()
+        except ValueError as exc:
+            raise RuntimeError("Intervals.icu wellness response is not valid JSON") from exc
+        if not isinstance(payload, list):
+            raise RuntimeError("Intervals.icu wellness response must be a JSON list")
+        records: list[dict[str, object]] = []
+        for index, item in enumerate(payload):
+            if not isinstance(item, dict):
+                raise RuntimeError(f"Intervals.icu wellness record {index} must be a JSON object")
+            if not isinstance(item.get("id"), str) or not item["id"]:
+                raise RuntimeError(f"Intervals.icu wellness record {index} is missing its date ID")
+            records.append(item)
+        return records
+
     def download_fit(self, activity: Activity, output_dir: Path) -> Path:
         self.authenticate()
         activity_dir = output_dir / self.name

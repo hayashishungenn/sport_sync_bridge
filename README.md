@@ -141,6 +141,14 @@ iGPSPORT / OneLap -> 下载 FIT -> 修正坐标 -> 上传 Garmin 国际区 -> �
 
 Intervals.icu 来源使用 athlete ID 和个人 API key 读取活动列表并下载 FIT，会跳过来源标记为 `STRAVA` 的活动，避免重复导入。
 
+也可以把 Intervals.icu 的每日 wellness 数据导入本地健康记录库，日期范围包含首尾两天：
+
+```powershell
+python sync.py health fetch-intervals-wellness --start-date 2026-08-01 --end-date 2026-08-31
+```
+
+抓取会保存 APK 支持的健康数值和备注；重复抓取相同记录不会增加重复行。之后可运行 python sync.py health summary 查看。
+
 Garmin 和 Strava 默认仍上传 FIT。可按目标分别指定格式，未指定的目标保持 FIT：
 
 ```powershell

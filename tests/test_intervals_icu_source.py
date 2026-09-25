@@ -147,6 +147,30 @@ class IntervalsIcuSourceTests(unittest.TestCase):
                 with self.assertRaisesRegex(RuntimeError, message):
                     source.list_activities(None, None, None)
 
+    def test_lists_wellness_for_an_inclusive_date_range(self) -> None:
+        source = self._source()
+        record = {"id": "2026-08-03", "weight": 72.4, "comments": "rest day"}
+        source.session = _FakeSession(
+            get_responses=[_Response(payload={"id": "i123"}), _Response(payload=[record])]
+        )
+
+        self.assertEqual(source.list_wellness("2026-08-03", "2026-08-05"), [record])
+        url, kwargs = source.session.get_calls[1]
+        self.assertEqual(url, "https://intervals.icu/api/v1/athlete/i123/wellness.json")
+        self.assertEqual(kwargs["params"], {"oldest": "2026-08-03", "newest": "2026-08-05"})
+        self.assertEqual(kwargs["auth"], ("API_KEY", "test-key"))
+
+    def test_wellness_response_must_be_a_list_of_records_with_date_ids(self) -> None:
+        cases = (({"records": []}, "JSON list"), ([None], "JSON object"), ([{}], "date ID"))
+        for payload, message in cases:
+            with self.subTest(payload=payload):
+                source = self._source()
+                source.session = _FakeSession(
+                    get_responses=[_Response(payload={"id": "i123"}), _Response(payload=payload)]
+                )
+                with self.assertRaisesRegex(RuntimeError, message):
+                    source.list_wellness("2026-08-03", "2026-08-03")
+
     def test_download_posts_activity_id_and_caches_valid_fit(self) -> None:
         source = self._source()
         expected = _fit_bytes()

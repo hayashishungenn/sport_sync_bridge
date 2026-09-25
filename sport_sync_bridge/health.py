@@ -3,6 +3,7 @@ from __future__ import annotations
 import csv
 import hashlib
 import io
+import json
 import math
 from datetime import datetime, time, timedelta, timezone
 from pathlib import Path
@@ -15,6 +16,8 @@ _METRIC_ALIASES = {
     "weight": "weight_kg",
     "weight_kg": "weight_kg",
     "body_weight": "weight_kg",
+    "body_fat": "body_fat_percent",
+    "body_fat_percent": "body_fat_percent",
     "height": "height_cm",
     "height_cm": "height_cm",
     "resting_hr": "resting_hr_bpm",
@@ -22,6 +25,8 @@ _METRIC_ALIASES = {
     "resting_hr_bpm": "resting_hr_bpm",
     "hrv": "hrv_ms",
     "hrv_ms": "hrv_ms",
+    "hrv_sdnn": "hrv_sdnn_ms",
+    "hrv_sdnn_ms": "hrv_sdnn_ms",
     "spo2": "spo2_percent",
     "oxygen_saturation": "spo2_percent",
     "spo2_percent": "spo2_percent",
@@ -39,6 +44,10 @@ _METRIC_ALIASES = {
     "vo2max_ride": "vo2_max_ride",
     "vo2_max_cycling": "vo2_max_ride",
     "sleep_score": "sleep_score",
+    "sleep_quality": "sleep_quality_score",
+    "sleep_quality_score": "sleep_quality_score",
+    "comments": "wellness_comment",
+    "wellness_comment": "wellness_comment",
     "lt_hr": "lactate_threshold_hr_bpm",
     "lt_hr_bpm": "lactate_threshold_hr_bpm",
     "lactate_threshold_hr": "lactate_threshold_hr_bpm",
@@ -75,9 +84,11 @@ _METRIC_ALIASES = {
 }
 _DEFAULT_UNITS = {
     "weight_kg": "kg",
+    "body_fat_percent": "%",
     "height_cm": "cm",
     "resting_hr_bpm": "bpm",
     "hrv_ms": "ms",
+    "hrv_sdnn_ms": "ms",
     "spo2_percent": "%",
     "sleep_hours": "h",
     "steps": "count",
@@ -86,6 +97,8 @@ _DEFAULT_UNITS = {
     "vo2_max_run": "mL/kg/min",
     "vo2_max_ride": "mL/kg/min",
     "sleep_score": "score",
+    "sleep_quality_score": "级",
+    "wellness_comment": "text",
     "lactate_threshold_hr_bpm": "bpm",
     "lactate_threshold_speed_kmh": "km/h",
     "calories_kcal": "kcal",
@@ -115,9 +128,11 @@ _STATUS_VALUES = {
 }
 _HEALTH_DISPLAY_LABELS = {
     "weight_kg": "体重",
+    "body_fat_percent": "体脂率",
     "height_cm": "身高",
     "resting_hr_bpm": "静息心率",
     "hrv_ms": "HRV",
+    "hrv_sdnn_ms": "HRV SDNN",
     "spo2_percent": "血氧饱和度",
     "sleep_hours": "睡眠时长",
     "steps": "步数",
@@ -126,6 +141,8 @@ _HEALTH_DISPLAY_LABELS = {
     "vo2_max_run": "跑步 VO₂max",
     "vo2_max_ride": "骑行 VO₂max",
     "sleep_score": "睡眠分数",
+    "sleep_quality_score": "睡眠质量等级",
+    "wellness_comment": "健康备注",
     "lactate_threshold_hr_bpm": "乳酸阈值心率",
     "lactate_threshold_speed_kmh": "乳酸阈值速度",
     "calories_kcal": "卡路里",
@@ -141,6 +158,24 @@ _HEALTH_DISPLAY_LABELS = {
     "bmi": "BMI",
 }
 _HEALTH_DISPLAY_ORDER = {metric: index for index, metric in enumerate(_HEALTH_DISPLAY_LABELS)}
+_TEXT_METRICS = {"wellness_comment"}
+_INTERVALS_WELLNESS_FIELDS = {
+    "weight": ("weight", "kg"),
+    "bodyFat": ("body_fat", "%"),
+    "restingHR": ("resting_hr", "bpm"),
+    "hrv": ("hrv", "ms"),
+    "hrvSDNN": ("hrv_sdnn", "ms"),
+    "sleepSecs": ("sleep", "s"),
+    "sleepScore": ("sleep_score", "score"),
+    "sleepQuality": ("sleep_quality", "score"),
+    "spO2": ("spo2", "%"),
+    "systolic": ("systolic", "mmHg"),
+    "diastolic": ("diastolic", "mmHg"),
+    "steps": ("steps", "count"),
+    "respiration": ("respiration", "brpm"),
+    "hydrationVolume": ("hydration", "L"),
+    "comments": ("comments", "text"),
+}
 
 
 def import_health_csv(state_db: StateDB, input_path: Path) -> int:
@@ -187,6 +222,51 @@ def import_health_csv(state_db: StateDB, input_path: Path) -> int:
     if imported == 0:
         raise ValueError("Health CSV contains no recognized health measurements")
     return imported
+
+
+def import_intervals_icu_wellness(
+    state_db: StateDB,
+    records: list[dict[str, object]],
+    *,
+    source_label: str = "Intervals.icu wellness",
+) -> int:
+    pending: list[tuple[str, str, float | str, str, str]] = []
+    for index, record in enumerate(records):
+        record_id = record.get("id")
+        observed = _parse_observed_at(record_id)
+        if observed is None:
+            raise ValueError(f"Intervals.icu wellness record {index} has no valid date ID")
+        try:
+            record_fingerprint = hashlib.sha256(
+                json.dumps(
+                    record,
+                    ensure_ascii=False,
+                    sort_keys=True,
+                    separators=(",", ":"),
+                    allow_nan=False,
+                ).encode("utf-8")
+            ).hexdigest()
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"Intervals.icu wellness record {record_id} is not valid JSON data") from exc
+
+        for api_field, (metric_name, unit) in _INTERVALS_WELLNESS_FIELDS.items():
+            raw_value = record.get(api_field)
+            parsed = _normalize_metric(metric_name, raw_value, unit)
+            if parsed is None:
+                continue
+            metric, value, normalized_unit = parsed
+            pending.append((observed, metric, value, normalized_unit, record_fingerprint))
+
+    for observed, metric, value, unit, fingerprint in pending:
+        state_db.upsert_health_observation(
+            observed_at=observed,
+            metric=metric,
+            value=value,
+            unit=unit,
+            source_label=source_label,
+            fingerprint=fingerprint,
+        )
+    return len(pending)
 
 
 def summarize_health(state_db: StateDB) -> dict[str, object]:
@@ -241,7 +321,7 @@ def format_health_summary_text(summary: dict[str, object]) -> str:
                 suffix = " km/h"
         else:
             display_unit = {"steps": "步", "floors": "层"}.get(metric, unit)
-            suffix = f" {display_unit}" if display_unit and display_unit != "status" else ""
+            suffix = f" {display_unit}" if display_unit and display_unit not in {"status", "text"} else ""
         observed_at = observation.get("observed_at")
         timestamp = f"（记录时间：{observed_at}）" if observed_at else ""
         label = _HEALTH_DISPLAY_LABELS.get(metric, metric)
@@ -324,6 +404,11 @@ def _normalize_metric(name: object, raw_value: object, raw_unit: object) -> tupl
     if metric is None or raw_value is None or not str(raw_value).strip():
         return None
     unit = str(raw_unit or _DEFAULT_UNITS[metric]).strip()
+    if metric in _TEXT_METRICS:
+        text_value = str(raw_value).strip()
+        if not text_value:
+            return None
+        return metric, text_value, unit
     if metric in _STATUS_VALUES:
         text_value = " ".join(str(raw_value).strip().split())
         normalized_status = " ".join(text_value.casefold().replace("_", " ").split())
@@ -345,6 +430,9 @@ def _normalize_metric(name: object, raw_value: object, raw_unit: object) -> tupl
         unit = "cm"
     elif metric == "sleep_hours" and lowered_unit in {"min", "minute", "minutes"}:
         value /= 60
+        unit = "h"
+    elif metric == "sleep_hours" and lowered_unit in {"s", "sec", "secs", "second", "seconds"}:
+        value /= 3600
         unit = "h"
     elif metric == "hydration_l" and lowered_unit in {"ml", "milliliter", "milliliters"}:
         value /= 1000
