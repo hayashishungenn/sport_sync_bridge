@@ -142,11 +142,16 @@ from .vdot import analyze_running_activities, format_vdot_report
 from .training import (
     export_training_plan_ics,
     export_workout_template,
+    format_training_plan_progress,
     get_training_template,
     get_workout_template,
     install_training_plan,
+    link_training_activity,
+    list_training_schedule,
     list_training_templates,
     list_workout_templates,
+    summarize_training_plan_progress,
+    unlink_training_activity,
 )
 from .utils import configure_logging, ensure_directory, pack_directory_to_base64_zip, parse_datetime, safe_filename
 from .weather import WeatherError, format_weather_report, get_weather
@@ -502,6 +507,18 @@ def build_parser() -> argparse.ArgumentParser:
     plans_install.add_argument("--locale", default="zh", choices=["en", "es", "fr", "it", "pt", "zh"])
     plans_install.add_argument("--start-date", required=True, help="Plan week 1 Monday, YYYY-MM-DD")
     plans_installed = plans_actions.add_parser("installed", help="List local plan schedules")
+    plans_schedule = plans_actions.add_parser("schedule", help="Show an installed plan schedule")
+    plans_schedule.add_argument("plan_id")
+    plans_link = plans_actions.add_parser("link-activity", help="Link a local activity to a plan item")
+    plans_link.add_argument("plan_id")
+    plans_link.add_argument("item_id")
+    plans_link.add_argument("activity_id")
+    plans_unlink = plans_actions.add_parser("unlink-activity", help="Clear a plan item's local activity link")
+    plans_unlink.add_argument("plan_id")
+    plans_unlink.add_argument("item_id")
+    plans_progress = plans_actions.add_parser("progress", help="Compare linked activities with plan targets")
+    plans_progress.add_argument("plan_id")
+    plans_progress.add_argument("--format", choices=["json", "txt"], default="txt")
     plans_export = plans_actions.add_parser("export", help="Export an installed plan as iCalendar")
     plans_export.add_argument("plan_id")
     plans_export.add_argument("--output", type=Path, required=True)
@@ -1702,10 +1719,41 @@ def _run_local_command(args: argparse.Namespace, config: AppConfig) -> int:
                 print(f"plans={len(plans)}")
                 return 0
 
+            if args.plans_action == "schedule":
+                schedule = list_training_schedule(state, args.plan_id)
+                print(json.dumps(schedule, ensure_ascii=False, indent=2))
+                return 0
+
+            if args.plans_action == "link-activity":
+                result = link_training_activity(
+                    state,
+                    args.plan_id,
+                    args.item_id,
+                    args.activity_id,
+                )
+                print(json.dumps(result, ensure_ascii=False))
+                return 0
+
+            if args.plans_action == "unlink-activity":
+                result = unlink_training_activity(state, args.plan_id, args.item_id)
+                print(json.dumps(result, ensure_ascii=False))
+                return 0
+
+            if args.plans_action == "progress":
+                progress = summarize_training_plan_progress(state, args.plan_id)
+                if args.format == "json":
+                    print(json.dumps(progress, ensure_ascii=False, indent=2))
+                else:
+                    print(format_training_plan_progress(progress))
+                return 0
+
             if args.plans_action == "export":
                 output_path = export_training_plan_ics(state, args.plan_id, args.output)
                 print(f"output={output_path}")
                 return 0
+        except ValueError as exc:
+            print(f"plans_error={exc}", file=sys.stderr)
+            return 2
         finally:
             state.close()
 

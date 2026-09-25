@@ -200,6 +200,198 @@ class GarSyncLocalFeatureTests(unittest.TestCase):
         self.assertIn("DTSTART;VALUE=DATE:20260228", calendar)
         self.assertNotIn("SUMMARY:休息日", calendar)
 
+    def test_plan_activity_cli_links_compares_and_unlinks(self) -> None:
+        template = get_training_template("8w_beginner_run", locale="zh")
+        plan_id, schedule = install_training_plan(
+            self.state,
+            template,
+            locale="zh",
+            start_date=date(2026, 1, 5),
+        )
+        target_item = next(
+            item for item in schedule if item["payload"].get("targetDistance") == "5km"
+        )
+        activity_path = create_gpx(self.root / "plan-activity.gpx")
+        activity_text = activity_path.read_text(encoding="utf-8")
+        activity_text = activity_text.replace("<type>cycling</type>", "<type>running</type>")
+        activity_text = activity_text.replace("2026-01-02", "2026-02-28")
+        activity_path.write_text(activity_text, encoding="utf-8")
+        activity = self.library.import_paths([activity_path])[0]
+        schedule_row = next(
+            row
+            for row in self.state.get_schedule_items(plan_id)
+            if row["item_id"] == target_item["item_id"]
+        )
+        schedule_payload = json.loads(schedule_row["payload_json"])
+        schedule_payload.update(
+            targetDuration="1h15min",
+            targetPace="5:30/km",
+            targetTSS=50,
+        )
+        self.state.connection.execute(
+            "UPDATE schedule_items SET payload_json = ? WHERE item_id = ?",
+            (json.dumps(schedule_payload, ensure_ascii=False), target_item["item_id"]),
+        )
+        activity_row = self.state.get_local_activity(activity.fingerprint)
+        activity_summary = json.loads(activity_row["summary_json"])
+        activity_summary["training_stress_score"] = 40
+        self.state.connection.execute(
+            "UPDATE local_activities SET summary_json = ? WHERE fingerprint = ?",
+            (json.dumps(activity_summary, ensure_ascii=False), activity.fingerprint),
+        )
+        self.state.connection.commit()
+        swim_template = {
+            "id": "test_swim_plan",
+            "name": "Swim target parsing",
+            "trainingPlan": {"name": "Swim target parsing", "sportType": "swimming"},
+            "weekTemplates": [
+                {
+                    "applyToWeeks": [1],
+                    "days": {
+                        "Mon": {
+                            "name": "Swim target",
+                            "sportType": "swimming",
+                            "targetDistance": "1200m",
+                            "targetPace": "2:15/100m",
+                        }
+                    },
+                }
+            ],
+        }
+        swim_plan_id, swim_schedule = install_training_plan(
+            self.state,
+            swim_template,
+            locale="en",
+            start_date=date(2026, 1, 5),
+        )
+        swim_target = next(
+            item for item in swim_schedule if item["payload"].get("targetDistance") == "1200m"
+        )
+        swim_activity_path = create_gpx(self.root / "swim-activity.gpx")
+        swim_activity_text = swim_activity_path.read_text(encoding="utf-8")
+        swim_activity_text = swim_activity_text.replace(
+            "<type>cycling</type>", "<type>swimming</type>"
+        )
+        swim_activity_path.write_text(swim_activity_text, encoding="utf-8")
+        swim_activity = self.library.import_paths([swim_activity_path])[0]
+        config = SimpleNamespace(
+            data_dir=self.root / ".data",
+            db_path=self.root / "state.db",
+            log_level="INFO",
+            log_path=self.root / "sync.log",
+        )
+
+        def run_cli(arguments: list[str]) -> tuple[int, str, str]:
+            output = io.StringIO()
+            errors = io.StringIO()
+            with (
+                patch("sport_sync_bridge.cli.AppConfig.load", return_value=config),
+                patch("sport_sync_bridge.cli.configure_logging"),
+                contextlib.redirect_stdout(output),
+                contextlib.redirect_stderr(errors),
+            ):
+                result = main(arguments)
+            return result, output.getvalue(), errors.getvalue()
+
+        schedule_result, schedule_output, _ = run_cli(["plans", "schedule", plan_id])
+        self.assertEqual(schedule_result, 0)
+        schedule_json = json.loads(schedule_output)
+        shown_target = next(
+            item for item in schedule_json["items"] if item["item_id"] == target_item["item_id"]
+        )
+        self.assertEqual(shown_target["targets"]["distance_m"], 5000)
+        self.assertEqual(shown_target["targets"]["duration_s"], 4500)
+        self.assertEqual(shown_target["targets"]["pace_seconds_per_km"], 330)
+        self.assertEqual(shown_target["targets"]["training_stress_score"], 50)
+        swim_result, swim_output, _ = run_cli(["plans", "schedule", swim_plan_id])
+        self.assertEqual(swim_result, 0)
+        swim_json = json.loads(swim_output)
+        shown_swim_target = next(
+            item for item in swim_json["items"] if item["item_id"] == swim_target["item_id"]
+        )
+        self.assertEqual(shown_swim_target["targets"]["distance_m"], 1200)
+        self.assertEqual(shown_swim_target["targets"]["pace_seconds_per_100m"], 135)
+        swim_link_result, _, _ = run_cli(
+            [
+                "plans",
+                "link-activity",
+                swim_plan_id,
+                swim_target["item_id"],
+                swim_activity.fingerprint,
+            ]
+        )
+        self.assertEqual(swim_link_result, 0)
+        swim_progress_result, swim_progress_output, _ = run_cli(
+            ["plans", "progress", swim_plan_id, "--format", "json"]
+        )
+        self.assertEqual(swim_progress_result, 0)
+        swim_progress = json.loads(swim_progress_output)
+        swim_progress_item = next(
+            item for item in swim_progress["items"] if item["item_id"] == swim_target["item_id"]
+        )
+        self.assertLess(
+            swim_progress_item["comparison"]["pace_seconds_per_100m"]["actual_minus_target"],
+            0,
+        )
+
+        link_result, link_output, _ = run_cli(
+            ["plans", "link-activity", plan_id, target_item["item_id"], activity.fingerprint]
+        )
+        self.assertEqual(link_result, 0)
+        self.assertEqual(json.loads(link_output)["activity_id"], activity.fingerprint)
+
+        progress_result, progress_output, _ = run_cli(
+            ["plans", "progress", plan_id, "--format", "json"]
+        )
+        self.assertEqual(progress_result, 0)
+        progress = json.loads(progress_output)
+        self.assertEqual(
+            progress["scheduled_item_count"],
+            sum(item["item_type"] == "workout" for item in schedule),
+        )
+        linked_item = next(item for item in progress["items"] if item["item_id"] == target_item["item_id"])
+        self.assertEqual(linked_item["status"], "linked")
+        self.assertLess(linked_item["comparison"]["distance_m"]["actual_minus_target"], 0)
+        self.assertIn("duration_s", linked_item["comparison"])
+        self.assertIn("pace_seconds_per_km", linked_item["comparison"])
+        self.assertEqual(
+            linked_item["comparison"]["training_stress_score"]["actual_minus_target"], -10
+        )
+
+        text_result, text_output, _ = run_cli(["plans", "progress", plan_id])
+        self.assertEqual(text_result, 0)
+        self.assertIn("差值 -", text_output)
+
+        other_item = next(
+            item
+            for item in schedule
+            if item["item_type"] == "workout" and item["item_id"] != target_item["item_id"]
+        )
+        duplicate_result, _, duplicate_error = run_cli(
+            ["plans", "link-activity", plan_id, other_item["item_id"], activity.fingerprint]
+        )
+        self.assertEqual(duplicate_result, 2)
+        self.assertIn("already linked", duplicate_error)
+
+        rest_item = next(item for item in schedule if item["item_type"] == "rest")
+        rest_link_result, _, rest_error = run_cli(
+            ["plans", "link-activity", plan_id, rest_item["item_id"], activity.fingerprint]
+        )
+        self.assertEqual(rest_link_result, 2)
+        self.assertIn("Only workout schedule items", rest_error)
+
+        unlink_result, _, _ = run_cli(
+            ["plans", "unlink-activity", plan_id, target_item["item_id"]]
+        )
+        self.assertEqual(unlink_result, 0)
+        progress_result, progress_output, _ = run_cli(
+            ["plans", "progress", plan_id, "--format", "json"]
+        )
+        self.assertEqual(progress_result, 0)
+        progress = json.loads(progress_output)
+        unlinked_item = next(item for item in progress["items"] if item["item_id"] == target_item["item_id"])
+        self.assertEqual(unlinked_item["status"], "unlinked")
+
     def test_plan_requires_monday_start(self) -> None:
         template = get_training_template("8w_beginner_run", locale="zh")
         with self.assertRaisesRegex(ValueError, "Monday"):

@@ -718,3 +718,75 @@ class StateDB:
             "SELECT * FROM schedule_items WHERE training_plan_id = ? ORDER BY scheduled_date, item_id",
             (plan_id,),
         ).fetchall()
+
+    def set_schedule_item_activity(
+        self,
+        plan_id: str,
+        item_id: str,
+        activity_id: str | None,
+    ) -> str | None:
+        with self.connection:
+            self.connection.execute("BEGIN IMMEDIATE")
+            plan = self.get_training_plan(plan_id)
+            if plan is None:
+                raise ValueError(f"Installed training plan was not found: {plan_id}")
+
+            schedule_item = self.connection.execute(
+                "SELECT item_id, item_type, payload_json FROM schedule_items "
+                "WHERE training_plan_id = ? AND item_id = ?",
+                (plan["plan_id"], item_id),
+            ).fetchone()
+            if schedule_item is None:
+                raise ValueError(f"Scheduled training item was not found: {item_id}")
+
+            resolved_activity_id = None
+            if activity_id is not None:
+                if schedule_item["item_type"] != "workout":
+                    raise ValueError("Only workout schedule items can be linked to an activity")
+                activity = self.get_local_activity(activity_id)
+                if activity is None:
+                    raise ValueError(f"Local activity was not found: {activity_id}")
+                resolved_activity_id = str(activity["fingerprint"])
+
+            try:
+                payload = json.loads(schedule_item["payload_json"])
+            except (TypeError, json.JSONDecodeError) as exc:
+                raise ValueError(f"Scheduled training item has invalid JSON: {item_id}") from exc
+            if not isinstance(payload, dict):
+                raise ValueError(f"Scheduled training item has invalid JSON: {item_id}")
+
+            if resolved_activity_id is None:
+                payload.pop("_manual_activity_id", None)
+            else:
+                for other in self.connection.execute(
+                    "SELECT item_id, payload_json FROM schedule_items WHERE training_plan_id = ?",
+                    (plan["plan_id"],),
+                ):
+                    if other["item_id"] == item_id:
+                        continue
+                    try:
+                        other_payload = json.loads(other["payload_json"])
+                    except (TypeError, json.JSONDecodeError) as exc:
+                        raise ValueError(
+                            f"Scheduled training item has invalid JSON: {other['item_id']}"
+                        ) from exc
+                    if not isinstance(other_payload, dict):
+                        raise ValueError(
+                            f"Scheduled training item has invalid JSON: {other['item_id']}"
+                        )
+                    if other_payload.get("_manual_activity_id") == resolved_activity_id:
+                        raise ValueError(
+                            f"Local activity is already linked to scheduled item {other['item_id']}"
+                        )
+                payload["_manual_activity_id"] = resolved_activity_id
+
+            self.connection.execute(
+                "UPDATE schedule_items SET payload_json = ? "
+                "WHERE training_plan_id = ? AND item_id = ?",
+                (
+                    json.dumps(payload, ensure_ascii=False, sort_keys=True),
+                    plan["plan_id"],
+                    item_id,
+                ),
+            )
+        return resolved_activity_id

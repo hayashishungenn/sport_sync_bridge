@@ -414,12 +414,19 @@ python sync.py plans list --locale zh
 python sync.py plans show 8w_beginner_run --locale zh
 python sync.py plans install 8w_beginner_run --locale zh --start-date 2026-10-05
 python sync.py plans installed
+python sync.py plans schedule <计划ID前缀>
+python sync.py plans link-activity <计划ID前缀> <计划项ID> <活动ID前缀>
+python sync.py plans unlink-activity <计划ID前缀> <计划项ID>
+python sync.py plans progress <计划ID前缀>
+python sync.py plans progress <计划ID前缀> --format json
 python sync.py plans export <计划ID前缀> --output .\training-plan.ics
 python sync.py workouts list --sport CYCLING
 python sync.py workouts show <课表ID>
 python sync.py workouts export <课表ID> --output .\workout.fit
 python sync.py workouts generate --sport running --task "节奏跑，间歇后放松" --target-mode pace --target-duration 45min --prompt-only
 ```
+
+`plans schedule` 会列出已安装计划的日期、课表项 ID 和可解析的距离、时长、配速及 TSS 目标。用 `link-activity` 将本地活动关联到一个训练项，`unlink-activity` 可解除关联；同一计划内一项活动只能关联到一个训练项。`plans progress` 对照已关联活动与可读取的目标指标，并报告实际值和差值；`--format json` 输出机器可读结果。
 
 `workouts generate` 用同一个 AI 接口按跑步、骑行或游泳请求生成一个结构化课表，并写成 Garmin FIT workout 文件。默认文件和可浏览的 JSON 元数据保存在 `.data/generated_workouts/`；`workouts list/show/export` 也会读取这些生成文件。可用 `--target-mode`、目标时长/距离/配速/心率/TSS、`--athlete-context` 和重复的 `--feedback` 提供训练要求。`--prompt-only` 只打印 system/user 提示词；FIT 无法直接编码的目标会保留在步骤备注和元数据中，重复组使用 FIT repeat 控制步骤。
 
