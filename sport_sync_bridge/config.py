@@ -48,6 +48,13 @@ class AppConfig:
     strava_access_token: str | None
     strava_expires_at: str | None
     strava_scope: str | None
+    wahoo_client_id: str | None
+    wahoo_client_secret: str | None
+    wahoo_redirect_uri: str
+    wahoo_access_token: str | None
+    wahoo_refresh_token: str | None
+    wahoo_expires_at: str | None
+    wahoo_scope: str | None
     ai_api_base_url: str | None
     ai_api_key: str | None
     ai_model: str | None
@@ -103,6 +110,13 @@ class AppConfig:
             strava_access_token=env_or_none("STRAVA_ACCESS_TOKEN"),
             strava_expires_at=env_or_none("STRAVA_EXPIRES_AT"),
             strava_scope=env_or_none("STRAVA_SCOPE"),
+            wahoo_client_id=env_or_none("WAHOO_CLIENT_ID"),
+            wahoo_client_secret=env_or_none("WAHOO_CLIENT_SECRET"),
+            wahoo_redirect_uri=os.getenv("WAHOO_REDIRECT_URI", "http://localhost/").strip(),
+            wahoo_access_token=env_or_none("WAHOO_ACCESS_TOKEN"),
+            wahoo_refresh_token=env_or_none("WAHOO_REFRESH_TOKEN"),
+            wahoo_expires_at=env_or_none("WAHOO_EXPIRES_AT"),
+            wahoo_scope=env_or_none("WAHOO_SCOPE"),
             ai_api_base_url=env_or_none("AI_API_BASE_URL"),
             ai_api_key=env_or_none("AI_API_KEY"),
             ai_model=env_or_none("AI_MODEL"),

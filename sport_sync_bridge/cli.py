@@ -153,7 +153,12 @@ def build_parser() -> argparse.ArgumentParser:
         choices=["igpsport", "onelap", "intervals_icu", "local", "garmin", "strava"],
         help="Repeatable source",
     )
-    sync_parser.add_argument("--target", action="append", choices=["garmin", "strava"], help="Repeatable target")
+    sync_parser.add_argument(
+        "--target",
+        action="append",
+        choices=["garmin", "strava", "wahoo"],
+        help="Repeatable target",
+    )
     sync_parser.add_argument("--from", dest="date_from", help="Start date, e.g. 2026-01-01")
     sync_parser.add_argument("--to", dest="date_to", help="End date, e.g. 2026-03-01")
     sync_parser.add_argument("--limit", type=int, help="Limit activities per source")
@@ -630,7 +635,12 @@ def build_parser() -> argparse.ArgumentParser:
         choices=["igpsport", "onelap", "intervals_icu", "local", "garmin", "strava"],
         help="Repeatable source",
     )
-    check_parser.add_argument("--target", action="append", choices=["garmin", "strava"], help="Repeatable target")
+    check_parser.add_argument(
+        "--target",
+        action="append",
+        choices=["garmin", "strava", "wahoo"],
+        help="Repeatable target",
+    )
 
     garmin_export_parser = subparsers.add_parser(
         "garmin-session-export",
@@ -647,6 +657,14 @@ def build_parser() -> argparse.ArgumentParser:
 
     exchange_parser = subparsers.add_parser("strava-exchange", help="Exchange Strava OAuth code for tokens")
     exchange_parser.add_argument("--code", required=True, help="OAuth code returned by Strava")
+
+    wahoo_auth_url_parser = subparsers.add_parser(
+        "wahoo-auth-url", help="Print the Wahoo OAuth authorize URL"
+    )
+    wahoo_exchange_parser = subparsers.add_parser(
+        "wahoo-exchange", help="Exchange a Wahoo OAuth code for tokens"
+    )
+    wahoo_exchange_parser.add_argument("--code", required=True, help="OAuth code returned by Wahoo")
 
     share_parser = subparsers.add_parser("share", help="Build GarSync friend and group invite links")
     share_actions = share_parser.add_subparsers(dest="share_action", required=True)
@@ -830,6 +848,20 @@ def main(argv: list[str] | None = None) -> int:
             print(f"scope={payload.get('scope')}")
             return 0
 
+        if args.command == "wahoo-auth-url":
+            target = engine.get_wahoo_target()
+            print(target.build_authorize_url())
+            return 0
+
+        if args.command == "wahoo-exchange":
+            target = engine.get_wahoo_target()
+            payload = target.exchange_code(args.code)
+            print("Wahoo tokens saved to SQLite.")
+            expires_at = engine.state_db.get_value("wahoo_expires_at") or payload.get("expires_at")
+            print(f"expires_at={expires_at}")
+            print(f"scope={payload.get('scope')}")
+            return 0
+
         selected_sources = args.source or config.sources
         selected_targets = args.target or config.targets
         _validate_selection(selected_sources, engine.sources.keys(), "source")
@@ -896,8 +928,10 @@ def _parse_target_format(value: str) -> tuple[str, str]:
     target, separator, activity_format = value.partition("=")
     target = target.strip().lower()
     activity_format = activity_format.strip().lower()
-    if not separator or target not in {"garmin", "strava"}:
-        raise argparse.ArgumentTypeError("format must use TARGET=FORMAT with target garmin or strava")
+    if not separator or target not in {"garmin", "strava", "wahoo"}:
+        raise argparse.ArgumentTypeError(
+            "format must use TARGET=FORMAT with target garmin, strava, or wahoo"
+        )
     if activity_format not in SUPPORTED_FORMATS:
         supported = ", ".join(sorted(SUPPORTED_FORMATS))
         raise argparse.ArgumentTypeError(f"format must be one of: {supported}")

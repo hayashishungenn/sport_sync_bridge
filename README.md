@@ -12,6 +12,7 @@
 
 - `Garmin Connect` 国际区
 - `Strava`
+- `Wahoo`（FIT 上传）
 
 这个项目参考了以下公开实现，并抽成了统一的 `source adapter + target adapter + SQLite state` 架构：
 
@@ -21,6 +22,7 @@
 - `Dunky-Z/FitSync`
 - `cyberjunky/python-garminconnect`
 - Strava 官方 `Authentication` / `Uploads` 文档
+- Wahoo 官方 Cloud API 文档
 
 ## 设计目标
 
@@ -31,6 +33,7 @@
 - 从本地传感器事件流计算跑步动态指标
 - 自动上传到 `Garmin Connect 国际区`
 - 自动上传到 `Strava`
+- 可选上传到 `Wahoo`（FIT）
 - 用 `SQLite` 记录同步状态，避免重复上传
 - 对 `iGPSPORT` / `OneLap` 都支持可选的 `GCJ-02 -> WGS84` 轨迹修正
 
@@ -142,6 +145,18 @@ python sync.py check --source strava --target garmin
 python sync.py sync --source strava --target garmin --dry-run
 ```
 
+### Wahoo FIT 上传
+
+Wahoo 可作为可选上传目标，仅接受 FIT。先在 Wahoo 开发者门户注册自己的应用，并配置 `WAHOO_CLIENT_ID`、`WAHOO_CLIENT_SECRET` 和与门户一致的 `WAHOO_REDIRECT_URI`；不要使用 APK 中的客户端凭据。Sandbox 有调用限制，生产环境需要 Wahoo 审核。授权只请求 `user_read workouts_write`，token 会保存在本地 SQLite。
+
+```powershell
+python sync.py wahoo-auth-url
+python sync.py wahoo-exchange --code 你的code
+python sync.py sync --source local --target wahoo --format wahoo=fit --dry-run
+```
+
+完成授权后，从回调地址的查询参数复制 `code`，再运行 `wahoo-exchange` 保存令牌。FIT 文件按 Wahoo API 上传并轮询处理状态。Wahoo 只支持 FIT，因此 `--format wahoo=gpx` 和 `--format wahoo=tcx` 会被拒绝。
+
 ### 5. 首次同步
 
 ```powershell
@@ -221,7 +236,7 @@ python sync.py weather --lat 30.5728 --lon 104.0668 --format json --refresh
 python sync.py sync --source local --target strava --format strava=tcx
 ```
 
-导入文件保存在 `.data/local_imports/`，索引和汇总写入 `.data/sync_state.db`。本地源只向现有 Garmin / Strava 目标提供 `FIT`、`GPX`、`TCX`；健康摘要类 JSON 不会被当成可上传运动文件。轨迹 CSV 需要时间戳、纬度和经度列；活动 JSON 接受 `activity`、`laps` 和 `track_points` 等结构。
+导入文件保存在 `.data/local_imports/`，索引和汇总写入 `.data/sync_state.db`。本地源只向现有 Garmin / Strava 目标和 Wahoo FIT 目标提供 `FIT`、`GPX`、`TCX`；健康摘要类 JSON 不会被当成可上传运动文件。轨迹 CSV 需要时间戳、纬度和经度列；活动 JSON 接受 `activity`、`laps` 和 `track_points` 等结构。
 
 `library merge` 按输入顺序合并至少两个同运动类型的 FIT 活动。时间重叠的后续片段会平移到前一段结束后一秒，超过两秒的原有停顿会写成休息圈。输出最多保留 50,000 个记录点，抽稀时保留首尾点和可用指标的全局极值。合并会重新生成 FIT，因此来源设备身份、开发者字段和非记录消息不会复制；其他解析损失会随命令结果列出。该行为依据 APK AOT 静态线索实现，尚未用 GarSync 运行时样例逐字段对照。
 
@@ -477,5 +492,6 @@ docker-compose up -d
 - `https://github.com/DreamMryang/synchronizeTheRecordingOfOnelapToGiant`
 - `https://github.com/Dunky-Z/FitSync`
 - `https://github.com/cyberjunky/python-garminconnect`
+- `https://cloud-api.wahooligan.com/`
 - `https://developers.strava.com/docs/authentication/`
 - `https://developers.strava.com/docs/uploads/`

@@ -16,6 +16,7 @@ from .sources import IGPSportSource, LocalFileSource, OneLapSource, SourceAdapte
 from .strava_source import StravaSource
 from .state import StateDB
 from .targets import GarminTarget, StravaTarget, TargetAdapter
+from .wahoo_target import WahooTarget
 from .utils import ensure_directory, safe_filename, sha1_file, utcnow
 
 
@@ -52,9 +53,10 @@ class SyncEngine:
         invalid_formats = {
             target: value
             for target, value in target_formats.items()
-            if target not in {"garmin", "strava"}
+            if target not in {"garmin", "strava", "wahoo"}
             or not isinstance(value, str)
             or value.lower() not in SUPPORTED_FORMATS
+            or (target == "wahoo" and value.lower() != "fit")
         }
         if invalid_formats:
             details = ", ".join(f"{target}={value}" for target, value in sorted(invalid_formats.items()))
@@ -205,6 +207,12 @@ class SyncEngine:
             raise RuntimeError("Strava target is not configured")
         return cast(StravaTarget, target)
 
+    def get_wahoo_target(self) -> WahooTarget:
+        target = self.targets.get("wahoo")
+        if target is None:
+            raise RuntimeError("Wahoo target is not configured")
+        return cast(WahooTarget, target)
+
     def _prepare_files(self, source: SourceAdapter, activity) -> FileBundle:
         row = self.state_db.get_activity_row(activity.source, activity.source_id)
         original_path = None
@@ -299,6 +307,10 @@ class SyncEngine:
         strava = StravaTarget(self.config, self.state_db)
         if strava.is_configured():
             targets[strava.name] = strava
+
+        wahoo = WahooTarget(self.config, self.state_db)
+        if wahoo.is_configured():
+            targets[wahoo.name] = wahoo
 
         return targets
 
