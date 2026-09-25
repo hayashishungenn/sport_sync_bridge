@@ -157,6 +157,27 @@ python sync.py sync --source local --target wahoo --format wahoo=fit --dry-run
 
 完成授权后，从回调地址的查询参数复制 `code`，再运行 `wahoo-exchange` 保存令牌。FIT 文件按 Wahoo API 上传并轮询处理状态。Wahoo 只支持 FIT，因此 `--format wahoo=gpx` 和 `--format wahoo=tcx` 会被拒绝。
 
+### Concept2 Logbook 活动来源
+
+Concept2 Logbook 可作为活动来源。先阅读 [Concept2 Logbook API 文档](https://log.concept2.com/developers/documentation/) 并注册自己的 OAuth 应用，配置 `CONCEPT2_CLIENT_ID`、`CONCEPT2_CLIENT_SECRET` 和已登记的 `CONCEPT2_REDIRECT_URI`，再获取只读授权：
+
+```powershell
+python sync.py concept2-auth-url
+python sync.py concept2-exchange --code 你的code
+python sync.py check --source concept2 --target garmin
+python sync.py sync --source concept2 --target garmin --dry-run
+```
+
+授权默认只申请 `user:read,results:read`。令牌保存在本地 SQLite；结果列表按日期过滤并自动翻页，FIT 文件从 Logbook 导出。Logbook 没有该结果的划桨数据时，FIT 导出可能返回 404。
+
+Concept2 API 也提供删除结果的操作。删除不可撤销，因此需单独申请写权限，并在命令提示中输入完整结果 ID。Concept2 要求先在开发环境验证写操作，并取得批准后才能向生产环境写入。默认配置会阻止生产环境删除；测试时将 `CONCEPT2_API_ROOT` 设为 `https://log-dev.concept2.com`。只有获得 Concept2 批准后，才可设置 `CONCEPT2_ALLOW_PRODUCTION_WRITES=true`。
+
+```powershell
+python sync.py concept2-auth-url --write
+python sync.py concept2-exchange --code 你的code --write
+python sync.py concept2-delete --activity-id 结果ID
+```
+
 ### 5. 首次同步
 
 ```powershell

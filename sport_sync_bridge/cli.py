@@ -151,7 +151,7 @@ def build_parser() -> argparse.ArgumentParser:
     sync_parser.add_argument(
         "--source",
         action="append",
-        choices=["igpsport", "onelap", "intervals_icu", "local", "garmin", "strava"],
+        choices=["igpsport", "onelap", "intervals_icu", "local", "garmin", "strava", "concept2"],
         help="Repeatable source",
     )
     sync_parser.add_argument(
@@ -644,7 +644,7 @@ def build_parser() -> argparse.ArgumentParser:
     check_parser.add_argument(
         "--source",
         action="append",
-        choices=["igpsport", "onelap", "intervals_icu", "local", "garmin", "strava"],
+        choices=["igpsport", "onelap", "intervals_icu", "local", "garmin", "strava", "concept2"],
         help="Repeatable source",
     )
     check_parser.add_argument(
@@ -677,6 +677,32 @@ def build_parser() -> argparse.ArgumentParser:
         "wahoo-exchange", help="Exchange a Wahoo OAuth code for tokens"
     )
     wahoo_exchange_parser.add_argument("--code", required=True, help="OAuth code returned by Wahoo")
+
+    concept2_auth_url_parser = subparsers.add_parser(
+        "concept2-auth-url", help="Print the Concept2 OAuth authorization URL"
+    )
+    concept2_auth_url_parser.add_argument(
+        "--write",
+        action="store_true",
+        help="Request result write access for the separate Concept2 delete command",
+    )
+    concept2_exchange_parser = subparsers.add_parser(
+        "concept2-exchange", help="Exchange a Concept2 OAuth code for tokens"
+    )
+    concept2_exchange_parser.add_argument("--code", required=True, help="OAuth code returned by Concept2")
+    concept2_exchange_parser.add_argument(
+        "--write",
+        action="store_true",
+        help="Match an authorization URL created with --write",
+    )
+
+    concept2_delete_parser = subparsers.add_parser(
+        "concept2-delete", help="Permanently delete a Concept2 Logbook result"
+    )
+    concept2_delete_parser.add_argument("--activity-id", required=True, help="Concept2 result ID")
+    concept2_delete_parser.add_argument(
+        "--yes", action="store_true", help="Skip the typed-ID confirmation prompt"
+    )
 
     share_parser = subparsers.add_parser("share", help="Build GarSync friend and group invite links")
     share_actions = share_parser.add_subparsers(dest="share_action", required=True)
@@ -873,6 +899,34 @@ def main(argv: list[str] | None = None) -> int:
             expires_at = engine.state_db.get_value("wahoo_expires_at") or payload.get("expires_at")
             print(f"expires_at={expires_at}")
             print(f"scope={payload.get('scope')}")
+            return 0
+
+        if args.command == "concept2-auth-url":
+            source = engine.get_concept2_source()
+            print(source.build_authorize_url(write=args.write))
+            return 0
+
+        if args.command == "concept2-exchange":
+            source = engine.get_concept2_source()
+            payload = source.exchange_code(args.code, write=args.write)
+            print("Concept2 tokens saved to SQLite.")
+            expires_at = engine.state_db.get_value("concept2_expires_at") or payload.get("expires_at")
+            scope = engine.state_db.get_value("concept2_scope") or payload.get("scope")
+            print(f"expires_at={expires_at}")
+            print(f"scope={scope}")
+            return 0
+
+        if args.command == "concept2-delete":
+            if not args.yes:
+                expected = args.activity_id.strip()
+                confirmation = input(
+                    f"Permanently delete Concept2 result {expected}? Type the ID to confirm: "
+                )
+                if confirmation.strip() != expected:
+                    print("Concept2 delete cancelled.")
+                    return 1
+            engine.get_concept2_source().delete_result(args.activity_id)
+            print(f"deleted=concept2:{args.activity_id}")
             return 0
 
         selected_sources = args.source or config.sources

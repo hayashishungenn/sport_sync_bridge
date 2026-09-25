@@ -55,6 +55,15 @@ class AppConfig:
     wahoo_refresh_token: str | None
     wahoo_expires_at: str | None
     wahoo_scope: str | None
+    concept2_client_id: str | None
+    concept2_client_secret: str | None
+    concept2_api_root: str
+    concept2_allow_production_writes: bool
+    concept2_redirect_uri: str
+    concept2_access_token: str | None
+    concept2_refresh_token: str | None
+    concept2_expires_at: str | None
+    concept2_scope: str | None
     ai_api_base_url: str | None
     ai_api_key: str | None
     ai_model: str | None
@@ -117,6 +126,17 @@ class AppConfig:
             wahoo_refresh_token=env_or_none("WAHOO_REFRESH_TOKEN"),
             wahoo_expires_at=env_or_none("WAHOO_EXPIRES_AT"),
             wahoo_scope=env_or_none("WAHOO_SCOPE"),
+            concept2_client_id=env_or_none("CONCEPT2_CLIENT_ID"),
+            concept2_client_secret=env_or_none("CONCEPT2_CLIENT_SECRET"),
+            concept2_api_root=os.getenv("CONCEPT2_API_ROOT", "https://log.concept2.com").rstrip("/"),
+            concept2_allow_production_writes=parse_bool(
+                os.getenv("CONCEPT2_ALLOW_PRODUCTION_WRITES"), False
+            ),
+            concept2_redirect_uri=os.getenv("CONCEPT2_REDIRECT_URI", "http://localhost/").strip(),
+            concept2_access_token=env_or_none("CONCEPT2_ACCESS_TOKEN"),
+            concept2_refresh_token=env_or_none("CONCEPT2_REFRESH_TOKEN"),
+            concept2_expires_at=env_or_none("CONCEPT2_EXPIRES_AT"),
+            concept2_scope=env_or_none("CONCEPT2_SCOPE"),
             ai_api_base_url=env_or_none("AI_API_BASE_URL"),
             ai_api_key=env_or_none("AI_API_KEY"),
             ai_model=env_or_none("AI_MODEL"),

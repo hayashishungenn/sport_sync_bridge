@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import cast
 
 from .config import AppConfig
+from .concept2_source import Concept2Source
 from .fit_tools import normalize_fit_coordinates
 from .formats import SUPPORTED_FORMATS, convert_activity_file
 from .garmin_source import GarminSource
@@ -213,6 +214,12 @@ class SyncEngine:
             raise RuntimeError("Wahoo target is not configured")
         return cast(WahooTarget, target)
 
+    def get_concept2_source(self) -> Concept2Source:
+        source = self.sources.get("concept2")
+        if source is None:
+            raise RuntimeError("Concept2 source is not configured")
+        return cast(Concept2Source, source)
+
     def _prepare_files(self, source: SourceAdapter, activity) -> FileBundle:
         row = self.state_db.get_activity_row(activity.source, activity.source_id)
         original_path = None
@@ -285,6 +292,7 @@ class SyncEngine:
             IGPSportSource(self.config),
             OneLapSource(self.config),
             IntervalsIcuSource(self.config),
+            Concept2Source(self.config, self.state_db),
             LocalFileSource(self.config, self.state_db),
         )
         garmin_target = self.targets.get("garmin")
