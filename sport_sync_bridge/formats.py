@@ -688,7 +688,9 @@ def _read_gpx(path: Path) -> ActivityFile:
     return activity
 
 
-def _nonempty_child_names(parent: ET.Element, handled: set[str]) -> set[str]:
+def _nonempty_child_names(parent: ET.Element | None, handled: set[str]) -> set[str]:
+    if parent is None:
+        return set()
     return {
         _local_name(child.tag)
         for child in parent

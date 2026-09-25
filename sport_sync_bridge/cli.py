@@ -185,6 +185,7 @@ def build_parser() -> argparse.ArgumentParser:
             "hammerhead",
             "polar",
             "wahoo",
+            "fitbit",
         ],
         help="Repeatable source",
     )
@@ -753,6 +754,7 @@ def build_parser() -> argparse.ArgumentParser:
             "hammerhead",
             "polar",
             "wahoo",
+            "fitbit",
         ],
         help="Repeatable source",
     )
@@ -786,6 +788,19 @@ def build_parser() -> argparse.ArgumentParser:
         "wahoo-exchange", help="Exchange a Wahoo OAuth code for tokens"
     )
     wahoo_exchange_parser.add_argument("--code", required=True, help="OAuth code returned by Wahoo")
+
+    google_health_auth_url_parser = subparsers.add_parser(
+        "google-health-auth-url", help="Print the Fitbit Google Health OAuth authorization URL"
+    )
+    google_health_exchange_parser = subparsers.add_parser(
+        "google-health-exchange", help="Exchange a Google Health OAuth code for local credentials"
+    )
+    google_health_exchange_parser.add_argument(
+        "--code", required=True, help="OAuth code from the registered redirect URL"
+    )
+    google_health_exchange_parser.add_argument(
+        "--state", required=True, help="OAuth state from the registered redirect URL"
+    )
 
     concept2_auth_url_parser = subparsers.add_parser(
         "concept2-auth-url", help="Print the Concept2 OAuth authorization URL"
@@ -1065,6 +1080,16 @@ def main(argv: list[str] | None = None) -> int:
             expires_at = engine.state_db.get_value("wahoo_expires_at") or payload.get("expires_at")
             print(f"expires_at={expires_at}")
             print(f"scope={payload.get('scope')}")
+            return 0
+
+        if args.command == "google-health-auth-url":
+            print(engine.google_health_client.build_authorize_url())
+            return 0
+
+        if args.command == "google-health-exchange":
+            result = engine.google_health_client.exchange_code(args.code, args.state)
+            print("Google Health credentials saved to local SQLite for the Fitbit source.")
+            print(f"expires_at={result.get('expires_at')}")
             return 0
 
         if args.command == "concept2-auth-url":

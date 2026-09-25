@@ -76,6 +76,9 @@ class AppConfig:
     polar_redirect_uri: str | None
     polar_access_token: str | None
     polar_member_id: str | None
+    google_health_client_id: str | None
+    google_health_client_secret: str | None
+    google_health_redirect_uri: str
     ai_api_base_url: str | None
     ai_api_key: str | None
     ai_model: str | None
@@ -163,6 +166,11 @@ class AppConfig:
             polar_redirect_uri=env_or_none("POLAR_REDIRECT_URI"),
             polar_access_token=env_or_none("POLAR_ACCESS_TOKEN"),
             polar_member_id=env_or_none("POLAR_MEMBER_ID"),
+            google_health_client_id=env_or_none("GOOGLE_HEALTH_CLIENT_ID"),
+            google_health_client_secret=env_or_none("GOOGLE_HEALTH_CLIENT_SECRET"),
+            google_health_redirect_uri=os.getenv(
+                "GOOGLE_HEALTH_REDIRECT_URI", "https://www.google.com"
+            ).strip(),
             ai_api_base_url=env_or_none("AI_API_BASE_URL"),
             ai_api_key=env_or_none("AI_API_KEY"),
             ai_model=env_or_none("AI_MODEL"),

@@ -11,6 +11,7 @@ from .concept2_source import Concept2Source
 from .fit_tools import normalize_fit_coordinates
 from .formats import SUPPORTED_FORMATS, convert_activity_file
 from .garmin_source import GarminSource
+from .google_health import GoogleHealthClient, GoogleHealthSource
 from .hammerhead_api import HammerheadClient
 from .hammerhead_source import HammerheadSource
 from .intervals_icu import IntervalsIcuSource
@@ -40,6 +41,7 @@ class SyncEngine:
         ensure_directory(config.converted_dir)
         self.state_db = StateDB(config.db_path)
         self.hammerhead_client = HammerheadClient(config, self.state_db)
+        self.google_health_client = GoogleHealthClient(config, self.state_db)
         self.polar_client = PolarClient(config, self.state_db)
         self.targets = self._build_targets()
         self.sources = self._build_sources()
@@ -316,6 +318,7 @@ class SyncEngine:
             Concept2Source(self.config, self.state_db),
             HammerheadSource(self.config, self.hammerhead_client),
             PolarSource(self.config, self.polar_client),
+            GoogleHealthSource(self.config, self.google_health_client),
             LocalFileSource(self.config, self.state_db),
         )
         garmin_target = self.targets.get("garmin")
