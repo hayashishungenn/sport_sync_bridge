@@ -293,6 +293,8 @@ python sync.py health summary
 python sync.py health summary --format text
 python sync.py health import-readiness .\training-readiness.json
 python sync.py health fetch-readiness --start-date 2026-08-01 --end-date 2026-08-07
+python sync.py health fetch-garmin-summary --start-date 2026-08-01 --end-date 2026-08-07
+python sync.py health summaries --start-date 2026-08-01 --end-date 2026-08-07
 python sync.py health readiness --format text --limit 7
 python sync.py health readiness --format json
 ```
@@ -300,6 +302,8 @@ python sync.py health readiness --format json
 `health import-readiness` 接受一个训练准备度 JSON 对象或对象数组，按日期保存在本地 SQLite；重复导入相同记录不会重复写入。记录保留 AOT 模型中的评分、恢复时间、ACWR、急性负荷、压力、HRV、睡眠因子，以及完整的 `inputContext`、`metadata` 和其他字段。该命令展示文件提供的分数，不自行计算设备侧准备度；`--format json` 可查看完整原始字段。
 
 `health fetch-readiness` 按包含首尾的日期范围逐日从 Garmin Connect 获取训练准备度记录，并写入同一 SQLite 历史，需要已配置 Garmin 登录信息。分数和因子直接保存服务器返回的数据，不重新计算设备侧评分。
+
+`health fetch-garmin-summary` 按包含首尾的日期范围读取 Garmin Connect 每日汇总。原始 JSON 按日期保存在本地数据库，可用 `health summaries` 查看；步数、楼层、心率、HRV、睡眠、血氧、压力、身体电量、距离、卡路里和呼吸等已识别指标也会进入健康历史及 AI 活动分析上下文。每日汇总指标按对应日期的 UTC 日末记时，不会被当作同日活动开始前的测量值。命令需要已配置 Garmin 登录信息。
 
 AI 运动分析保留为可选功能。它把单次活动摘要、最近活动的周汇总和本地健康指标发送给 OpenAI 兼容的 Chat Completions 接口，不发送 GPS 坐标。可先检查提示词，再配置自己使用的远端或本地模型：
 

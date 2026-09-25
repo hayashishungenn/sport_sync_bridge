@@ -5,7 +5,7 @@ import hashlib
 import io
 import json
 import math
-from datetime import datetime, time, timedelta, timezone
+from datetime import date, datetime, time, timedelta, timezone
 from pathlib import Path
 
 from .state import StateDB
@@ -34,9 +34,44 @@ _METRIC_ALIASES = {
     "sleep_hours": "sleep_hours",
     "steps": "steps",
     "step_count": "steps",
+    "step_goal": "step_goal",
+    "floors_goal": "floors_goal",
     "stress": "stress_score",
     "stress_score": "stress_score",
+    "max_stress": "max_stress_score",
+    "max_stress_score": "max_stress_score",
     "body_battery": "body_battery",
+    "body_battery_high": "body_battery_high",
+    "body_battery_low": "body_battery_low",
+    "body_battery_charged": "body_battery_charged_points",
+    "body_battery_charged_points": "body_battery_charged_points",
+    "body_battery_drained": "body_battery_drained_points",
+    "body_battery_drained_points": "body_battery_drained_points",
+    "distance": "distance_km",
+    "distance_km": "distance_km",
+    "floors_descended": "floors_descended",
+    "min_heart_rate": "min_heart_rate_bpm",
+    "min_heart_rate_bpm": "min_heart_rate_bpm",
+    "max_heart_rate": "max_heart_rate_bpm",
+    "max_heart_rate_bpm": "max_heart_rate_bpm",
+    "resting_hr_7d": "resting_hr_7d_bpm",
+    "resting_hr_7d_bpm": "resting_hr_7d_bpm",
+    "spo2_low": "spo2_low_percent",
+    "spo2_low_percent": "spo2_low_percent",
+    "hrv_weekly_average": "hrv_weekly_average_ms",
+    "hrv_weekly_average_ms": "hrv_weekly_average_ms",
+    "avg_waking_respiration": "avg_waking_respiration_bpm",
+    "avg_waking_respiration_bpm": "avg_waking_respiration_bpm",
+    "latest_respiration": "latest_respiration_bpm",
+    "latest_respiration_bpm": "latest_respiration_bpm",
+    "max_respiration": "max_respiration_bpm",
+    "max_respiration_bpm": "max_respiration_bpm",
+    "active_calories": "active_calories_kcal",
+    "active_calories_kcal": "active_calories_kcal",
+    "bmr_calories": "bmr_calories_kcal",
+    "bmr_calories_kcal": "bmr_calories_kcal",
+    "wellness_calories": "wellness_calories_kcal",
+    "wellness_calories_kcal": "wellness_calories_kcal",
     "vo2_max_run": "vo2_max_run",
     "vo2max_run": "vo2_max_run",
     "vo2_max_running": "vo2_max_run",
@@ -92,8 +127,28 @@ _DEFAULT_UNITS = {
     "spo2_percent": "%",
     "sleep_hours": "h",
     "steps": "count",
+    "step_goal": "count",
+    "floors_goal": "count",
     "stress_score": "score",
+    "max_stress_score": "score",
     "body_battery": "%",
+    "body_battery_high": "%",
+    "body_battery_low": "%",
+    "body_battery_charged_points": "points",
+    "body_battery_drained_points": "points",
+    "distance_km": "km",
+    "floors_descended": "count",
+    "min_heart_rate_bpm": "bpm",
+    "max_heart_rate_bpm": "bpm",
+    "resting_hr_7d_bpm": "bpm",
+    "spo2_low_percent": "%",
+    "hrv_weekly_average_ms": "ms",
+    "avg_waking_respiration_bpm": "brpm",
+    "latest_respiration_bpm": "brpm",
+    "max_respiration_bpm": "brpm",
+    "active_calories_kcal": "kcal",
+    "bmr_calories_kcal": "kcal",
+    "wellness_calories_kcal": "kcal",
     "vo2_max_run": "mL/kg/min",
     "vo2_max_ride": "mL/kg/min",
     "sleep_score": "score",
@@ -136,8 +191,28 @@ _HEALTH_DISPLAY_LABELS = {
     "spo2_percent": "血氧饱和度",
     "sleep_hours": "睡眠时长",
     "steps": "步数",
+    "step_goal": "每日步数目标",
+    "floors_goal": "每日爬楼目标",
     "stress_score": "压力",
+    "max_stress_score": "最高压力",
     "body_battery": "身体电量",
+    "body_battery_high": "身体电量最高值",
+    "body_battery_low": "身体电量最低值",
+    "body_battery_charged_points": "身体电量充入",
+    "body_battery_drained_points": "身体电量消耗",
+    "distance_km": "每日距离",
+    "floors_descended": "下行楼层",
+    "min_heart_rate_bpm": "最低心率",
+    "max_heart_rate_bpm": "最高心率",
+    "resting_hr_7d_bpm": "七日平均静息心率",
+    "spo2_low_percent": "最低血氧饱和度",
+    "hrv_weekly_average_ms": "HRV 七日平均",
+    "avg_waking_respiration_bpm": "清醒平均呼吸频率",
+    "latest_respiration_bpm": "最新呼吸频率",
+    "max_respiration_bpm": "最高呼吸频率",
+    "active_calories_kcal": "活动卡路里",
+    "bmr_calories_kcal": "基础代谢卡路里",
+    "wellness_calories_kcal": "健康卡路里",
     "vo2_max_run": "跑步 VO₂max",
     "vo2_max_ride": "骑行 VO₂max",
     "sleep_score": "睡眠分数",
@@ -175,6 +250,37 @@ _INTERVALS_WELLNESS_FIELDS = {
     "respiration": ("respiration", "brpm"),
     "hydrationVolume": ("hydration", "L"),
     "comments": ("comments", "text"),
+}
+_GARMIN_USER_SUMMARY_FIELDS = {
+    "totalSteps": ("steps", "count"),
+    "dailyStepGoal": ("step_goal", "count"),
+    "floorsAscended": ("floors", "count"),
+    "floorsDescended": ("floors_descended", "count"),
+    "userFloorsAscendedGoal": ("floors_goal", "count"),
+    "restingHeartRate": ("resting_heart_rate", "bpm"),
+    "minHeartRate": ("min_heart_rate_bpm", "bpm"),
+    "maxHeartRate": ("max_heart_rate_bpm", "bpm"),
+    "lastSevenDaysAvgRestingHeartRate": ("resting_hr_7d_bpm", "bpm"),
+    "averageStressLevel": ("stress_score", "score"),
+    "maxStressLevel": ("max_stress_score", "score"),
+    "bodyBatteryMostRecentValue": ("body_battery", "%"),
+    "bodyBatteryHighestValue": ("body_battery_high", "%"),
+    "bodyBatteryLowestValue": ("body_battery_low", "%"),
+    "bodyBatteryChargedValue": ("body_battery_charged_points", "points"),
+    "bodyBatteryDrainedValue": ("body_battery_drained_points", "points"),
+    "averageSpo2": ("spo2_percent", "%"),
+    "lowestSpo2": ("spo2_low_percent", "%"),
+    "sleepingSeconds": ("sleep", "s"),
+    "avgWakingRespirationValue": ("avg_waking_respiration_bpm", "brpm"),
+    "latestRespirationValue": ("latest_respiration_bpm", "brpm"),
+    "highestRespirationValue": ("max_respiration_bpm", "brpm"),
+    "hrvWeeklyAverage": ("hrv_weekly_average_ms", "ms"),
+    "totalDistanceMeters": ("distance_km", "m"),
+    "totalKilocalories": ("calories", "kcal"),
+    "activeKilocalories": ("active_calories_kcal", "kcal"),
+    "bmrKilocalories": ("bmr_calories_kcal", "kcal"),
+    "wellnessKilocalories": ("wellness_calories_kcal", "kcal"),
+    "hrvStatus": ("hrv_status", "status"),
 }
 
 
@@ -267,6 +373,102 @@ def import_intervals_icu_wellness(
             fingerprint=fingerprint,
         )
     return len(pending)
+
+
+def import_garmin_user_summaries(
+    state_db: StateDB,
+    records: list[dict[str, object]],
+    *,
+    source_label: str = "Garmin Connect daily summary",
+) -> dict[str, int]:
+    stored_records: list[dict[str, str]] = []
+    pending_observations: list[tuple[str, str, float | str, str, str, str]] = []
+    seen_dates: set[str] = set()
+
+    for index, record in enumerate(records):
+        if not isinstance(record, dict):
+            raise ValueError(f"Garmin user summary record {index} must be an object")
+        calendar_date = _parse_garmin_summary_date(
+            record.get("calendarDate"), f"record {index} date"
+        )
+        if calendar_date in seen_dates:
+            raise ValueError(f"Garmin user summary date {calendar_date} appears more than once")
+        seen_dates.add(calendar_date)
+        try:
+            summary_json = json.dumps(
+                record,
+                ensure_ascii=False,
+                sort_keys=True,
+                separators=(",", ":"),
+                allow_nan=False,
+            )
+        except (TypeError, ValueError) as exc:
+            raise ValueError(
+                f"Garmin user summary for {calendar_date} is not valid JSON data"
+            ) from exc
+        fingerprint = hashlib.sha256(summary_json.encode("utf-8")).hexdigest()
+        stored_records.append(
+            {
+                "calendar_date": calendar_date,
+                "summary_json": summary_json,
+                "fingerprint": fingerprint,
+                "source_label": source_label,
+            }
+        )
+
+        observed_at = datetime.combine(
+            date.fromisoformat(calendar_date), time.max, tzinfo=timezone.utc
+        ).isoformat()
+        for api_field, (metric_name, unit) in _GARMIN_USER_SUMMARY_FIELDS.items():
+            parsed = _normalize_garmin_user_summary_metric(
+                metric_name, record.get(api_field), unit
+            )
+            if parsed is None:
+                continue
+            metric, value, normalized_unit = parsed
+            pending_observations.append(
+                (observed_at, metric, value, normalized_unit, source_label, fingerprint)
+            )
+
+    summaries_stored = state_db.save_garmin_user_summaries(
+        stored_records, pending_observations
+    )
+    return {
+        "summaries_stored": summaries_stored,
+        "observations_processed": len(pending_observations),
+    }
+
+
+def list_garmin_user_summaries(
+    state_db: StateDB,
+    start_date: str,
+    end_date: str,
+) -> dict[str, object]:
+    start = _parse_garmin_summary_date(start_date, "start-date")
+    end = _parse_garmin_summary_date(end_date, "end-date")
+    if end < start:
+        raise ValueError("Garmin user summary end date must be on or after the start date")
+    rows = state_db.list_garmin_user_summaries(start, end)
+    records: list[dict[str, object]] = []
+    for row in rows:
+        try:
+            summary = json.loads(str(row["summary_json"]))
+        except (TypeError, ValueError) as exc:
+            raise ValueError(
+                f"Stored Garmin user summary for {row['calendar_date']} is invalid JSON"
+            ) from exc
+        if not isinstance(summary, dict):
+            raise ValueError(
+                f"Stored Garmin user summary for {row['calendar_date']} must be an object"
+            )
+        records.append(
+            {
+                "calendar_date": str(row["calendar_date"]),
+                "source_label": str(row["source_label"]),
+                "summary": summary,
+            }
+        )
+    return {"record_count": len(records), "records": records}
 
 
 def summarize_health(state_db: StateDB) -> dict[str, object]:
@@ -437,13 +639,42 @@ def _normalize_metric(name: object, raw_value: object, raw_unit: object) -> tupl
     elif metric == "hydration_l" and lowered_unit in {"ml", "milliliter", "milliliters"}:
         value /= 1000
         unit = "L"
+    elif metric == "distance_km" and lowered_unit in {"m", "meter", "meters"}:
+        value /= 1000
+        unit = "km"
     elif metric == "lactate_threshold_speed_kmh" and lowered_unit in {"mph", "mi/h"}:
         value *= 1.609344
         unit = "km/h"
-    elif metric == "steps":
+    elif metric in {"steps", "step_goal", "floors_goal", "floors_descended"}:
         value = int(value)
         unit = "count"
     return metric, value, unit
+
+
+def _normalize_garmin_user_summary_metric(
+    name: str,
+    raw_value: object,
+    unit: str,
+) -> tuple[str, float | str, str] | None:
+    metric = _METRIC_ALIASES.get(name)
+    if metric == "hrv_status":
+        if raw_value is None:
+            return None
+        value = " ".join(str(raw_value).strip().split())
+        return (metric, value, unit) if value else None
+    return _normalize_metric(name, raw_value, unit)
+
+
+def _parse_garmin_summary_date(value: object, field: object) -> str:
+    try:
+        parsed = date.fromisoformat(str(value))
+    except (TypeError, ValueError) as exc:
+        raise ValueError(
+            f"Garmin user summary {field} must use YYYY-MM-DD"
+        ) from exc
+    if parsed.isoformat() != str(value):
+        raise ValueError(f"Garmin user summary {field} must use YYYY-MM-DD")
+    return parsed.isoformat()
 
 
 def _health_value(value: object) -> float | str:

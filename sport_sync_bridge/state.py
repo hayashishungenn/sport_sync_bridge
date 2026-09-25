@@ -10,7 +10,7 @@ from .models import Activity
 from .utils import ensure_directory, utcnow
 
 
-DATABASE_SCHEMA_VERSION = 2
+DATABASE_SCHEMA_VERSION = 3
 
 
 class StateDB:
@@ -94,6 +94,14 @@ class StateDB:
                 ON health_observations(metric, observed_at);
             CREATE INDEX IF NOT EXISTS idx_health_time
                 ON health_observations(observed_at);
+
+            CREATE TABLE IF NOT EXISTS garmin_user_summaries (
+                calendar_date TEXT PRIMARY KEY,
+                summary_json TEXT NOT NULL,
+                fingerprint TEXT NOT NULL,
+                source_label TEXT NOT NULL,
+                imported_at TEXT NOT NULL
+            );
 
             CREATE TABLE IF NOT EXISTS training_readiness_records (
                 fingerprint TEXT PRIMARY KEY,
@@ -415,6 +423,59 @@ class StateDB:
         return self.connection.execute(
             f"SELECT * FROM health_observations{where} ORDER BY observed_at DESC, metric, id DESC",
             values,
+        ).fetchall()
+
+    def save_garmin_user_summaries(
+        self,
+        records: list[dict[str, str]],
+        observations: list[tuple[str, str, float | str, str, str, str]],
+    ) -> int:
+        if not records and not observations:
+            return 0
+        imported_at = utcnow().isoformat()
+        values = [
+            (
+                record["calendar_date"],
+                record["summary_json"],
+                record["fingerprint"],
+                record["source_label"],
+                imported_at,
+            )
+            for record in records
+        ]
+        with self.connection:
+            before = self.connection.total_changes
+            self.connection.executemany(
+                "INSERT INTO garmin_user_summaries ("
+                "calendar_date, summary_json, fingerprint, source_label, imported_at) "
+                "VALUES (?, ?, ?, ?, ?) "
+                "ON CONFLICT(calendar_date) DO UPDATE SET "
+                "summary_json = excluded.summary_json, "
+                "fingerprint = excluded.fingerprint, "
+                "source_label = excluded.source_label, "
+                "imported_at = excluded.imported_at "
+                "WHERE garmin_user_summaries.fingerprint != excluded.fingerprint",
+                values,
+            )
+            summaries_stored = self.connection.total_changes - before
+            self.connection.executemany(
+                "INSERT OR IGNORE INTO health_observations ("
+                "observed_at, metric, value, unit, source_label, fingerprint) "
+                "VALUES (?, ?, ?, ?, ?, ?)",
+                observations,
+            )
+            return summaries_stored
+
+    def list_garmin_user_summaries(
+        self,
+        start_date: str,
+        end_date: str,
+    ) -> list[sqlite3.Row]:
+        return self.connection.execute(
+            "SELECT * FROM garmin_user_summaries "
+            "WHERE calendar_date >= ? AND calendar_date <= ? "
+            "ORDER BY calendar_date",
+            (start_date, end_date),
         ).fetchall()
 
     def save_training_readiness_records(self, records: list[dict[str, object]]) -> int:

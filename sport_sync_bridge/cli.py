@@ -63,7 +63,9 @@ from .engine import SyncEngine
 from .intervals_icu import IntervalsIcuSource
 from .health_sources import (
     fetch_garmin_training_readiness,
+    fetch_garmin_user_summaries,
     validate_training_readiness_date_range,
+    validate_garmin_user_summary_date_range,
     fetch_intervals_icu_wellness,
 )
 from .targets import GarminTarget
@@ -75,9 +77,11 @@ from .force_vector_analysis import (
     load_force_vector_snapshot,
 )
 from .health import (
+    import_garmin_user_summaries,
     import_intervals_icu_wellness,
     format_health_summary_text,
     import_health_csv,
+    list_garmin_user_summaries,
     summarize_health,
     summarize_health_for_activity,
 )
@@ -438,6 +442,25 @@ def build_parser() -> argparse.ArgumentParser:
     )
     health_readiness_fetch.add_argument("--start-date", required=True, help="Start date, YYYY-MM-DD")
     health_readiness_fetch.add_argument("--end-date", required=True, help="End date, YYYY-MM-DD")
+    health_garmin_summary_fetch = health_actions.add_parser(
+        "fetch-garmin-summary",
+        help="Fetch Garmin daily health summaries for an inclusive date range",
+    )
+    health_garmin_summary_fetch.add_argument(
+        "--start-date", required=True, help="Start date, YYYY-MM-DD"
+    )
+    health_garmin_summary_fetch.add_argument(
+        "--end-date", required=True, help="End date, YYYY-MM-DD"
+    )
+    health_garmin_summaries = health_actions.add_parser(
+        "summaries", help="Show imported Garmin daily summaries as JSON"
+    )
+    health_garmin_summaries.add_argument(
+        "--start-date", required=True, help="Start date, YYYY-MM-DD"
+    )
+    health_garmin_summaries.add_argument(
+        "--end-date", required=True, help="End date, YYYY-MM-DD"
+    )
     health_intervals_wellness = health_actions.add_parser(
         "fetch-intervals-wellness",
         help="Fetch Intervals.icu wellness for an inclusive date range",
@@ -822,6 +845,29 @@ def _run_garmin_readiness_fetch(args: argparse.Namespace, config: AppConfig) -> 
         state.close()
     print(f"records_fetched={len(records)}")
     print(f"records_added={added}")
+    return 0
+
+
+def _run_garmin_user_summary_fetch(args: argparse.Namespace, config: AppConfig) -> int:
+    start_date, end_date = validate_garmin_user_summary_date_range(
+        args.start_date, args.end_date
+    )
+    target = GarminTarget(config)
+    target.authenticate()
+    records = fetch_garmin_user_summaries(
+        target.client,
+        start_date.isoformat(),
+        end_date.isoformat(),
+    )
+
+    state = StateDB(config.db_path)
+    try:
+        result = import_garmin_user_summaries(state, records)
+    finally:
+        state.close()
+    print(f"summaries_fetched={len(records)}")
+    print(f"summaries_stored={result['summaries_stored']}")
+    print(f"observations_processed={result['observations_processed']}")
     return 0
 
 
@@ -1215,6 +1261,8 @@ def _run_local_command(args: argparse.Namespace, config: AppConfig) -> int:
     if args.command == "health":
         if args.health_action == "fetch-readiness":
             return _run_garmin_readiness_fetch(args, config)
+        if args.health_action == "fetch-garmin-summary":
+            return _run_garmin_user_summary_fetch(args, config)
         if args.health_action == "fetch-intervals-wellness":
             return _run_intervals_icu_wellness_fetch(args, config)
         state = StateDB(config.db_path)
@@ -1231,6 +1279,11 @@ def _run_local_command(args: argparse.Namespace, config: AppConfig) -> int:
                     print(format_training_readiness_text(summary))
                 else:
                     print(json.dumps(summary, ensure_ascii=False, indent=2))
+            elif args.health_action == "summaries":
+                summaries = list_garmin_user_summaries(
+                    state, args.start_date, args.end_date
+                )
+                print(json.dumps(summaries, ensure_ascii=False, indent=2))
             else:
                 summary = summarize_health(state)
                 if args.format == "text":

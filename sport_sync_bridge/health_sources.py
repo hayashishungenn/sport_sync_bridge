@@ -8,6 +8,10 @@ class TrainingReadinessClient(Protocol):
     def get_training_readiness(self, cdate: str) -> object: ...
 
 
+class GarminUserSummaryClient(Protocol):
+    def get_user_summary(self, cdate: str) -> object: ...
+
+
 class IntervalsWellnessClient(Protocol):
     def list_wellness(self, start_date: str, end_date: str) -> object: ...
 
@@ -50,6 +54,50 @@ def fetch_garmin_training_readiness(
             if not record.get("sourceId"):
                 record["sourceId"] = "garmin"
             records.append(record)
+        current += timedelta(days=1)
+    return records
+
+
+def validate_garmin_user_summary_date_range(start_date: str, end_date: str) -> tuple[date, date]:
+    start = _parse_garmin_summary_date(start_date, "start-date")
+    end = _parse_garmin_summary_date(end_date, "end-date")
+    if end < start:
+        raise ValueError("Garmin user summary end date must be on or after the start date")
+    return start, end
+
+
+def fetch_garmin_user_summaries(
+    client: GarminUserSummaryClient,
+    start_date: str,
+    end_date: str,
+) -> list[dict[str, object]]:
+    start, end = validate_garmin_user_summary_date_range(start_date, end_date)
+    fetch_daily = getattr(client, "get_user_summary", None)
+    if not callable(fetch_daily):
+        raise RuntimeError("Garmin client does not support daily user summaries")
+
+    records: list[dict[str, object]] = []
+    current = start
+    while current <= end:
+        current_date = current.isoformat()
+        response = fetch_daily(current_date)
+        if not isinstance(response, dict):
+            raise ValueError(
+                f"Garmin user summary response for {current_date} must be an object"
+            )
+        record = dict(response)
+        response_date = record.get("calendarDate")
+        if response_date not in (None, ""):
+            parsed_response_date = _parse_garmin_summary_date(
+                str(response_date), f"response date for {current_date}"
+            )
+            if parsed_response_date != current:
+                raise ValueError(
+                    f"Garmin user summary date {parsed_response_date.isoformat()} "
+                    f"does not match requested date {current_date}"
+                )
+        record["calendarDate"] = current_date
+        records.append(record)
         current += timedelta(days=1)
     return records
 
@@ -98,6 +146,16 @@ def _parse_iso_date(value: str, field: str) -> date:
         raise ValueError(f"Training readiness {field} must use YYYY-MM-DD") from exc
     if parsed.isoformat() != value:
         raise ValueError(f"Training readiness {field} must use YYYY-MM-DD")
+    return parsed
+
+
+def _parse_garmin_summary_date(value: str, field: str) -> date:
+    try:
+        parsed = date.fromisoformat(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"Garmin user summary {field} must use YYYY-MM-DD") from exc
+    if parsed.isoformat() != value:
+        raise ValueError(f"Garmin user summary {field} must use YYYY-MM-DD")
     return parsed
 
 

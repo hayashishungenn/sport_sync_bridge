@@ -45,6 +45,10 @@ class StateDatabaseTests(unittest.TestCase):
                     "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'training_readiness_records'"
                 ).fetchone()
                 self.assertIsNotNone(readiness_table)
+                summaries_table = state.connection.execute(
+                    "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'garmin_user_summaries'"
+                ).fetchone()
+                self.assertIsNotNone(summaries_table)
             finally:
                 state.close()
 
