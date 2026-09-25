@@ -41,6 +41,16 @@ PR_DISTANCE_TARGETS = {
     "swimming": (("100m", 100.0), ("400m", 400.0), ("1500m", 1_500.0)),
 }
 PR_DISTANCE_TOLERANCE = 0.03
+TRAINING_TYPE_ORDER = ("easy", "tempo", "threshold", "interval", "race", "mixed")
+TRAINING_TYPES_BY_HEART_RATE_ZONE = {
+    2: "easy",
+    3: "tempo",
+    4: "threshold",
+    5: "interval",
+}
+RACE_CLASSIFICATION_SPORTS = RUNNING_SPORTS | {"walking", "hiking"}
+RACE_DISTANCE_TARGETS_M = (5_000.0, 10_000.0, 21_097.5, 42_195.0)
+RACE_DISTANCE_TOLERANCE = 0.03
 
 
 def calculate_period_summary(
@@ -179,6 +189,8 @@ def calculate_period_summary(
     )
     pr_changes = _find_pr_changes(pr_history, start_day, end_day)
     ftp_trend = _build_ftp_trend(activities)
+    training_type_distribution = _build_training_type_distribution(activities)
+    intensity_model = _detect_intensity_model(training_type_distribution)
 
     weekly_slices = _build_weekly_slices(activities)
     return {
@@ -196,6 +208,8 @@ def calculate_period_summary(
         "vdot_end": vdot_values[-1] if vdot_values else None,
         "vdot_max": max(vdot_values) if vdot_values else None,
         "ftp_trend": ftp_trend,
+        "training_type_distribution": training_type_distribution,
+        "intensity_model": intensity_model,
         "avg_norm_power_w": (
             sum(normalized_power_values) / len(normalized_power_values)
             if normalized_power_values
@@ -236,6 +250,16 @@ def format_period_summary(summary: dict[str, object], output_format: str) -> str
         f"平均 NP：{_format_optional(summary['avg_norm_power_w'])} W（{summary['avg_norm_power_activity_count']} 次有效活动）",
         "个人纪录变化：",
     ]
+    training_type_distribution = summary.get("training_type_distribution")
+    if isinstance(training_type_distribution, Mapping) and training_type_distribution:
+        training_types = "，".join(
+            f"{training_type} {float(seconds):g}秒"
+            for training_type, seconds in training_type_distribution.items()
+        )
+        lines.append(f"训练类型时长：{training_types}")
+    else:
+        lines.append("训练类型时长：暂无")
+    lines.append(f"强度模型：{summary.get('intensity_model') or '暂无'}")
     sampled_zones = summary.get("sampled_zone_time_s")
     sampled_zone_counts = summary.get("sampled_zone_activity_count")
     if isinstance(sampled_zones, Mapping):
@@ -768,6 +792,85 @@ def _aggregate_recorded_zone_time(activities: list[dict[str, object]]) -> dict[s
                     if seconds is not None:
                         totals[zone_type][int(zone_id)] += seconds
     return {name: dict(sorted(values.items())) for name, values in totals.items()}
+
+
+def _build_training_type_distribution(activities: list[dict[str, object]]) -> dict[str, float]:
+    totals: dict[str, float] = defaultdict(float)
+    for activity in activities:
+        training_type = _classify_single_activity_type(activity)
+        duration = _optional_nonnegative(activity.get("duration_s"))
+        if duration is not None:
+            totals[training_type] += duration
+    return {
+        training_type: totals[training_type]
+        for training_type in TRAINING_TYPE_ORDER
+        if training_type in totals
+    }
+
+
+def _classify_single_activity_type(activity: Mapping[str, object]) -> str:
+    heart_rate_zone_times = _activity_heart_rate_zone_times(activity)
+    if heart_rate_zone_times is not None and len(heart_rate_zone_times) >= 6:
+        dominant_zone = max(range(2, 6), key=heart_rate_zone_times.__getitem__)
+        return TRAINING_TYPES_BY_HEART_RATE_ZONE[dominant_zone]
+
+    sport_type = str(activity.get("sport_type") or "").strip().lower().replace(" ", "_")
+    distance = _optional_nonnegative(activity.get("distance_m"))
+    if sport_type in RACE_CLASSIFICATION_SPORTS and distance is not None:
+        for target_distance in RACE_DISTANCE_TARGETS_M:
+            if abs(distance - target_distance) / target_distance < RACE_DISTANCE_TOLERANCE:
+                return "race"
+    return "mixed"
+
+
+def _activity_heart_rate_zone_times(activity: Mapping[str, object]) -> list[float] | None:
+    messages = activity.get("time_in_zone_messages")
+    if not isinstance(messages, list):
+        raise ValueError("Activity time_in_zone_messages must be a list")
+
+    seconds_by_zone: dict[int, float] = defaultdict(float)
+    highest_zone = 0
+    for message in messages:
+        if not isinstance(message, Mapping):
+            raise ValueError("Activity time-in-zone message must be an object")
+        zones = message.get("heart_rate_zones")
+        if zones is None:
+            continue
+        if not isinstance(zones, list):
+            raise ValueError("Activity heart_rate_zones must be a list")
+        for zone in zones:
+            if not isinstance(zone, Mapping):
+                raise ValueError("Activity heart_rate_zones entry must be an object")
+            zone_id = _optional_finite(zone.get("zone"))
+            if zone_id is None or zone_id < 0 or not zone_id.is_integer():
+                raise ValueError("Activity heart_rate_zones entry has an invalid zone")
+            seconds = _optional_nonnegative(zone.get("seconds"))
+            if seconds is None:
+                continue
+            zone_number = int(zone_id)
+            seconds_by_zone[zone_number] += seconds
+            highest_zone = max(highest_zone, zone_number)
+
+    if highest_zone < 5:
+        return None
+    zone_times = [0.0] * (highest_zone + 1)
+    for zone_number, seconds in seconds_by_zone.items():
+        zone_times[zone_number] = seconds
+    return zone_times
+
+
+def _detect_intensity_model(training_type_distribution: Mapping[str, float]) -> str | None:
+    total_duration = sum(float(duration) for duration in training_type_distribution.values())
+    if not math.isfinite(total_duration) or total_duration <= 0:
+        return None
+
+    easy_fraction = float(training_type_distribution.get("easy", 0.0)) / total_duration
+    interval_fraction = float(training_type_distribution.get("interval", 0.0)) / total_duration
+    if easy_fraction > 0.6 and interval_fraction < 0.14:
+        return "pyramidal"
+    if easy_fraction <= 0.4 or interval_fraction <= 0.14:
+        return "mixed"
+    return "polarized"
 
 
 def _zone_messages(value: object) -> list[Mapping[str, object]]:

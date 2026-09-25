@@ -15,6 +15,7 @@ from sport_sync_bridge.cli import main
 from sport_sync_bridge.formats import TrackPoint
 from sport_sync_bridge.period_summary import (
     _activity_power_samples,
+    _detect_intensity_model,
     calculate_period_summary,
     format_period_summary,
 )
@@ -292,6 +293,136 @@ class PeriodSummaryTests(unittest.TestCase):
         self.assertEqual(result["recorded_zone_time_s"]["speed"], {2: 500.0})
         self.assertEqual(result["recorded_zone_time_s"]["cadence"], {3: 800.0})
         self.assertEqual(result["recorded_zone_time_s"]["power"], {1: 450.0})
+
+    def test_period_reconstructs_training_type_distribution(self) -> None:
+        def heart_rate_zones(seconds_by_zone: tuple[float, ...]) -> list[dict[str, object]]:
+            return [
+                {
+                    "heart_rate_zones": [
+                        {"zone": zone, "seconds": seconds_by_zone[zone - 1]}
+                        for zone in range(1, 6)
+                    ]
+                }
+            ]
+
+        rows = [
+            self._row(
+                "a" * 64,
+                "running",
+                "2026-01-01T08:00:00Z",
+                "fit",
+                5000,
+                100,
+                150,
+                zones=heart_rate_zones((10, 200, 100, 0, 0)),
+            ),
+            self._row(
+                "b" * 64,
+                "cycling",
+                "2026-01-02T08:00:00Z",
+                "fit",
+                20000,
+                200,
+                150,
+                zones=heart_rate_zones((10, 100, 200, 0, 0)),
+            ),
+            self._row(
+                "c" * 64,
+                "cycling",
+                "2026-01-03T08:00:00Z",
+                "fit",
+                20000,
+                300,
+                150,
+                zones=heart_rate_zones((10, 100, 200, 300, 0)),
+            ),
+            self._row(
+                "d" * 64,
+                "cycling",
+                "2026-01-04T08:00:00Z",
+                "fit",
+                20000,
+                400,
+                150,
+                zones=heart_rate_zones((10, 100, 200, 300, 400)),
+            ),
+            self._row(
+                "e" * 64,
+                "walking",
+                "2026-01-05T08:00:00Z",
+                "fit",
+                10200,
+                500,
+                100,
+            ),
+            self._row(
+                "f" * 64,
+                "running",
+                "2026-01-06T08:00:00Z",
+                "fit",
+                5151,
+                600,
+                150,
+            ),
+        ]
+
+        result = calculate_period_summary(
+            rows,
+            date_from=date(2026, 1, 1),
+            date_to=date(2026, 1, 31),
+        )
+
+        self.assertEqual(
+            result["training_type_distribution"],
+            {
+                "easy": 100.0,
+                "tempo": 200.0,
+                "threshold": 300.0,
+                "interval": 400.0,
+                "race": 500.0,
+                "mixed": 600.0,
+            },
+        )
+        self.assertEqual(result["intensity_model"], "mixed")
+        report = format_period_summary(result, "txt")
+        self.assertIn("训练类型时长：easy 100秒", report)
+        self.assertIn("强度模型：mixed", report)
+
+    def test_training_type_race_distance_tolerance_is_three_percent(self) -> None:
+        rows = [
+            self._row("a" * 64, "running", "2026-01-01T08:00:00Z", "fit", 5149, 100, 150),
+            self._row("b" * 64, "running", "2026-01-02T08:00:00Z", "fit", 5150, 200, 150),
+            self._row("c" * 64, "walking", "2026-01-03T08:00:00Z", "fit", 9701, 300, 100),
+            self._row("d" * 64, "walking", "2026-01-04T08:00:00Z", "fit", 9700, 400, 100),
+            self._row("e" * 64, "hiking", "2026-01-05T08:00:00Z", "fit", 10_310, 500, 100),
+        ]
+
+        result = calculate_period_summary(
+            rows,
+            date_from=date(2026, 1, 1),
+            date_to=date(2026, 1, 31),
+        )
+
+        self.assertEqual(result["training_type_distribution"], {"race": 400.0, "mixed": 1100.0})
+
+    def test_intensity_model_uses_aot_duration_ratio_thresholds(self) -> None:
+        self.assertEqual(
+            _detect_intensity_model({"easy": 61, "interval": 13, "mixed": 26}),
+            "pyramidal",
+        )
+        self.assertEqual(
+            _detect_intensity_model({"easy": 61, "interval": 14, "mixed": 25}),
+            "mixed",
+        )
+        self.assertEqual(
+            _detect_intensity_model({"easy": 60, "interval": 15, "mixed": 25}),
+            "polarized",
+        )
+        self.assertEqual(
+            _detect_intensity_model({"easy": 40, "interval": 20, "mixed": 40}),
+            "mixed",
+        )
+        self.assertIsNone(_detect_intensity_model({}))
 
     def test_period_recalculates_heart_rate_and_speed_zones_from_fit_samples(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -649,6 +780,8 @@ class PeriodSummaryTests(unittest.TestCase):
             payload = json.loads(output.getvalue())
             self.assertEqual(payload["activity_count"], 1)
             self.assertAlmostEqual(payload["vdot_max"], 38.3, places=1)
+            self.assertEqual(payload["training_type_distribution"], {"race": 1500.0})
+            self.assertEqual(payload["intensity_model"], "mixed")
             self.assertEqual(payload["sampled_zone_time_s"], {"heart_rate": {}, "speed": {}})
             self.assertEqual(payload["sampled_zone_activity_count"], {"heart_rate": 0, "speed": 0})
             self.assertEqual(payload["pr_changes"][0]["prType"], "5K")
