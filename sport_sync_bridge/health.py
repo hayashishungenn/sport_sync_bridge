@@ -41,6 +41,10 @@ _METRIC_ALIASES = {
     "light_sleep_seconds": "light_sleep_seconds",
     "rem_sleep_seconds": "rem_sleep_seconds",
     "awake_sleep_seconds": "awake_sleep_seconds",
+    "restless_sleep_seconds": "restless_sleep_seconds",
+    "time_in_bed_hours": "time_in_bed_hours",
+    "sleep_latency_seconds": "sleep_latency_seconds",
+    "sleep_after_wake_seconds": "sleep_after_wake_seconds",
     "steps": "steps",
     "step_count": "steps",
     "step_goal": "step_goal",
@@ -155,6 +159,10 @@ _DEFAULT_UNITS = {
     "light_sleep_seconds": "s",
     "rem_sleep_seconds": "s",
     "awake_sleep_seconds": "s",
+    "restless_sleep_seconds": "s",
+    "time_in_bed_hours": "h",
+    "sleep_latency_seconds": "s",
+    "sleep_after_wake_seconds": "s",
     "steps": "count",
     "step_goal": "count",
     "floors_goal": "count",
@@ -234,6 +242,10 @@ _HEALTH_DISPLAY_LABELS = {
     "light_sleep_seconds": "浅睡时长",
     "rem_sleep_seconds": "快速眼动睡眠时长",
     "awake_sleep_seconds": "清醒时长",
+    "restless_sleep_seconds": "睡眠躁动时长",
+    "time_in_bed_hours": "卧床时长",
+    "sleep_latency_seconds": "入睡潜伏期",
+    "sleep_after_wake_seconds": "醒后时长",
     "steps": "步数",
     "step_goal": "每日步数目标",
     "floors_goal": "每日爬楼目标",
@@ -487,6 +499,287 @@ def import_intervals_icu_wellness(
             fingerprint=fingerprint,
         )
     return len(pending)
+
+
+def import_google_health_data_points(
+    state_db: StateDB,
+    data_points_by_type: dict[str, list[dict[str, object]]],
+) -> int:
+    if not isinstance(data_points_by_type, dict):
+        raise ValueError("Google Health data points must be grouped by data type")
+
+    payload_fields = {
+        "sleep": "sleep",
+        "weight": "weight",
+        "steps": "steps",
+        "heart-rate": "heartRate",
+    }
+    pending: list[tuple[str, str, float | str, str, str, str]] = []
+    for data_type, records in data_points_by_type.items():
+        if data_type not in payload_fields:
+            raise ValueError(f"Unsupported Google Health data type: {data_type}")
+        if not isinstance(records, list):
+            raise ValueError(f"Google Health {data_type} data points must be a list")
+        for index, record in enumerate(records):
+            if not isinstance(record, dict):
+                raise ValueError(f"Google Health {data_type} data point {index} must be an object")
+            try:
+                canonical_record = json.dumps(
+                    record,
+                    ensure_ascii=False,
+                    sort_keys=True,
+                    separators=(",", ":"),
+                    allow_nan=False,
+                )
+            except (TypeError, ValueError) as exc:
+                raise ValueError(
+                    f"Google Health {data_type} data point {index} is not valid JSON data"
+                ) from exc
+            fingerprint = hashlib.sha256(
+                f"{data_type}\n{canonical_record}".encode("utf-8")
+            ).hexdigest()
+            observed_at, metrics = _google_health_point_observations(
+                data_type,
+                record,
+                payload_fields[data_type],
+                index,
+            )
+            source_label = f"Google Health {data_type}"
+            for metric_name, raw_value, raw_unit in metrics:
+                parsed = _normalize_metric(metric_name, raw_value, raw_unit)
+                if parsed is None:
+                    continue
+                metric, value, unit = parsed
+                pending.append(
+                    (observed_at, metric, value, unit, source_label, fingerprint)
+                )
+
+    state_db.upsert_health_observations(pending)
+    return len(pending)
+
+
+def _google_health_point_observations(
+    data_type: str,
+    record: dict[str, object],
+    payload_field: str,
+    index: int,
+) -> tuple[str, list[tuple[str, object, str]]]:
+    payload = record.get(payload_field)
+    if not isinstance(payload, dict):
+        raise ValueError(
+            f"Google Health {data_type} data point {index} must contain a {payload_field} object"
+        )
+
+    if data_type == "sleep":
+        interval = _google_health_object(payload.get("interval"), "sleep interval")
+        start = _google_health_timestamp(interval.get("startTime"), "sleep startTime")
+        end = _google_health_timestamp(interval.get("endTime"), "sleep endTime")
+        if end <= start:
+            raise ValueError(f"Google Health sleep data point {index} has an invalid interval")
+        metrics = _google_health_sleep_metrics(payload, start, end, index)
+        return end.isoformat(), metrics
+
+    if data_type == "weight":
+        sample_time = _google_health_object(payload.get("sampleTime"), "weight sampleTime")
+        observed_at = _google_health_timestamp(
+            sample_time.get("physicalTime"), "weight physicalTime"
+        )
+        weight_grams = _google_health_number(
+            payload.get("weightGrams"), "weightGrams", minimum=0, maximum=1_000_000
+        )
+        return observed_at.isoformat(), [("weight_kg", weight_grams / 1000, "kg")]
+
+    if data_type == "steps":
+        interval = _google_health_object(payload.get("interval"), "steps interval")
+        start = _google_health_timestamp(interval.get("startTime"), "steps startTime")
+        end = _google_health_timestamp(interval.get("endTime"), "steps endTime")
+        if end <= start:
+            raise ValueError(f"Google Health steps data point {index} has an invalid interval")
+        count = _google_health_integer(payload.get("count"), "steps count", 0, 1_000_000)
+        return end.isoformat(), [("steps", count, "count")]
+
+    sample_time = _google_health_object(payload.get("sampleTime"), "heart-rate sampleTime")
+    observed_at = _google_health_timestamp(
+        sample_time.get("physicalTime"), "heart-rate physicalTime"
+    )
+    beats_per_minute = _google_health_integer(
+        payload.get("beatsPerMinute"), "beatsPerMinute", 1, 300
+    )
+    return observed_at.isoformat(), [("pulse_bpm", beats_per_minute, "bpm")]
+
+
+def _google_health_sleep_metrics(
+    payload: dict[str, object],
+    session_start: datetime,
+    session_end: datetime,
+    index: int,
+) -> list[tuple[str, object, str]]:
+    metrics: list[tuple[str, object, str]] = []
+    summary_value = payload.get("summary")
+    summary: dict[str, object] = {}
+    if summary_value is not None:
+        summary = _google_health_object(summary_value, "sleep summary")
+
+    minutes_in_period = _google_health_optional_integer(
+        summary, "minutesInSleepPeriod", "sleep minutesInSleepPeriod"
+    )
+    minutes_asleep = _google_health_optional_integer(
+        summary, "minutesAsleep", "sleep minutesAsleep"
+    )
+    minutes_awake = _google_health_optional_integer(
+        summary, "minutesAwake", "sleep minutesAwake"
+    )
+    minutes_to_fall_asleep = _google_health_optional_integer(
+        summary, "minutesToFallAsleep", "sleep minutesToFallAsleep"
+    )
+    minutes_after_wake = _google_health_optional_integer(
+        summary, "minutesAfterWakeUp", "sleep minutesAfterWakeUp"
+    )
+    if minutes_in_period is not None:
+        metrics.append(("time_in_bed_hours", minutes_in_period, "min"))
+    if minutes_to_fall_asleep is not None:
+        metrics.append(("sleep_latency_seconds", minutes_to_fall_asleep * 60, "s"))
+    if minutes_after_wake is not None:
+        metrics.append(("sleep_after_wake_seconds", minutes_after_wake * 60, "s"))
+
+    summary_stages: dict[str, float] = {}
+    stage_summaries = summary.get("stagesSummary")
+    if stage_summaries is not None:
+        if not isinstance(stage_summaries, list):
+            raise ValueError(f"Google Health sleep data point {index} stagesSummary must be a list")
+        for stage_index, raw_stage in enumerate(stage_summaries):
+            stage = _google_health_object(
+                raw_stage, f"sleep stage summary {stage_index}"
+            )
+            stage_type = stage.get("type")
+            if not isinstance(stage_type, str) or not stage_type:
+                raise ValueError(
+                    f"Google Health sleep data point {index} stage summary {stage_index} has no type"
+                )
+            minutes = _google_health_integer(
+                stage.get("minutes"), f"sleep stage {stage_type} minutes", 0
+            )
+            summary_stages[stage_type] = summary_stages.get(stage_type, 0) + minutes * 60
+
+    interval_stages: dict[str, float] = {}
+    raw_stages = payload.get("stages")
+    if raw_stages is not None:
+        if not isinstance(raw_stages, list):
+            raise ValueError(f"Google Health sleep data point {index} stages must be a list")
+        for stage_index, raw_stage in enumerate(raw_stages):
+            stage = _google_health_object(raw_stage, f"sleep stage {stage_index}")
+            stage_type = stage.get("type")
+            if not isinstance(stage_type, str) or not stage_type:
+                raise ValueError(
+                    f"Google Health sleep data point {index} stage {stage_index} has no type"
+                )
+            start = _google_health_timestamp(
+                stage.get("startTime"), f"sleep stage {stage_index} startTime"
+            )
+            end = _google_health_timestamp(
+                stage.get("endTime"), f"sleep stage {stage_index} endTime"
+            )
+            if start < session_start or end > session_end or end <= start:
+                raise ValueError(
+                    f"Google Health sleep data point {index} stage {stage_index} is outside its session"
+                )
+            interval_stages[stage_type] = interval_stages.get(stage_type, 0) + (
+                end - start
+            ).total_seconds()
+
+    stage_metrics = {
+        "DEEP": "deep_sleep_seconds",
+        "LIGHT": "light_sleep_seconds",
+        "REM": "rem_sleep_seconds",
+        "AWAKE": "awake_sleep_seconds",
+        "RESTLESS": "restless_sleep_seconds",
+    }
+    for stage_type, metric_name in stage_metrics.items():
+        stage_seconds = summary_stages.get(stage_type)
+        if stage_seconds is None:
+            stage_seconds = interval_stages.get(stage_type)
+        if stage_type == "AWAKE" and minutes_awake is not None:
+            stage_seconds = minutes_awake * 60
+        if stage_seconds is not None:
+            metrics.append((metric_name, stage_seconds, "s"))
+
+    total_sleep_seconds: float | None = None
+    if minutes_asleep is not None:
+        total_sleep_seconds = minutes_asleep * 60
+    else:
+        stage_values = {
+            **interval_stages,
+            **summary_stages,
+        }
+        sleep_stage_values = [
+            stage_values[stage_type]
+            for stage_type in ("DEEP", "LIGHT", "REM", "ASLEEP")
+            if stage_type in stage_values
+        ]
+        if sleep_stage_values:
+            total_sleep_seconds = sum(sleep_stage_values)
+    if total_sleep_seconds is not None:
+        metrics.append(("sleep_hours", total_sleep_seconds, "s"))
+    return metrics
+
+
+def _google_health_object(value: object, field: str) -> dict[str, object]:
+    if not isinstance(value, dict):
+        raise ValueError(f"Google Health {field} must be an object")
+    return value
+
+
+def _google_health_timestamp(value: object, field: str) -> datetime:
+    if not isinstance(value, str) or "T" not in value:
+        raise ValueError(f"Google Health {field} must be an RFC 3339 timestamp")
+    parsed = parse_datetime(value)
+    if parsed is None:
+        raise ValueError(f"Google Health {field} must be an RFC 3339 timestamp")
+    return parsed.astimezone(timezone.utc)
+
+
+def _google_health_optional_integer(
+    payload: dict[str, object], key: str, field: str
+) -> int | None:
+    if key not in payload or payload[key] is None:
+        return None
+    return _google_health_integer(payload[key], field, 0)
+
+
+def _google_health_integer(
+    value: object,
+    field: str,
+    minimum: int,
+    maximum: int = (1 << 63) - 1,
+) -> int:
+    if isinstance(value, bool):
+        raise ValueError(f"Google Health {field} must be an integer")
+    if isinstance(value, int):
+        parsed = value
+    elif isinstance(value, str):
+        try:
+            parsed = int(value.strip())
+        except ValueError as exc:
+            raise ValueError(f"Google Health {field} must be an integer") from exc
+    else:
+        raise ValueError(f"Google Health {field} must be an integer")
+    if parsed < minimum or parsed > maximum:
+        raise ValueError(f"Google Health {field} is outside the supported range")
+    return parsed
+
+
+def _google_health_number(
+    value: object, field: str, *, minimum: float, maximum: float
+) -> float:
+    if isinstance(value, bool):
+        raise ValueError(f"Google Health {field} must be a number")
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"Google Health {field} must be a number") from exc
+    if not math.isfinite(parsed) or parsed < minimum or parsed > maximum:
+        raise ValueError(f"Google Health {field} is outside the supported range")
+    return parsed
 
 
 def import_garmin_user_summaries(
@@ -986,6 +1279,47 @@ def _garmin_sleep_context_before_activity(
     return max(candidates, key=lambda item: item[0])[1]
 
 
+def _google_health_sleep_context_before_activity(
+    observations: list[object],
+) -> dict[str, object] | None:
+    sleep_metrics = {
+        "sleep_hours",
+        "time_in_bed_hours",
+        "deep_sleep_seconds",
+        "light_sleep_seconds",
+        "rem_sleep_seconds",
+        "awake_sleep_seconds",
+        "restless_sleep_seconds",
+        "sleep_latency_seconds",
+        "sleep_after_wake_seconds",
+    }
+    sessions: dict[str, dict[str, object]] = {}
+    for row in observations:
+        if str(row["source_label"]) != "Google Health sleep":
+            continue
+        fingerprint = str(row["fingerprint"])
+        observed_at = str(row["observed_at"])
+        context = sessions.setdefault(
+            fingerprint,
+            {
+                "source": "Google Health",
+                "sleep_end_utc": observed_at,
+            },
+        )
+        metric = str(row["metric"])
+        if metric in sleep_metrics:
+            context[metric] = _health_value(row["value"])
+
+    candidates: list[tuple[datetime, dict[str, object]]] = []
+    for context in sessions.values():
+        sleep_end = parse_datetime(context.get("sleep_end_utc"))
+        if sleep_end is not None and any(metric in context for metric in sleep_metrics):
+            candidates.append((sleep_end, context))
+    if not candidates:
+        return None
+    return max(candidates, key=lambda item: item[0])[1]
+
+
 def summarize_health_for_activity(
     state_db: StateDB,
     activity_start: object,
@@ -1003,9 +1337,8 @@ def summarize_health_for_activity(
         raise ValueError("Activity start time is invalid")
     start = start.astimezone(timezone.utc)
 
-    before = _latest_health_by_metric(
-        state_db.list_health_observations(observed_before=start.isoformat())
-    )
+    observations_before = state_db.list_health_observations(observed_before=start.isoformat())
+    before = _latest_health_by_metric(observations_before)
     after: dict[str, dict[str, object]] = {}
     if activity_end not in (None, ""):
         end = parse_datetime(activity_end)
@@ -1021,7 +1354,21 @@ def summarize_health_for_activity(
                 observed_before=end_of_day.isoformat(),
             )
         )
-    sleep_context = _garmin_sleep_context_before_activity(state_db, start)
+    garmin_sleep_context = _garmin_sleep_context_before_activity(state_db, start)
+    google_health_sleep_context = _google_health_sleep_context_before_activity(
+        observations_before
+    )
+    sleep_context_candidates = [
+        context
+        for context in (garmin_sleep_context, google_health_sleep_context)
+        if context is not None
+    ]
+    sleep_context = max(
+        sleep_context_candidates,
+        key=lambda context: parse_datetime(context.get("sleep_end_utc"))
+        or datetime.min.replace(tzinfo=timezone.utc),
+        default=None,
+    )
     if sleep_context is not None:
         sleep_metric_pairs = (
             ("sleep_hours", "sleep_hours"),
@@ -1029,6 +1376,10 @@ def summarize_health_for_activity(
             ("light_sleep_seconds", "light_sleep_seconds"),
             ("rem_sleep_seconds", "rem_sleep_seconds"),
             ("awake_sleep_seconds", "awake_sleep_seconds"),
+            ("restless_sleep_seconds", "restless_sleep_seconds"),
+            ("time_in_bed_hours", "time_in_bed_hours"),
+            ("sleep_latency_seconds", "sleep_latency_seconds"),
+            ("sleep_after_wake_seconds", "sleep_after_wake_seconds"),
             ("hrv_ms", "sleep_avg_hrv_ms"),
             ("hrv_weekly_average_ms", "hrv_7d_baseline_ms"),
             ("avg_sleep_spo2_percent", "sleep_avg_spo2_percent"),
@@ -1133,10 +1484,20 @@ def _normalize_metric(name: object, raw_value: object, raw_unit: object) -> tupl
     elif metric == "height_cm" and lowered_unit in {"m", "meter", "meters"}:
         value *= 100
         unit = "cm"
-    elif metric == "sleep_hours" and lowered_unit in {"min", "minute", "minutes"}:
+    elif metric in {"sleep_hours", "time_in_bed_hours"} and lowered_unit in {
+        "min",
+        "minute",
+        "minutes",
+    }:
         value /= 60
         unit = "h"
-    elif metric == "sleep_hours" and lowered_unit in {"s", "sec", "secs", "second", "seconds"}:
+    elif metric in {"sleep_hours", "time_in_bed_hours"} and lowered_unit in {
+        "s",
+        "sec",
+        "secs",
+        "second",
+        "seconds",
+    }:
         value /= 3600
         unit = "h"
     elif metric in {

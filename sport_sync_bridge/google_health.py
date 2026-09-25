@@ -3,7 +3,7 @@ from __future__ import annotations
 import hmac
 import json
 import tempfile
-from datetime import datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 from urllib.parse import quote
@@ -16,10 +16,38 @@ from .state import StateDB
 from .utils import fit_signature_ok, parse_datetime, safe_filename
 
 
-GOOGLE_HEALTH_SCOPES = (
+GOOGLE_HEALTH_ACTIVITY_SCOPES = (
     "https://www.googleapis.com/auth/googlehealth.activity_and_fitness.readonly",
     "https://www.googleapis.com/auth/googlehealth.location.readonly",
 )
+GOOGLE_HEALTH_SCOPES = (
+    *GOOGLE_HEALTH_ACTIVITY_SCOPES,
+    "https://www.googleapis.com/auth/googlehealth.sleep.readonly",
+    "https://www.googleapis.com/auth/googlehealth.health_metrics_and_measurements.readonly",
+)
+GOOGLE_HEALTH_HEALTH_DATA_TYPES = ("sleep", "weight", "steps", "heart-rate")
+_GOOGLE_HEALTH_HEALTH_DATA_TYPE_CONFIG = {
+    "sleep": (
+        "sleep.interval.civil_end_time",
+        25,
+        "https://www.googleapis.com/auth/googlehealth.sleep.readonly",
+    ),
+    "weight": (
+        "weight.sample_time.civil_time",
+        10000,
+        "https://www.googleapis.com/auth/googlehealth.health_metrics_and_measurements.readonly",
+    ),
+    "steps": (
+        "steps.interval.civil_start_time",
+        10000,
+        "https://www.googleapis.com/auth/googlehealth.activity_and_fitness.readonly",
+    ),
+    "heart-rate": (
+        "heart_rate.sample_time.civil_time",
+        10000,
+        "https://www.googleapis.com/auth/googlehealth.health_metrics_and_measurements.readonly",
+    ),
+}
 
 
 class GoogleHealthClient:
@@ -47,7 +75,12 @@ class GoogleHealthClient:
             payload = json.loads(raw_credentials)
         except (TypeError, ValueError):
             return False
-        return isinstance(payload, dict) and bool(payload.get("refresh_token"))
+        if not isinstance(payload, dict) or not payload.get("refresh_token"):
+            return False
+        scopes = payload.get("scopes")
+        return isinstance(scopes, list) and set(GOOGLE_HEALTH_ACTIVITY_SCOPES).issubset(
+            scope for scope in scopes if isinstance(scope, str)
+        )
 
     def build_authorize_url(self) -> str:
         flow = self._new_flow()
@@ -84,7 +117,7 @@ class GoogleHealthClient:
         missing_scopes = set(GOOGLE_HEALTH_SCOPES) - granted_scopes
         if missing_scopes:
             raise RuntimeError(
-                "Google Health authorization must include both activity and location read-only permissions"
+                "Google Health authorization must include activity, location, sleep, and health-measurement read-only permissions"
             )
         self._save_credentials(credentials)
         self.state_db.set_value(self.oauth_state_key, "")
@@ -128,6 +161,79 @@ class GoogleHealthClient:
         if not isinstance(content, bytes) or not content:
             raise RuntimeError(f"Google Health response for {path} is empty")
         return content
+
+    def list_health_data_points(
+        self,
+        data_type: str,
+        start_date: str,
+        end_date: str,
+    ) -> list[dict[str, Any]]:
+        config = _GOOGLE_HEALTH_HEALTH_DATA_TYPE_CONFIG.get(data_type)
+        if config is None:
+            raise ValueError(f"Unsupported Google Health data type: {data_type}")
+        start, end = validate_google_health_date_range(start_date, end_date)
+
+        filter_field, page_size, required_scope = config
+        self._require_scopes({required_scope})
+        exclusive_end = (end + timedelta(days=1)).isoformat()
+        filter_value = (
+            f'{filter_field} >= "{start.isoformat()}" '
+            f'AND {filter_field} < "{exclusive_end}"'
+        )
+        rows: list[dict[str, Any]] = []
+        page_token: str | None = None
+        seen_page_tokens: set[str] = set()
+        while True:
+            params: dict[str, str | int] = {"pageSize": page_size, "filter": filter_value}
+            if page_token:
+                params["pageToken"] = page_token
+            payload = self.get_json(
+                f"/users/me/dataTypes/{data_type}/dataPoints",
+                params=params,
+            )
+            page_rows = payload.get("dataPoints")
+            if not isinstance(page_rows, list):
+                raise RuntimeError(
+                    f"Google Health {data_type} response must include a dataPoints list"
+                )
+            for index, row in enumerate(page_rows):
+                if not isinstance(row, dict):
+                    raise RuntimeError(
+                        f"Google Health {data_type} data point {index} must be a JSON object"
+                    )
+                rows.append(row)
+
+            next_page_token = payload.get("nextPageToken")
+            if next_page_token in (None, ""):
+                break
+            if not isinstance(next_page_token, str):
+                raise RuntimeError("Google Health nextPageToken must be a string")
+            if next_page_token in seen_page_tokens:
+                raise RuntimeError("Google Health returned a repeated pagination token")
+            seen_page_tokens.add(next_page_token)
+            page_token = next_page_token
+        return rows
+
+    def _require_scopes(self, required_scopes: set[str]) -> None:
+        missing_scopes = required_scopes - self._stored_scopes()
+        if missing_scopes:
+            raise RuntimeError(
+                "Fitbit authorization is missing Google Health read-only permissions; "
+                "run `python sync.py google-health-auth-url` and authorize again"
+            )
+
+    def _stored_scopes(self) -> set[str]:
+        raw_credentials = self.state_db.get_value(self.credentials_key)
+        try:
+            payload = json.loads(raw_credentials) if raw_credentials else None
+        except (TypeError, ValueError):
+            return set()
+        if not isinstance(payload, dict):
+            return set()
+        scopes = payload.get("scopes")
+        if not isinstance(scopes, list):
+            return set()
+        return {scope for scope in scopes if isinstance(scope, str)}
 
     def _get(
         self,
@@ -216,7 +322,12 @@ class GoogleHealthClient:
                 "client_secret": self.config.google_health_client_secret,
                 "token_uri": self.token_uri,
             }
-            return Credentials.from_authorized_user_info(info, scopes=list(GOOGLE_HEALTH_SCOPES))
+            stored_scopes = stored.get("scopes")
+            if not isinstance(stored_scopes, list) or not stored_scopes or any(
+                not isinstance(scope, str) for scope in stored_scopes
+            ):
+                raise ValueError("Stored Google Health scopes are invalid")
+            return Credentials.from_authorized_user_info(info, scopes=stored_scopes)
         except ImportError as exc:
             raise RuntimeError("google-auth is required for Google Health API access") from exc
         except (KeyError, TypeError, ValueError) as exc:
@@ -408,3 +519,21 @@ def _error_message(response: Any) -> str | None:
 
 def _is_invalid_grant(error: Exception) -> bool:
     return "invalid_grant" in str(error).casefold()
+
+
+def _parse_iso_date(value: str, field: str) -> date:
+    try:
+        parsed = date.fromisoformat(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"Google Health {field} must use YYYY-MM-DD") from exc
+    if parsed.isoformat() != value:
+        raise ValueError(f"Google Health {field} must use YYYY-MM-DD")
+    return parsed
+
+
+def validate_google_health_date_range(start_date: str, end_date: str) -> tuple[date, date]:
+    start = _parse_iso_date(start_date, "start-date")
+    end = _parse_iso_date(end_date, "end-date")
+    if end < start:
+        raise ValueError("Google Health end date must be on or after the start date")
+    return start, end

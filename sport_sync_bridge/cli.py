@@ -85,6 +85,11 @@ from .virtual_ride import (
 from .config import AppConfig
 from .ecg_signal import EcgSignalNormalizer, analyze_bigrun_ecg_signal
 from .engine import SyncEngine
+from .google_health import (
+    GOOGLE_HEALTH_HEALTH_DATA_TYPES,
+    GoogleHealthClient,
+    validate_google_health_date_range,
+)
 from .intervals_icu import IntervalsIcuSource
 from .health_sources import (
     GARMIN_HEALTH_DETAIL_ENDPOINTS,
@@ -111,6 +116,7 @@ from .force_vector_analysis import (
 from .health import (
     import_garmin_health_details,
     import_garmin_user_summaries,
+    import_google_health_data_points,
     import_intervals_icu_wellness,
     format_health_summary_text,
     import_health_csv,
@@ -640,6 +646,19 @@ def build_parser() -> argparse.ArgumentParser:
     )
     health_intervals_wellness.add_argument("--start-date", required=True, help="Start date, YYYY-MM-DD")
     health_intervals_wellness.add_argument("--end-date", required=True, help="End date, YYYY-MM-DD")
+    health_fitbit_fetch = health_actions.add_parser(
+        "fetch-fitbit",
+        help="Fetch Fitbit sleep, weight, steps, or heart-rate data from Google Health",
+    )
+    health_fitbit_fetch.add_argument(
+        "--dataset",
+        action="append",
+        choices=GOOGLE_HEALTH_HEALTH_DATA_TYPES,
+        required=True,
+        help="Repeat for each Google Health dataset to import",
+    )
+    health_fitbit_fetch.add_argument("--start-date", required=True, help="Start date, YYYY-MM-DD")
+    health_fitbit_fetch.add_argument("--end-date", required=True, help="End date, YYYY-MM-DD")
     health_summary = health_actions.add_parser("summary", help="Show latest health measurements")
     health_summary.add_argument("--format", choices=["json", "text"], default="json")
     health_readiness = health_actions.add_parser("readiness", help="Show imported training readiness history")
@@ -1439,6 +1458,30 @@ def _run_intervals_icu_wellness_fetch(args: argparse.Namespace, config: AppConfi
     return 0
 
 
+def _run_fitbit_health_fetch(args: argparse.Namespace, config: AppConfig) -> int:
+    start_date, end_date = validate_google_health_date_range(
+        args.start_date, args.end_date
+    )
+    state = StateDB(config.db_path)
+    try:
+        client = GoogleHealthClient(config, state)
+        data_points = {
+            dataset: client.list_health_data_points(
+                dataset,
+                start_date.isoformat(),
+                end_date.isoformat(),
+            )
+            for dataset in dict.fromkeys(args.dataset)
+        }
+        imported = import_google_health_data_points(state, data_points)
+    finally:
+        state.close()
+    fetched = sum(len(records) for records in data_points.values())
+    print(f"data_points_fetched={fetched}")
+    print(f"observations_processed={imported}")
+    return 0
+
+
 def _run_local_command(args: argparse.Namespace, config: AppConfig) -> int:
     if args.command == "ble":
         return _run_ble_command(args, config)
@@ -1877,6 +1920,8 @@ def _run_local_command(args: argparse.Namespace, config: AppConfig) -> int:
             return _run_garmin_health_detail_fetch(args, config)
         if args.health_action == "fetch-intervals-wellness":
             return _run_intervals_icu_wellness_fetch(args, config)
+        if args.health_action == "fetch-fitbit":
+            return _run_fitbit_health_fetch(args, config)
         state = StateDB(config.db_path)
         try:
             if args.health_action == "import":

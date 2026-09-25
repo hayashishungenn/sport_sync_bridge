@@ -217,9 +217,9 @@ python sync.py sync --source polar --target garmin --dry-run
 
 Polar 官方 API 目前只返回用户注册本应用之后上传到 Flow、且最近 30 天内的活动。已授权但未同意必要数据权限时，服务端会拒绝请求。访问令牌被撤销后需重新运行授权流程。
 
-### Fitbit 活动来源（Google Health API）
+### Fitbit 数据来源（Google Health API）
 
-Fitbit AOT 中的 Fitbit Web API 连接需要迁移到 Google Health API。本项目通过 Google 官方 OAuth 客户端库授权，只请求活动与位置只读权限。先在 Google Cloud 启用 Google Health API，创建 Web application OAuth 客户端，把 `https://www.google.com` 加入授权重定向 URI，并允许 `activity_and_fitness.readonly` 与 `location.readonly` 两个 scope。应用处于 Testing 状态时，也要把自己的 Google 账号加入测试用户。External + Testing 项目的授权和刷新令牌会在 7 天后过期，需要重新授权。
+Fitbit AOT 中的 Fitbit Web API 连接需要迁移到 Google Health API。本项目通过 Google 官方 OAuth 客户端库授权，请求活动、位置、睡眠和健康测量只读权限。先在 Google Cloud 启用 Google Health API，创建 Web application OAuth 客户端，把 `https://www.google.com` 加入授权重定向 URI，并允许 `activity_and_fitness.readonly`、`location.readonly`、`sleep.readonly` 与 `health_metrics_and_measurements.readonly` 这些 scope。应用处于 Testing 状态时，也要把自己的 Google 账号加入测试用户。External + Testing 项目的授权和刷新令牌会在 7 天后过期，需要重新授权。
 
 在 `.env` 中设置 `GOOGLE_HEALTH_CLIENT_ID`、`GOOGLE_HEALTH_CLIENT_SECRET` 和与 Google Cloud 完全一致的 `GOOGLE_HEALTH_REDIRECT_URI`。活动列表使用 Google Health 的分页接口，轨迹通过 [`exportExerciseTcx`](https://developers.google.com/health/reference/rest/v4/users.dataTypes.dataPoints/exportExerciseTcx) 导出 TCX，再转为同步管线使用的 FIT。此导出接口要求同时授予活动和位置权限。缺少 GPS 轨迹的锻炼无法进入当前 FIT 同步流程。OAuth 凭据保存在本地 SQLite，不会写入 APK 或 Git。
 
@@ -228,9 +228,10 @@ python sync.py google-health-auth-url
 python sync.py google-health-exchange --code 回调中的code --state 回调中的state
 python sync.py check --source fitbit --target garmin
 python sync.py sync --source fitbit --target garmin --dry-run
+python sync.py health fetch-fitbit --dataset sleep --dataset weight --start-date 2026-08-01 --end-date 2026-08-31
 ```
 
-当前移植范围覆盖 Fitbit 活动读取与轨迹导出；AOT 中的睡眠、体重读取及 Fitbit 活动上传尚未接入。Google Health API 使用独立 OAuth 客户端，[旧 Fitbit Web API 令牌不能直接复用](https://developers.google.com/health/migration/data-access)。公开分发受限数据权限需要 Google 应用验证；Google 可能要求 CASA 第三方安全评估，官方列出的费用为 500–4,500 美元，取决于应用复杂度，详见[验证说明](https://developers.google.com/health/app-verification)。本项目只说明个人测试用法，不包含该发布流程。
+`health fetch-fitbit` 支持重复 `--dataset` 选择 `sleep`、`weight`、`steps`、`heart-rate`，日期范围包含首尾两天；睡眠阶段、体重、步数和心率样本会进入本地健康记录，并供健康摘要和活动分析使用。授权刷新令牌只保存在本地 SQLite。Google Health API 使用独立 OAuth 客户端，[旧 Fitbit Web API 令牌不能直接复用](https://developers.google.com/health/migration/data-access)。公开分发受限数据权限需要 Google 应用验证；Google 可能要求 CASA 第三方安全评估，官方列出的费用为 500–4,500 美元，取决于应用复杂度，详见[验证说明](https://developers.google.com/health/app-verification)。本项目只说明个人测试用法，不包含该发布流程。
 
 ### 5. 首次同步
 

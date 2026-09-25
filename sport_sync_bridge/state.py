@@ -411,6 +411,20 @@ class StateDB:
         )
         self.connection.commit()
 
+    def upsert_health_observations(
+        self,
+        observations: list[tuple[str, str, float | str, str, str, str]],
+    ) -> None:
+        if not observations:
+            return
+        with self.connection:
+            self.connection.executemany(
+                "INSERT OR IGNORE INTO health_observations ("
+                "observed_at, metric, value, unit, source_label, fingerprint) "
+                "VALUES (?, ?, ?, ?, ?, ?)",
+                observations,
+            )
+
     def list_health_observations(
         self,
         metric: str | None = None,
