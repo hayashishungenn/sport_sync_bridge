@@ -118,7 +118,13 @@ from .social_feed import SocialFeedClient, SocialFeedError
 from .social_friends import NakamaFriendsClient, NakamaFriendsError
 from .state import StateDB
 from .training_balance import calculate_training_balance, format_training_balance
-from .swim_css import calculate_swim_css, format_swim_css, parse_swim_time
+from .swim_css import (
+    calculate_swim_css,
+    calculate_swim_rest_seconds,
+    format_swim_css,
+    format_swim_rest,
+    parse_swim_time,
+)
 from .vdot import analyze_running_activities, format_vdot_report
 from .training import (
     export_training_plan_ics,
@@ -243,6 +249,11 @@ def build_parser() -> argparse.ArgumentParser:
     library_swim_css.add_argument("--time-400m", required=True, help="400 m time as M:SS or seconds")
     library_swim_css.add_argument("--pool-length", choices=[25, 50], type=int, default=25)
     library_swim_css.add_argument("--format", choices=["json", "txt"], default="json")
+    library_swim_rest = library_actions.add_parser(
+        "swim-rest", help="Calculate the default swim interval rest from its distance"
+    )
+    library_swim_rest.add_argument("distance_m", type=int, help="Swim interval distance in meters")
+    library_swim_rest.add_argument("--format", choices=["json", "txt"], default="json")
     library_running_dynamics = library_actions.add_parser(
         "running-dynamics", help="Analyze a local accelerometer and GPS event stream"
     )
@@ -1281,6 +1292,11 @@ def _run_local_command(args: argparse.Namespace, config: AppConfig) -> int:
                     pool_length_m=args.pool_length,
                 )
                 print(format_swim_css(result, args.format), end="")
+                return 0
+
+            if args.library_action == "swim-rest":
+                rest_seconds = calculate_swim_rest_seconds(args.distance_m)
+                print(format_swim_rest(args.distance_m, rest_seconds, args.format), end="")
                 return 0
 
             if args.library_action == "report":

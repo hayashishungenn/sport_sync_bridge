@@ -64,6 +64,16 @@ def calculate_swim_css(
     }
 
 
+def calculate_swim_rest_seconds(distance_m: int) -> int:
+    if isinstance(distance_m, bool) or not isinstance(distance_m, int) or distance_m <= 0:
+        raise ValueError("Swim interval distance must be a positive whole number of meters")
+
+    fixed_rests = {25: 12, 50: 20, 100: 25, 200: 35, 400: 50, 800: 60}
+    if distance_m in fixed_rests:
+        return fixed_rests[distance_m]
+    return math.floor(distance_m * 0.075 + 0.5)
+
+
 def format_swim_css(result: dict[str, object], output_format: str) -> str:
     if output_format == "json":
         return json.dumps(result, ensure_ascii=False, indent=2) + "\n"
@@ -85,6 +95,15 @@ def format_swim_css(result: dict[str, object], output_format: str) -> str:
             for distance, seconds in splits.items()
         )
     return "\n".join(lines) + "\n"
+
+
+def format_swim_rest(distance_m: int, rest_seconds: int, output_format: str) -> str:
+    result = {"distance_m": distance_m, "rest_seconds": rest_seconds}
+    if output_format == "json":
+        return json.dumps(result, ensure_ascii=False, indent=2) + "\n"
+    if output_format != "txt":
+        raise ValueError(f"Unsupported swim rest report format: {output_format}")
+    return f"间歇距离：{distance_m} 米\n默认休息时间：{rest_seconds} 秒\n"
 
 
 def _positive_finite(value: float, label: str) -> float:

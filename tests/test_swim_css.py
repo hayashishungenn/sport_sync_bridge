@@ -10,7 +10,13 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 from sport_sync_bridge.cli import main
-from sport_sync_bridge.swim_css import calculate_swim_css, format_swim_css, parse_swim_time
+from sport_sync_bridge.swim_css import (
+    calculate_swim_css,
+    calculate_swim_rest_seconds,
+    format_swim_css,
+    format_swim_rest,
+    parse_swim_time,
+)
 
 
 class SwimCssTests(unittest.TestCase):
@@ -47,6 +53,27 @@ class SwimCssTests(unittest.TestCase):
         self.assertEqual(json.loads(format_swim_css(result, "json"))["css_pace_per_100m"], "1:30")
         self.assertIn("50 米泳池目标：0:45", format_swim_css(result, "txt"))
 
+    def test_calculates_garsync_default_swim_rests(self) -> None:
+        expected = {25: 12, 50: 20, 100: 25, 200: 35, 400: 50, 800: 60, 1600: 120}
+        for distance_m, rest_seconds in expected.items():
+            with self.subTest(distance_m=distance_m):
+                self.assertEqual(calculate_swim_rest_seconds(distance_m), rest_seconds)
+        self.assertEqual(calculate_swim_rest_seconds(150), 11)
+
+    def test_rejects_invalid_swim_rest_distance_and_format(self) -> None:
+        for distance_m in (0, -25, True, 25.0):
+            with self.subTest(distance_m=distance_m), self.assertRaises(ValueError):
+                calculate_swim_rest_seconds(distance_m)
+        with self.assertRaisesRegex(ValueError, "Unsupported"):
+            format_swim_rest(100, 25, "csv")
+
+    def test_formats_swim_rest_reports(self) -> None:
+        self.assertEqual(
+            json.loads(format_swim_rest(100, 25, "json")),
+            {"distance_m": 100, "rest_seconds": 25},
+        )
+        self.assertIn("默认休息时间：25 秒", format_swim_rest(100, 25, "txt"))
+
     def test_cli_runs_css_calculation_without_accounts(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             data_dir = Path(temporary) / ".data"
@@ -80,6 +107,27 @@ class SwimCssTests(unittest.TestCase):
             result = json.loads(output.getvalue())
             self.assertEqual(result["css_seconds_per_100m"], 90)
             self.assertEqual(result["pool_length_m"], 50)
+
+    def test_cli_runs_swim_rest_without_accounts(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            data_dir = Path(temporary) / ".data"
+            data_dir.mkdir()
+            config = SimpleNamespace(
+                data_dir=data_dir,
+                db_path=data_dir / "sync_state.db",
+                log_level="ERROR",
+                log_path=data_dir / "sync.log",
+            )
+            output = io.StringIO()
+            with (
+                patch("sport_sync_bridge.cli.AppConfig.load", return_value=config),
+                patch("sport_sync_bridge.cli.configure_logging"),
+                contextlib.redirect_stdout(output),
+            ):
+                status = main(["library", "swim-rest", "100"])
+
+            self.assertEqual(status, 0)
+            self.assertEqual(json.loads(output.getvalue()), {"distance_m": 100, "rest_seconds": 25})
 
 
 if __name__ == "__main__":
