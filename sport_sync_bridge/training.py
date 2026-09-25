@@ -197,47 +197,60 @@ def export_training_plan_ics(state_db: StateDB, plan_id: str, output_path: Path)
     return output_path
 
 
-def list_workout_templates(sport_type: str | None = None) -> list[WorkoutTemplate]:
+def list_workout_templates(
+    sport_type: str | None = None,
+    *,
+    generated_dir: Path | None = None,
+) -> list[WorkoutTemplate]:
     templates: list[WorkoutTemplate] = []
-    if not WORKOUT_DIR.is_dir():
-        return templates
-    for metadata_path in sorted(WORKOUT_DIR.glob("*.fit.meta")):
-        fit_path = metadata_path.with_suffix("")
-        if not fit_path.is_file():
+    directories = [WORKOUT_DIR]
+    if generated_dir is not None and generated_dir.resolve() != WORKOUT_DIR.resolve():
+        directories.append(generated_dir)
+    for directory in directories:
+        if not directory.is_dir():
             continue
-        try:
-            metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError) as exc:
-            raise ValueError(f"Invalid workout template metadata: {metadata_path.name}") from exc
-        if not isinstance(metadata, dict):
-            raise ValueError(f"Invalid workout template metadata: {metadata_path.name}")
-        sport = str(metadata.get("sportType") or "unknown")
-        if sport_type and sport.lower() != sport_type.lower():
-            continue
-        steps = metadata.get("steps") if isinstance(metadata.get("steps"), list) else []
-        templates.append(
-            WorkoutTemplate(
-                template_id=str(metadata.get("id") or fit_path.stem),
-                name=str(metadata.get("name") or fit_path.stem),
-                sport_type=sport,
-                estimated_duration_s=_optional_number(metadata.get("estimatedDuration")),
-                estimated_distance_m=_optional_number(metadata.get("estimatedDistance")),
-                steps=tuple(step for step in steps if isinstance(step, dict)),
-                fit_path=fit_path,
+        for metadata_path in sorted(directory.glob("*.fit.meta")):
+            fit_path = metadata_path.with_suffix("")
+            if not fit_path.is_file():
+                continue
+            try:
+                metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError) as exc:
+                raise ValueError(f"Invalid workout template metadata: {metadata_path.name}") from exc
+            if not isinstance(metadata, dict):
+                raise ValueError(f"Invalid workout template metadata: {metadata_path.name}")
+            sport = str(metadata.get("sportType") or "unknown")
+            if sport_type and sport.lower() != sport_type.lower():
+                continue
+            steps = metadata.get("steps") if isinstance(metadata.get("steps"), list) else []
+            templates.append(
+                WorkoutTemplate(
+                    template_id=str(metadata.get("id") or fit_path.stem),
+                    name=str(metadata.get("name") or fit_path.stem),
+                    sport_type=sport,
+                    estimated_duration_s=_optional_number(metadata.get("estimatedDuration")),
+                    estimated_distance_m=_optional_number(metadata.get("estimatedDistance")),
+                    steps=tuple(step for step in steps if isinstance(step, dict)),
+                    fit_path=fit_path,
+                )
             )
-        )
-    return templates
+    return sorted(templates, key=lambda item: (item.name.casefold(), item.template_id))
 
 
-def get_workout_template(identifier: str) -> WorkoutTemplate:
-    for template in list_workout_templates():
+def get_workout_template(identifier: str, *, generated_dir: Path | None = None) -> WorkoutTemplate:
+    for template in list_workout_templates(generated_dir=generated_dir):
         if identifier in {template.template_id, template.fit_path.stem}:
             return template
     raise ValueError(f"Workout template was not found: {identifier}")
 
 
-def export_workout_template(identifier: str, output_path: Path) -> Path:
-    template = get_workout_template(identifier)
+def export_workout_template(
+    identifier: str,
+    output_path: Path,
+    *,
+    generated_dir: Path | None = None,
+) -> Path:
+    template = get_workout_template(identifier, generated_dir=generated_dir)
     output_path = output_path.expanduser().resolve()
     if output_path.suffix.lower() != ".fit":
         raise ValueError("Workout export path must end in .fit")

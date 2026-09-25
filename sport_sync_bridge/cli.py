@@ -21,6 +21,12 @@ from .activity_analysis import (
     write_ai_analysis_markdown,
 )
 from .ai_training_plan import build_ai_training_plan_prompt, normalize_ai_training_plan
+from .ai_workout import (
+    build_ai_single_workout_prompts,
+    make_workout_output_path,
+    normalize_ai_workout,
+    write_ai_workout_fit,
+)
 from .activity_charts import write_activity_charts
 from .activity_map import write_route_map
 from .activity_poster import POSTER_LAYOUTS, POSTER_METRICS, POSTER_RATIOS, write_activity_poster
@@ -429,6 +435,33 @@ def build_parser() -> argparse.ArgumentParser:
     workouts_export = workouts_actions.add_parser("export", help="Copy a workout FIT template")
     workouts_export.add_argument("workout_id")
     workouts_export.add_argument("--output", type=Path, required=True)
+    workouts_generate = workouts_actions.add_parser(
+        "generate", help="Generate one structured workout with the configured AI"
+    )
+    workouts_generate.add_argument("--sport", required=True, choices=["running", "cycling", "swimming"])
+    workouts_generate.add_argument("--task", required=True, help="Workout request or session description")
+    workouts_generate.add_argument(
+        "--target-mode",
+        choices=["pace", "heart-rate", "power", "mixed"],
+        default="mixed",
+        help="Preferred target type (default: mixed)",
+    )
+    workouts_generate.add_argument("--target-duration", help="Optional target duration, such as 45min")
+    workouts_generate.add_argument("--target-distance", help="Optional target distance, such as 10km")
+    workouts_generate.add_argument("--target-pace", help="Optional target pace, such as 4:30/km")
+    workouts_generate.add_argument("--target-heart-rate", help="Optional target heart-rate zone or bpm")
+    workouts_generate.add_argument("--target-tss", type=float, help="Optional target training stress score")
+    workouts_generate.add_argument("--athlete-context", help="Optional athlete profile or training context")
+    workouts_generate.add_argument(
+        "--feedback", action="append", default=[], help="Feedback to apply; may be supplied more than once"
+    )
+    workouts_generate.add_argument(
+        "--language", default="zh-CN", type=validate_ai_language_code, help="Workout language (default: zh-CN)"
+    )
+    workouts_generate.add_argument("--output", type=Path, help="FIT output path (default: data/generated_workouts)")
+    workouts_generate.add_argument(
+        "--prompt-only", action="store_true", help="Print the prompts without contacting the AI service"
+    )
 
     health_parser = subparsers.add_parser("health", help="Import and summarize local health measurements")
     health_actions = health_parser.add_subparsers(dest="health_action", required=True)
@@ -1173,8 +1206,10 @@ def _run_local_command(args: argparse.Namespace, config: AppConfig) -> int:
             state.close()
 
     if args.command == "workouts":
+        if args.workouts_action == "generate":
+            return _run_ai_workout_generation(args, config)
         if args.workouts_action == "list":
-            templates = list_workout_templates(args.sport)
+            templates = list_workout_templates(args.sport, generated_dir=config.data_dir / "generated_workouts")
             for workout in templates:
                 print(
                     json.dumps(
@@ -1192,7 +1227,9 @@ def _run_local_command(args: argparse.Namespace, config: AppConfig) -> int:
             print(f"workouts={len(templates)}")
             return 0
         if args.workouts_action == "show":
-            workout = get_workout_template(args.workout_id)
+            workout = get_workout_template(
+                args.workout_id, generated_dir=config.data_dir / "generated_workouts"
+            )
             print(
                 json.dumps(
                     {
@@ -1208,7 +1245,11 @@ def _run_local_command(args: argparse.Namespace, config: AppConfig) -> int:
                 )
             )
             return 0
-        output_path = export_workout_template(args.workout_id, args.output)
+        output_path = export_workout_template(
+            args.workout_id,
+            args.output,
+            generated_dir=config.data_dir / "generated_workouts",
+        )
         print(f"output={output_path}")
         return 0
 
@@ -1888,6 +1929,59 @@ def _run_ai_training_plan_generation(args: argparse.Namespace, config: AppConfig
                 "scheduled_items": len(schedule),
                 "workout_items": sum(item["item_type"] == "workout" for item in schedule),
                 "plan_json": str(output_path),
+            },
+            ensure_ascii=False,
+        )
+    )
+    return 0
+
+
+def _run_ai_workout_generation(args: argparse.Namespace, config: AppConfig) -> int:
+    system_prompt, user_prompt = build_ai_single_workout_prompts(
+        sport=args.sport,
+        task=args.task,
+        target_mode=args.target_mode.replace("-", "_"),
+        target_duration=args.target_duration,
+        target_distance=args.target_distance,
+        target_pace=args.target_pace,
+        target_heart_rate=args.target_heart_rate,
+        target_tss=args.target_tss,
+        athlete_context=args.athlete_context,
+        feedback=args.feedback,
+        language=args.language,
+    )
+    if args.prompt_only:
+        print(f"SYSTEM PROMPT\n{system_prompt}\n\nUSER PROMPT\n{user_prompt}")
+        return 0
+    if not config.ai_api_base_url or not config.ai_model:
+        raise ValueError("Set AI_API_BASE_URL and AI_MODEL before requesting an AI workout")
+
+    from .activity_analysis import request_ai_analysis
+
+    response = request_ai_analysis(
+        base_url=config.ai_api_base_url,
+        model=config.ai_model,
+        api_key=config.ai_api_key,
+        prompt=user_prompt,
+        timeout_seconds=180,
+        system_prompt=system_prompt,
+        temperature=0.4,
+    )
+    workout = normalize_ai_workout(response, sport=args.sport)
+    output_path = args.output.expanduser().resolve() if args.output is not None else make_workout_output_path(
+        workout, config.data_dir / "generated_workouts"
+    )
+    written = write_ai_workout_fit(workout, output_path)
+    print(
+        json.dumps(
+            {
+                "workout_id": workout["workoutId"],
+                "name": workout["name"],
+                "sport": workout["sportType"],
+                "fit_file": str(written),
+                "metadata_file": f"{written}.meta",
+                "estimated_duration_s": workout["estimatedDuration"],
+                "estimated_distance_m": workout["estimatedDistance"],
             },
             ensure_ascii=False,
         )

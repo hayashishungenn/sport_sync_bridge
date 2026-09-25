@@ -274,9 +274,12 @@ python sync.py plans export <计划ID前缀> --output .\training-plan.ics
 python sync.py workouts list --sport CYCLING
 python sync.py workouts show <课表ID>
 python sync.py workouts export <课表ID> --output .\workout.fit
+python sync.py workouts generate --sport running --task "节奏跑，间歇后放松" --target-mode pace --target-duration 45min --prompt-only
 ```
 
 `plans generate` 使用已配置的 OpenAI 兼容 Chat Completions 接口生成并安装本地训练计划，JSON 副本默认保存到 `.data/generated_plans/`。支持跑步、骑行、游泳、铁人三项和冬季两项；可补充赛事、目标时间、当前水平及个人偏好。命令会校验完整周数、每周训练日和运动类型。`--prompt-only` 不调用模型；默认不会发送本地活动历史，只有指定 `--include-history` 才发送最近 12 周的汇总数据，不含活动名称、路线或坐标。
+
+`workouts generate` 用同一个 AI 接口按跑步、骑行或游泳请求生成一个结构化课表，并写成 Garmin FIT workout 文件。默认文件和可浏览的 JSON 元数据保存在 `.data/generated_workouts/`；`workouts list/show/export` 也会读取这些生成文件。可用 `--target-mode`、目标时长/距离/配速/心率/TSS、`--athlete-context` 和重复的 `--feedback` 提供训练要求。`--prompt-only` 只打印 system/user 提示词；FIT 无法直接编码的目标会保留在步骤备注和元数据中，重复组使用 FIT repeat 控制步骤。
 
 健康指标可从 UTF-8 CSV 导入，支持 `date,metric,value,unit` 长表格式及带日期列的宽表。指标包括体重、身高、静息心率、HRV、血氧、睡眠、步数、压力、身体电量、血压，以及 AOT 中确认的跑步/骑行 VO₂max、睡眠分数、阈值心率/速度、卡路里、楼层、呼吸率、饮水量、恢复时长、HRV 状态、训练准备状态和完全恢复状态；体重与身高齐全时会计算 BMI。汇总默认输出 JSON，也可用文本格式查看指标名称和单位；乳酸阈值速度会同时显示每公里配速。数值指标可用于本地汇总和 AI 活动分析；状态字段只保存 CSV 提供的标签，不计算设备侧准备度或恢复算法。
 
