@@ -8,6 +8,7 @@ import requests
 
 
 FRIENDS_ENDPOINT = "/v2/friend"
+MUTUAL_FRIENDSHIP_STATE = 0
 
 
 class NakamaFriendsError(ValueError):
@@ -79,6 +80,29 @@ class NakamaFriendsClient:
         if not isinstance(payload, dict):
             raise NakamaFriendsError("Nakama friends response must be a JSON object")
         return payload
+
+    def list_mutual_friend_ids(self, *, limit: int = 2000) -> list[str]:
+        payload = self.list_friends(limit=limit)
+        friends = payload.get("friends")
+        if friends is None:
+            return []
+        if not isinstance(friends, list):
+            raise NakamaFriendsError("Nakama friends response field 'friends' must be a list")
+
+        friend_ids: list[str] = []
+        for friend in friends:
+            if not isinstance(friend, dict):
+                raise NakamaFriendsError("Nakama friends response contains an invalid friend")
+            if friend.get("state") != MUTUAL_FRIENDSHIP_STATE:
+                continue
+            user = friend.get("user")
+            if not isinstance(user, dict):
+                raise NakamaFriendsError("mutual friend response is missing its user")
+            user_id = user.get("id")
+            if not isinstance(user_id, str) or not user_id.strip():
+                raise NakamaFriendsError("mutual friend response is missing its user ID")
+            friend_ids.append(user_id.strip())
+        return friend_ids
 
     def add_friend(self, user_id: str) -> None:
         self._change_friend(self._post, "POST", user_id)

@@ -652,6 +652,10 @@ def build_parser() -> argparse.ArgumentParser:
         help="Social API base URL (defaults to GARSYNC_SOCIAL_BASE_URL)",
     )
     social_feed.add_argument(
+        "--nakama-base-url",
+        help="Nakama API URL for automatic follow-feed IDs (defaults to GARSYNC_NAKAMA_BASE_URL)",
+    )
+    social_feed.add_argument(
         "--token-env",
         default="GARSYNC_NAKAMA_AUTH_TOKEN",
         help="Environment variable containing the Nakama session token",
@@ -664,7 +668,7 @@ def build_parser() -> argparse.ArgumentParser:
     social_feed.add_argument(
         "--following-id",
         action="append",
-        help="Follow-feed user ID; repeat for multiple IDs",
+        help="Override automatic mutual-friend IDs for the follow feed; repeat for multiple IDs",
     )
 
     social_friends = social_actions.add_parser("friends", help="List or change Nakama friends")
@@ -698,6 +702,22 @@ def build_parser() -> argparse.ArgumentParser:
             help="Nakama API base URL (defaults to GARSYNC_NAKAMA_BASE_URL)",
         )
         friend_change.add_argument(
+            "--token-env",
+            default="GARSYNC_NAKAMA_AUTH_TOKEN",
+            help="Environment variable containing the Nakama session token",
+        )
+
+    for action, help_text in (
+        ("thumb", "Like a social activity"),
+        ("unthumb", "Remove your like from a social activity"),
+    ):
+        thumb_action = social_actions.add_parser(action, help=help_text)
+        thumb_action.add_argument("activity_id", help="GarSync social activity ID")
+        thumb_action.add_argument(
+            "--base-url",
+            help="Social API base URL (defaults to GARSYNC_SOCIAL_BASE_URL)",
+        )
+        thumb_action.add_argument(
             "--token-env",
             default="GARSYNC_NAKAMA_AUTH_TOKEN",
             help="Environment variable containing the Nakama session token",
@@ -737,7 +757,9 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "social":
         if args.social_action == "feed":
             return _run_social_feed_command(args)
-        return _run_social_friends_command(args)
+        if args.social_action == "friends":
+            return _run_social_friends_command(args)
+        return _run_social_thumb_command(args)
     if args.command in {
         "library",
         "plans",
@@ -1656,6 +1678,20 @@ def _run_social_feed_command(args: argparse.Namespace) -> int:
         return 2
 
     try:
+        following_ids = args.following_id
+        if args.kind == "follow" and following_ids is None:
+            nakama_base_url = args.nakama_base_url or os.environ.get("GARSYNC_NAKAMA_BASE_URL")
+            if not nakama_base_url:
+                print(
+                    "social_error=follow feed requires GARSYNC_NAKAMA_BASE_URL or --nakama-base-url",
+                    file=sys.stderr,
+                )
+                return 2
+            following_ids = NakamaFriendsClient(
+                nakama_base_url,
+                auth_token,
+            ).list_mutual_friend_ids()
+
         client = SocialFeedClient(base_url, auth_token)
         payload = client.get_feed(
             args.kind,
@@ -1664,9 +1700,9 @@ def _run_social_feed_command(args: argparse.Namespace) -> int:
             user_id=args.user_id,
             latitude=args.lat,
             longitude=args.lng,
-            following_ids=args.following_id,
+            following_ids=following_ids,
         )
-    except SocialFeedError as exc:
+    except (SocialFeedError, NakamaFriendsError) as exc:
         print(f"social_error={exc}", file=sys.stderr)
         return 2
 
@@ -1711,6 +1747,42 @@ def _run_social_friends_command(args: argparse.Namespace) -> int:
                 "operation": args.friends_action,
                 "status": "ok",
                 "userId": args.user_id.strip(),
+            },
+            ensure_ascii=False,
+        )
+    )
+    return 0
+
+
+def _run_social_thumb_command(args: argparse.Namespace) -> int:
+    base_url = args.base_url or os.environ.get("GARSYNC_SOCIAL_BASE_URL")
+    if not base_url:
+        print("social_error=set GARSYNC_SOCIAL_BASE_URL or pass --base-url", file=sys.stderr)
+        return 2
+    auth_token = os.environ.get(args.token_env)
+    if not auth_token:
+        print(
+            "social_error=the configured Nakama session token environment variable is missing or empty",
+            file=sys.stderr,
+        )
+        return 2
+
+    try:
+        client = SocialFeedClient(base_url, auth_token)
+        if args.social_action == "thumb":
+            client.thumb(args.activity_id)
+        else:
+            client.unthumb(args.activity_id)
+    except SocialFeedError as exc:
+        print(f"social_error={exc}", file=sys.stderr)
+        return 2
+
+    print(
+        json.dumps(
+            {
+                "operation": args.social_action,
+                "status": "ok",
+                "activityId": args.activity_id.strip(),
             },
             ensure_ascii=False,
         )

@@ -115,6 +115,28 @@ class NakamaFriendsClientTests(unittest.TestCase):
             timeout=30,
         )
 
+    def test_list_mutual_friend_ids_keeps_only_state_zero_users(self) -> None:
+        payload = {
+            "friends": [
+                {"state": 0, "user": {"id": "mutual-1"}},
+                {"state": 1, "user": {"id": "outgoing-1"}},
+                {"state": 2, "user": {"id": "incoming-1"}},
+                {"state": 3, "user": {"id": "blocked-1"}},
+            ]
+        }
+        with patch.object(self.client, "list_friends", return_value=payload) as list_friends:
+            self.assertEqual(self.client.list_mutual_friend_ids(), ["mutual-1"])
+        list_friends.assert_called_once_with(limit=2000)
+
+    def test_list_mutual_friend_ids_rejects_malformed_mutual_entries(self) -> None:
+        with patch.object(
+            self.client,
+            "list_friends",
+            return_value={"friends": [{"state": 0, "user": {}}]},
+        ):
+            with self.assertRaisesRegex(NakamaFriendsError, "user ID"):
+                self.client.list_mutual_friend_ids()
+
     def test_validation_prevents_invalid_requests(self) -> None:
         invalid_calls = (
             lambda: self.client.list_friends(limit=True),

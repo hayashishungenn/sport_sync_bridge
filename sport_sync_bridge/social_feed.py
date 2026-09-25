@@ -15,6 +15,7 @@ FEED_ENDPOINTS = {
     "hot": "/feed/hot",
     "follow": "/feed/follow",
 }
+THUMB_ENDPOINT = "/thumb"
 
 
 class SocialFeedError(ValueError):
@@ -28,6 +29,8 @@ class SocialFeedClient:
         auth_token: str,
         *,
         get: Callable[..., Any] | None = None,
+        post: Callable[..., Any] | None = None,
+        delete: Callable[..., Any] | None = None,
     ) -> None:
         if not isinstance(base_url, str):
             raise SocialFeedError("social base URL must be a string")
@@ -51,6 +54,8 @@ class SocialFeedClient:
         self._base_url = normalized_url.rstrip("/")
         self._auth_token = auth_token.strip()
         self._get = get if get is not None else requests.get
+        self._post = post if post is not None else requests.post
+        self._delete = delete if delete is not None else requests.delete
 
     def get_feed(
         self,
@@ -131,3 +136,31 @@ class SocialFeedClient:
         if not isinstance(payload, dict):
             raise SocialFeedError("social feed response must be a JSON object")
         return payload
+
+    def thumb(self, activity_id: str) -> None:
+        self._change_thumb(self._post, "POST", activity_id)
+
+    def unthumb(self, activity_id: str) -> None:
+        self._change_thumb(self._delete, "DELETE", activity_id)
+
+    def _change_thumb(
+        self, request: Callable[..., Any], method: str, activity_id: str
+    ) -> None:
+        if not isinstance(activity_id, str) or not activity_id.strip():
+            raise SocialFeedError("activity ID must be a non-empty string")
+        try:
+            response = request(
+                f"{self._base_url}{THUMB_ENDPOINT}",
+                json={"activityId": activity_id.strip()},
+                headers={
+                    "Authorization": f"Bearer {self._auth_token}",
+                    "Content-Type": "application/json",
+                },
+                timeout=30,
+            )
+        except requests.RequestException as exc:
+            raise SocialFeedError("social thumb request failed") from exc
+        if not 200 <= response.status_code < 300:
+            raise SocialFeedError(
+                f"{method} {THUMB_ENDPOINT} failed with HTTP {response.status_code}"
+            )

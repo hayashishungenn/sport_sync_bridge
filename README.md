@@ -234,7 +234,7 @@ python sync.py share group-invite <群组UUID> --group-name "周末骑行" --nam
 
 ### 社交动态与好友
 
-`social feed` 读取 GarSync 的用户、附近、最新、热门和关注动态，接口地址从 `GARSYNC_SOCIAL_BASE_URL` 读取。`social friends` 使用 Nakama REST API 列出好友、发送好友请求或移除好友；默认列表上限为 2000 条，`--cursor` 可继续读取下一页，`--state` 将数字状态筛选原样传给服务器。列表保留服务器返回的原始状态字段。
+`social feed` 读取 GarSync 的用户、附近、最新、热门和关注动态，接口地址从 `GARSYNC_SOCIAL_BASE_URL` 读取。关注动态默认从 Nakama 好友列表筛选互相关注者，并把这些用户 ID 传给动态接口；重复提供 `--following-id` 可手动覆盖。`social friends` 使用 Nakama REST API 列出好友、发送好友请求或移除好友；`social thumb` 和 `social unthumb` 可点赞或取消点赞。好友列表默认上限为 2000 条，`--cursor` 可继续读取下一页，`--state` 将数字状态筛选原样传给服务器。状态值为 0 mutual、1 outgoingRequest、2 incomingRequest、3 blocked。
 
 Nakama API 地址从 `GARSYNC_NAKAMA_BASE_URL` 读取，会在本地请求 `/v2/friend`。会话令牌默认从 `GARSYNC_NAKAMA_AUTH_TOKEN` 读取，也可用 `--token-env` 指定其他环境变量。不要把令牌写入命令行参数。
 
@@ -243,6 +243,10 @@ python sync.py social friends list
 python sync.py social friends list --limit 2000 --cursor "<游标>"
 python sync.py social friends add <用户ID>
 python sync.py social friends remove <用户ID>
+python sync.py social feed follow
+python sync.py social feed follow --following-id <用户ID> --following-id <另一个用户ID>
+python sync.py social thumb <动态ID>
+python sync.py social unthumb <动态ID>
 ```
 
 ### BLE 运动传感器
