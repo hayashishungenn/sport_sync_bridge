@@ -34,6 +34,7 @@ from sport_sync_bridge.training import (
     list_training_templates,
     list_workout_templates,
 )
+from sport_sync_bridge.training_readiness import import_training_readiness_records
 from sport_sync_bridge.wifi_transfer import _make_handler
 from tests.activity_fixtures import create_fit, create_gpx, create_tcx
 
@@ -334,8 +335,79 @@ class GarSyncLocalFeatureTests(unittest.TestCase):
         self.assertNotIn("stress_score", context["after_activity"])
         self.assertEqual(
             summarize_health_for_activity(self.state, None, None),
-            {"before_activity": {}, "after_activity": {}},
+            {
+                "before_activity": {},
+                "after_activity": {},
+                "training_readiness_before_activity": None,
+            },
         )
+
+    def test_ai_analysis_uses_only_latest_training_readiness_before_activity(self) -> None:
+        import_training_readiness_records(
+            self.state,
+            [
+                {
+                    "calendarDate": "2026-01-02",
+                    "timestamp": "2026-01-02T02:50:00Z",
+                    "score": 70,
+                    "level": "Low",
+                    "recoveryTime": 24,
+                },
+                {
+                    "calendarDate": "2026-01-02",
+                    "timestamp": "2026-01-02T02:59:00Z",
+                    "score": 74.5,
+                    "level": "Moderate",
+                    "recoveryTime": 12,
+                    "recoveryTimeFactorPercent": 80,
+                    "hrvWeeklyAverage": 54,
+                    "sleepScore": 82,
+                    "validSleep": True,
+                    "metadata": {"device": "PRIVATE-DEVICE-METADATA"},
+                },
+                {
+                    "calendarDate": "2026-01-02",
+                    "timestamp": "2026-01-02T03:00:00Z",
+                    "score": 99,
+                    "level": "High",
+                    "recoveryTime": 2,
+                },
+                {
+                    "calendarDate": "2026-01-02",
+                    "timestamp": "2026-01-02T03:05:00Z",
+                    "score": 100,
+                    "level": "High",
+                    "recoveryTime": 1,
+                },
+            ],
+            source_label="test readiness data",
+        )
+
+        context = summarize_health_for_activity(
+            self.state,
+            "2026-01-02T03:00:00Z",
+            "2026-01-02T04:00:00Z",
+        )
+        readiness = context["training_readiness_before_activity"]
+        self.assertIsInstance(readiness, dict)
+        self.assertEqual(readiness["score"], 74.5)
+        self.assertEqual(readiness["observed_at"], "2026-01-02T02:59:00+00:00")
+        self.assertEqual(readiness["data"]["recoveryTime"], 12)
+
+        prompt = build_ai_analysis_prompt(
+            {"sport_type": "running", "start_time": "2026-01-02T03:00:00Z"},
+            [],
+            health_summary=context,
+        )
+
+        self.assertIn("活动开始前最近一次训练准备度记录", prompt)
+        self.assertIn("准备度分数：74.5", prompt)
+        self.assertIn("恢复时间：12", prompt)
+        self.assertIn("HRV 周均值：54", prompt)
+        self.assertIn("睡眠评分：82", prompt)
+        self.assertNotIn("99", prompt)
+        self.assertNotIn("100", prompt)
+        self.assertNotIn("PRIVATE-DEVICE-METADATA", prompt)
 
     def test_ai_prompt_uses_summary_data_without_track_coordinates(self) -> None:
         activity = read_activity_file(create_gpx(self.root / "ride.gpx"))

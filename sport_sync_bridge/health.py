@@ -862,9 +862,13 @@ def summarize_health_for_activity(
     state_db: StateDB,
     activity_start: object,
     activity_end: object,
-) -> dict[str, dict[str, dict[str, object]]]:
+) -> dict[str, object]:
     if activity_start in (None, ""):
-        return {"before_activity": {}, "after_activity": {}}
+        return {
+            "before_activity": {},
+            "after_activity": {},
+            "training_readiness_before_activity": None,
+        }
     start = parse_datetime(activity_start)
     if start is None:
         raise ValueError("Activity start time is invalid")
@@ -888,7 +892,49 @@ def summarize_health_for_activity(
                 observed_before=end_of_day.isoformat(),
             )
         )
-    return {"before_activity": before, "after_activity": after}
+    readiness = state_db.get_latest_training_readiness_before(start.isoformat())
+    readiness_context = None
+    if readiness is not None:
+        try:
+            payload = json.loads(str(readiness["payload_json"]))
+        except (TypeError, ValueError) as exc:
+            raise ValueError("Stored training readiness record is invalid JSON") from exc
+        if not isinstance(payload, dict):
+            raise ValueError("Stored training readiness record must be a JSON object")
+        readiness_fields = (
+            "recoveryTime",
+            "recoveryTimeChangePhrase",
+            "recoveryTimeFactorPercent",
+            "recoveryTimeFactorFeedback",
+            "acwrFactorPercent",
+            "acwrFactorFeedback",
+            "acuteLoad",
+            "stressHistoryFactorPercent",
+            "stressHistoryFactorFeedback",
+            "hrvFactorPercent",
+            "hrvFactorFeedback",
+            "hrvWeeklyAverage",
+            "sleepHistoryFactorPercent",
+            "sleepHistoryFactorFeedback",
+            "sleepScore",
+            "validSleep",
+        )
+        readiness_context = {
+            "calendar_date": str(readiness["calendar_date"]),
+            "observed_at": str(readiness["observed_at"]),
+            "score": readiness["score"],
+            "level": readiness["level"],
+            "data": {
+                field: payload[field]
+                for field in readiness_fields
+                if field in payload and payload[field] is not None
+            },
+        }
+    return {
+        "before_activity": before,
+        "after_activity": after,
+        "training_readiness_before_activity": readiness_context,
+    }
 
 
 def _latest_health_by_metric(rows: list[object]) -> dict[str, dict[str, object]]:

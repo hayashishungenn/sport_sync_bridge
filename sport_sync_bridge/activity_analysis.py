@@ -587,6 +587,42 @@ def build_ai_analysis_prompt(
                     f"{metric}: {value.get('value')} {value.get('unit', '')} "
                     f"({value.get('observed_at', 'unknown time')})"
                 )
+    readiness = (
+        health_summary.get("training_readiness_before_activity")
+        if isinstance(health_summary, dict)
+        else None
+    )
+    if isinstance(readiness, dict):
+        lines.extend(("", "活动开始前最近一次训练准备度记录（时间戳为 UTC）："))
+        lines.append(f"记录时间：{readiness.get('observed_at', 'unknown time')}")
+        readiness_values = [
+            ("score", "准备度分数"),
+            ("level", "等级"),
+            ("recoveryTime", "恢复时间"),
+            ("recoveryTimeChangePhrase", "恢复时间变化"),
+            ("recoveryTimeFactorPercent", "恢复时间因子百分比"),
+            ("recoveryTimeFactorFeedback", "恢复时间因子反馈"),
+            ("acwrFactorPercent", "急慢性负荷比因子百分比"),
+            ("acwrFactorFeedback", "急慢性负荷比因子反馈"),
+            ("acuteLoad", "急性负荷"),
+            ("stressHistoryFactorPercent", "压力历史因子百分比"),
+            ("stressHistoryFactorFeedback", "压力历史因子反馈"),
+            ("hrvFactorPercent", "HRV 因子百分比"),
+            ("hrvFactorFeedback", "HRV 因子反馈"),
+            ("hrvWeeklyAverage", "HRV 周均值"),
+            ("sleepHistoryFactorPercent", "睡眠历史因子百分比"),
+            ("sleepHistoryFactorFeedback", "睡眠历史因子反馈"),
+            ("sleepScore", "睡眠评分"),
+            ("validSleep", "睡眠数据有效"),
+        ]
+        readiness_data = readiness.get("data")
+        if not isinstance(readiness_data, dict):
+            readiness_data = {}
+        for field, label in readiness_values:
+            value = readiness.get(field) if field in {"score", "level"} else readiness_data.get(field)
+            if value is not None:
+                rendered = json.dumps(value, ensure_ascii=False, allow_nan=False)
+                lines.append(f"{label}：{rendered}")
     health_after = health_summary.get("after_activity") if isinstance(health_summary, dict) else None
     if isinstance(health_after, dict) and health_after:
         lines.extend(("", "活动结束后至结束日 UTC 日末记录的健康指标（时间戳为 UTC）："))

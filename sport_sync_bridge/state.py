@@ -598,6 +598,14 @@ class StateDB:
             (limit,),
         ).fetchall()
 
+    def get_latest_training_readiness_before(self, observed_before: str) -> sqlite3.Row | None:
+        return self.connection.execute(
+            "SELECT * FROM training_readiness_records "
+            "WHERE observed_at < ? "
+            "ORDER BY observed_at DESC, imported_at DESC, fingerprint DESC LIMIT 1",
+            (observed_before,),
+        ).fetchone()
+
     def save_ai_analysis_result(
         self,
         *,
