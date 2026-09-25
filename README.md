@@ -374,9 +374,9 @@ python sync.py ble remove <设备地址>
 
 `ble guide` 说明蓝牙传感器所需的系统访问权限，以及不使用传感器时如何跳过。它不会扫描设备、打开系统设置或触发 Android 授权弹窗；实际权限由运行 CLI 的操作系统管理。
 
-`trainer preview` 不连接蓝牙，可预览内置示例课程或指定课程文件。课程 JSON 使用顶层 `name` 和 `segments`；每段包含 `start_time_s`、`end_time_s`、`start_power_w`、`end_power_w`，`label` 可选。也可直接把 AI 生成骑行训练对应的 `.fit.meta` 文件作为课程输入。使用 `%FTP` 或缺省功率目标时要提供 `--ftp`。`trainer ride` 连接支持 FTMS 的训练台并生成 FIT 活动，默认保存到 `.data/virtual_rides/`；设备提供标准 Indoor Bike Data 时记录功率、速度、距离、心率和踏频，否则仍保存计时数据。交互终端支持 `+`/`-` 每次调整 5% 强度、`s` 跳过当前间歇、`p` 暂停或继续。暂停时目标功率设为 0 W，暂停时长计入 FIT 经过时间，但不计入计时器时间。
+`trainer preview` 不连接蓝牙，可预览内置示例课程或指定课程文件。课程 JSON 使用顶层 `name` 和 `segments`；每段包含 `start_time_s`、`end_time_s`、`start_power_w`、`end_power_w`，`label` 可选。也可直接把 AI 生成骑行训练对应的 `.fit.meta` 文件作为课程输入。使用 `%FTP` 或缺省功率目标时要提供 `--ftp`。`trainer ride` 连接支持 FTMS 的训练台并生成 FIT 活动，默认保存到 `.data/virtual_rides/`；设备提供标准 Indoor Bike Data 时记录功率、速度、距离、心率和踏频，否则仍保存计时数据。交互终端支持 `+`/`-` 每次调整 5% 强度、`s` 跳过当前间歇、`p` 暂停或继续，以及 `e` 在 ERG 目标功率和 0% 目标阻力模式间切换。暂停时目标功率设为 0 W，暂停时长计入 FIT 经过时间，但不计入计时器时间。
 
-`trainer set-resistance` 把 FTMS 目标阻力设为 0.0，对应 GarSync 虚拟骑行 ERG 切换中写入阻力目标的分支；`trainer set-power` 设置功率目标，对应另一分支。
+`trainer set-resistance` 把标准 FTMS 目标阻力设为 0.0；交互课表按 `e` 切换到该模式，再切回目标功率控制。APK 静态导出的虚拟骑行字节与 FTMS 标准操作码不一致，因此本项目使用标准的目标阻力和目标功率命令，不复刻无法确认语义的字节序列。
 
 `bigrun-ecg-analyze` 读取 `bigrun-ecg-decode` 生成的 JSON，要求采样率为 100–2000 Hz 且至少有 5 秒样本。它复现 APK 中的 100 ms 移动平均、0.5 Hz 高通、12 Hz 低通、R 峰检测和 R-R 间期计算，并按低于 60 bpm、高于 100 bpm 输出心率阈值状态。该状态只复现设备阈值提示，不是疾病分类；报告包含非医疗声明。
 
@@ -508,7 +508,7 @@ python sync.py receive --host 0.0.0.0 --port 8765
 
 接收页不设访问口令，只应在可信的本地网络中临时开启。
 
-未移植到 Python CLI 的 APK 功能包括其余云平台的私有认证/同步协议、手机 BLE 配对引导界面、训练台其他控制命令、设备侧训练准备度评分算法（JSON 快照可导入和查看，通用 HR-TSS/CTL/ATL/TSB 训练负荷指标已实现）及其他未确认的在线健康接口。GarSync 的周期 AI 教练界面受 Pro 权限限制，AI 周计划生成会扣除 gems，按当前范围未接入；单次 AI 课表生成和 AI 活动分析保留为本项目可配置模型功能。标准 FTMS 目标功率控制已实现；BLE 测量通知也支持心率、跑步步频、骑行速度/踏频、功率计测量与功率向量、室内单车数据。BigRun ECG 已支持原始通知采集、波形解码、工作模式切换、波形归一化、非诊断性 R 峰、R-R 间期和心率指标计算，以及按 APK AOT 规则恢复的模式分类标记（normal、tachycardia、bradycardia、atrialFibrillation、pac、pvc、vt、myocardialIschemia、myocardialInfarction）。分类结果仅供运动分析参考，不可替代专业医疗诊断。Samba 默认使用 SMB2/3；旧协议需要显式添加 `--legacy-smb`，导入始终只读。Garmin 每日健康汇总及睡眠、HRV、压力、身体电量、呼吸、饮水、血压、心率、健身年龄、血氧适应、楼层图表和步数详情可以从 Garmin Connect 读取；健康 CSV 仍可手动导入。当前天气功能需要显式坐标和 GarSync 天气服务令牌；AI 活动分析使用本地汇总与可配置模型接口，单次 AI 课表生成只发送命令提供的训练要求。静态 AOT 索引不足以确认其他云端接口的运行期请求、服务端校验或设备交互行为。
+未移植到 Python CLI 的 APK 功能包括其余云平台的私有认证/同步协议、手机 BLE 配对引导界面、设备侧训练准备度评分算法（JSON 快照可导入和查看，通用 HR-TSS/CTL/ATL/TSB 训练负荷指标已实现）及其他未确认的在线健康接口。GarSync 的周期 AI 教练界面受 Pro 权限限制，AI 周计划生成会扣除 gems，按当前范围未接入；单次 AI 课表生成和 AI 活动分析保留为本项目可配置模型功能。标准 FTMS 目标功率控制已实现；BLE 测量通知也支持心率、跑步步频、骑行速度/踏频、功率计测量与功率向量、室内单车数据。BigRun ECG 已支持原始通知采集、波形解码、工作模式切换、波形归一化、非诊断性 R 峰、R-R 间期和心率指标计算，以及按 APK AOT 规则恢复的模式分类标记（normal、tachycardia、bradycardia、atrialFibrillation、pac、pvc、vt、myocardialIschemia、myocardialInfarction）。分类结果仅供运动分析参考，不可替代专业医疗诊断。Samba 默认使用 SMB2/3；旧协议需要显式添加 `--legacy-smb`，导入始终只读。Garmin 每日健康汇总及睡眠、HRV、压力、身体电量、呼吸、饮水、血压、心率、健身年龄、血氧适应、楼层图表和步数详情可以从 Garmin Connect 读取；健康 CSV 仍可手动导入。当前天气功能需要显式坐标和 GarSync 天气服务令牌；AI 活动分析使用本地汇总与可配置模型接口，单次 AI 课表生成只发送命令提供的训练要求。静态 AOT 索引不足以确认其他云端接口的运行期请求、服务端校验或设备交互行为。
 
 常用参数:
 

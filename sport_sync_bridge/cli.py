@@ -2598,10 +2598,14 @@ def _run_ble_command(args: argparse.Namespace, config: AppConfig) -> int:
             def report_pause(paused: bool) -> None:
                 print(f"ride_paused={str(paused).lower()}")
 
+            def report_erg_mode(erg_enabled: bool) -> None:
+                mode = "erg" if erg_enabled else "resistance"
+                print(f"trainer_mode={mode}")
+
             interactive = sys.stdin.isatty()
             if interactive:
                 print(
-                    "controls: + increase, - decrease intensity, s skip interval, p pause/resume",
+                    "controls: + increase, - decrease intensity, s skip interval, p pause/resume, e toggle ERG/resistance",
                     file=sys.stderr,
                 )
 
@@ -2616,6 +2620,7 @@ def _run_ble_command(args: argparse.Namespace, config: AppConfig) -> int:
                     on_measurement=record_trainer_measurement,
                     on_control=_read_trainer_control if interactive else None,
                     on_pause=report_pause,
+                    on_erg_mode=report_erg_mode,
                 )
             )
             if ride_started_at is None:
@@ -2694,7 +2699,19 @@ def _read_trainer_control() -> str | None:
             return None
         key = sys.stdin.readline().strip()
 
-    return {"+": "increase", "-": "decrease", "s": "skip", "p": "pause"}.get(key)
+    return _trainer_control_from_key(key)
+
+
+def _trainer_control_from_key(key: str) -> str | None:
+    if not isinstance(key, str):
+        return None
+    return {
+        "+": "increase",
+        "-": "decrease",
+        "s": "skip",
+        "p": "pause",
+        "e": "toggle_erg",
+    }.get(key.casefold())
 
 
 def _run_samba_command(args: argparse.Namespace, config: AppConfig) -> int:

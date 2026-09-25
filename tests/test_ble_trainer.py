@@ -18,7 +18,7 @@ from sport_sync_bridge.ble_trainer import (
     run_trainer_course,
     set_trainer_resistance_mode,
 )
-from sport_sync_bridge.cli import main
+from sport_sync_bridge.cli import _trainer_control_from_key, main
 from sport_sync_bridge.virtual_ride import PowerSegment, RideCourse
 
 
@@ -247,6 +247,67 @@ class BleTrainerCourseTests(unittest.TestCase):
         )
         self.assertEqual(pause_states, [True, False])
         self.assertGreater(result.elapsed_time_s, result.timer_time_s + 0.05)
+
+    def test_live_erg_toggle_switches_between_ftms_modes(self) -> None:
+        scanner, client, state = self._fake_ble()
+        course = RideCourse((PowerSegment(0, 2.1, 150, 150),))
+        controls = iter(("toggle_erg", "toggle_erg"))
+        modes: list[bool] = []
+
+        async def no_wait(_duration: float) -> None:
+            return None
+
+        with patch("sport_sync_bridge.ble_trainer.asyncio.sleep", new=no_wait):
+            asyncio.run(
+                run_trainer_course(
+                    "trainer-id",
+                    course,
+                    scanner_type=scanner,
+                    client_type=client,
+                    on_control=lambda: next(controls, None),
+                    on_erg_mode=modes.append,
+                )
+            )
+
+        self.assertEqual(
+            state.writes,
+            [b"\x00", b"\x04\x00\x00", b"\x05\x96\x00", b"\x05\x00\x00"],
+        )
+        self.assertEqual(modes, [False, True])
+        self.assertEqual(state.stop_count, 1)
+
+    def test_erg_toggle_while_paused_is_sent_after_resume(self) -> None:
+        scanner, client, state = self._fake_ble()
+        course = RideCourse((PowerSegment(0, 3.1, 100, 100),))
+        controls = iter((None, "pause", "toggle_erg", "pause"))
+        modes: list[bool] = []
+
+        async def no_wait(_duration: float) -> None:
+            return None
+
+        with patch("sport_sync_bridge.ble_trainer.asyncio.sleep", new=no_wait):
+            asyncio.run(
+                run_trainer_course(
+                    "trainer-id",
+                    course,
+                    scanner_type=scanner,
+                    client_type=client,
+                    on_control=lambda: next(controls, None),
+                    on_erg_mode=modes.append,
+                )
+            )
+
+        self.assertEqual(
+            state.writes,
+            [b"\x00", b"\x05\x64\x00", b"\x05\x00\x00", b"\x04\x00\x00"],
+        )
+        self.assertEqual(modes, [False])
+        self.assertEqual(state.stop_count, 1)
+
+    def test_erg_keyboard_shortcut_maps_to_mode_toggle(self) -> None:
+        self.assertEqual(_trainer_control_from_key("e"), "toggle_erg")
+        self.assertEqual(_trainer_control_from_key("E"), "toggle_erg")
+        self.assertIsNone(_trainer_control_from_key("x"))
 
     def test_streams_standard_ftms_indoor_bike_measurements(self) -> None:
         flags = (1 << 2) | (1 << 4) | (1 << 6) | (1 << 9) | (1 << 11)

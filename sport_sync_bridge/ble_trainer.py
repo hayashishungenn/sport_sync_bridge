@@ -161,6 +161,7 @@ async def run_trainer_course(
     on_measurement: Callable[[dict[str, object]], None] | None = None,
     on_control: Callable[[], str | None] | None = None,
     on_pause: Callable[[bool], None] | None = None,
+    on_erg_mode: Callable[[bool], None] | None = None,
 ) -> RideRunResult:
     _validate_timeout(timeout)
     if not isinstance(address, str) or not address.strip():
@@ -179,6 +180,8 @@ async def run_trainer_course(
     started_at: float | None = None
     active_started_at: float | None = None
     paused_at: float | None = None
+    active_trainer_mode: str | None = None
+    pending_erg_mode_notification = False
     try:
         device = await scanner_type.find_device_by_address(address, timeout=timeout)
         if device is None:
@@ -270,21 +273,44 @@ async def run_trainer_course(
                                 paused_at = None
                             if on_pause is not None:
                                 on_pause(session.paused)
+                        elif control == "toggle_erg":
+                            session.toggle_erg_mode()
+                            pending_erg_mode_notification = True
                         if session.paused:
                             await asyncio.sleep(0.1)
                             continue
-                        target = session.current_target_power_w
-                        if target != last_target:
+
+                        if session.erg_enabled:
+                            if active_trainer_mode != "erg":
+                                active_trainer_mode = "erg"
+                                last_target = None
+                            target = session.current_target_power_w
+                            if target != last_target:
+                                await _send_and_check_response(
+                                    client,
+                                    control_point,
+                                    encode_target_power_command(target),
+                                    responses,
+                                    timeout,
+                                )
+                                last_target = target
+                                if on_target is not None:
+                                    on_target(session.course_elapsed_s, session.segment_index, target)
+                        elif active_trainer_mode != "resistance":
                             await _send_and_check_response(
                                 client,
                                 control_point,
-                                encode_target_power_command(target),
+                                encode_zero_resistance_command(),
                                 responses,
                                 timeout,
                             )
-                            last_target = target
-                            if on_target is not None:
-                                on_target(session.course_elapsed_s, session.segment_index, target)
+                            active_trainer_mode = "resistance"
+                            last_target = None
+
+                        if pending_erg_mode_notification:
+                            if on_erg_mode is not None:
+                                on_erg_mode(session.erg_enabled)
+                            pending_erg_mode_notification = False
 
                         if on_tick is not None:
                             on_tick(session.wall_elapsed_s)

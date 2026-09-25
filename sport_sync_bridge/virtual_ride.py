@@ -146,6 +146,7 @@ class RideSession:
     segment_elapsed_s: float = 0.0
     wall_elapsed_s: float = 0.0
     last_sent_power_w: int = -1
+    erg_enabled: bool = True
 
     def __post_init__(self) -> None:
         self.intensity = _finite_number(self.intensity, "Intensity multiplier")
@@ -202,6 +203,10 @@ class RideSession:
     def toggle_pause(self) -> bool:
         self.paused = not self.paused
         return self.paused
+
+    def toggle_erg_mode(self) -> bool:
+        self.erg_enabled = not self.erg_enabled
+        return self.erg_enabled
 
     def advance(self, seconds: float = 1.0) -> None:
         remaining_time = _finite_number(seconds, "Advance duration")
