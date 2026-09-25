@@ -11,11 +11,14 @@ from .concept2_source import Concept2Source
 from .fit_tools import normalize_fit_coordinates
 from .formats import SUPPORTED_FORMATS, convert_activity_file
 from .garmin_source import GarminSource
+from .hammerhead_api import HammerheadClient
+from .hammerhead_source import HammerheadSource
 from .intervals_icu import IntervalsIcuSource
 from .models import FileBundle, UploadResult
 from .sources import IGPSportSource, LocalFileSource, OneLapSource, SourceAdapter
 from .strava_source import StravaSource
 from .state import StateDB
+from .hammerhead_target import HammerheadTarget
 from .targets import GarminTarget, StravaTarget, TargetAdapter
 from .wahoo_target import WahooTarget
 from .utils import ensure_directory, safe_filename, sha1_file, utcnow
@@ -32,6 +35,7 @@ class SyncEngine:
         ensure_directory(config.repaired_dir)
         ensure_directory(config.converted_dir)
         self.state_db = StateDB(config.db_path)
+        self.hammerhead_client = HammerheadClient(config, self.state_db)
         self.targets = self._build_targets()
         self.sources = self._build_sources()
 
@@ -54,7 +58,7 @@ class SyncEngine:
         invalid_formats = {
             target: value
             for target, value in target_formats.items()
-            if target not in {"garmin", "strava", "wahoo"}
+            if target not in {"garmin", "strava", "wahoo", "hammerhead"}
             or not isinstance(value, str)
             or value.lower() not in SUPPORTED_FORMATS
             or (target == "wahoo" and value.lower() != "fit")
@@ -220,6 +224,18 @@ class SyncEngine:
             raise RuntimeError("Concept2 source is not configured")
         return cast(Concept2Source, source)
 
+    def get_hammerhead_source(self) -> HammerheadSource:
+        source = self.sources.get("hammerhead")
+        if source is None:
+            raise RuntimeError("Hammerhead source is not configured")
+        return cast(HammerheadSource, source)
+
+    def get_hammerhead_target(self) -> HammerheadTarget:
+        target = self.targets.get("hammerhead")
+        if target is None:
+            raise RuntimeError("Hammerhead target is not configured")
+        return cast(HammerheadTarget, target)
+
     def _prepare_files(self, source: SourceAdapter, activity) -> FileBundle:
         row = self.state_db.get_activity_row(activity.source, activity.source_id)
         original_path = None
@@ -293,6 +309,7 @@ class SyncEngine:
             OneLapSource(self.config),
             IntervalsIcuSource(self.config),
             Concept2Source(self.config, self.state_db),
+            HammerheadSource(self.config, self.hammerhead_client),
             LocalFileSource(self.config, self.state_db),
         )
         garmin_target = self.targets.get("garmin")
@@ -319,6 +336,10 @@ class SyncEngine:
         wahoo = WahooTarget(self.config, self.state_db)
         if wahoo.is_configured():
             targets[wahoo.name] = wahoo
+
+        hammerhead = HammerheadTarget(self.config, self.hammerhead_client)
+        if hammerhead.is_configured():
+            targets[hammerhead.name] = hammerhead
 
         return targets
 

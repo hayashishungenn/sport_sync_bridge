@@ -6,6 +6,7 @@
 
 - `iGPSPORT` 大陆版
 - `OneLap / 顽鹿`
+- `Hammerhead`（公开 API 活动来源）
 - 本地活动库（`FIT` / `GPX` / `TCX` / `ZIP` / 轨迹 `JSON` / `CSV`）
 
 当前实现的目标平台:
@@ -13,6 +14,7 @@
 - `Garmin Connect` 国际区
 - `Strava`
 - `Wahoo`（FIT 上传）
+- `Hammerhead`（路线上传）
 
 这个项目参考了以下公开实现，并抽成了统一的 `source adapter + target adapter + SQLite state` 架构：
 
@@ -23,6 +25,7 @@
 - `cyberjunky/python-garminconnect`
 - Strava 官方 `Authentication` / `Uploads` 文档
 - Wahoo 官方 Cloud API 文档
+- Hammerhead 官方 Public API 文档
 
 ## 设计目标
 
@@ -34,6 +37,7 @@
 - 自动上传到 `Garmin Connect 国际区`
 - 自动上传到 `Strava`
 - 可选上传到 `Wahoo`（FIT）
+- 从 Hammerhead 读取活动 FIT，并把活动文件作为路线上传到 Hammerhead
 - 用 `SQLite` 记录同步状态，避免重复上传
 - 对 `iGPSPORT` / `OneLap` 都支持可选的 `GCJ-02 -> WGS84` 轨迹修正
 
@@ -177,6 +181,22 @@ python sync.py concept2-auth-url --write
 python sync.py concept2-exchange --code 你的code --write
 python sync.py concept2-delete --activity-id 结果ID
 ```
+
+### Hammerhead 活动来源与路线目标
+
+Hammerhead 使用官方 [Public API 文档](https://api.hammerhead.io/v1/docs/openapi.yml)。先创建开发者账号、登记自己的应用并接受 [API 许可协议](https://support.hammerhead.io/hc/en-us/article_attachments/42752245991835)，然后配置 `HAMMERHEAD_CLIENT_ID`、`HAMMERHEAD_CLIENT_SECRET` 和登记过的 `HAMMERHEAD_REDIRECT_URI`。项目不包含 APK 中的客户端凭据。当前默认只请求 `activity:read route:read route:write`，令牌保存在本地 SQLite。
+
+```powershell
+python sync.py hammerhead-auth-url
+python sync.py hammerhead-exchange --code 回调中的code --state 回调中的state
+python sync.py check --source hammerhead --target hammerhead
+python sync.py sync --source hammerhead --target garmin --dry-run
+python sync.py sync --source local --target hammerhead --format hammerhead=gpx
+python sync.py hammerhead-routes --limit 20
+python sync.py hammerhead-delete-route --route-id 路线ID
+```
+
+活动列表按 API 页码读取，活动 FIT 从公开活动文件端点下载。同步到 Hammerhead 时，FIT、GPX 或 TCX 会作为路线文件上传，不会创建 Hammerhead 活动。删除只适用于由本 API 客户端创建的路线，并要求输入完整路线 ID 确认。API 许可协议当前写明不收许可费，同时保留今后收费的权利；若之后开始收费，请勿启用此连接器。
 
 ### 5. 首次同步
 

@@ -151,13 +151,13 @@ def build_parser() -> argparse.ArgumentParser:
     sync_parser.add_argument(
         "--source",
         action="append",
-        choices=["igpsport", "onelap", "intervals_icu", "local", "garmin", "strava", "concept2"],
+        choices=["igpsport", "onelap", "intervals_icu", "local", "garmin", "strava", "concept2", "hammerhead"],
         help="Repeatable source",
     )
     sync_parser.add_argument(
         "--target",
         action="append",
-        choices=["garmin", "strava", "wahoo"],
+        choices=["garmin", "strava", "wahoo", "hammerhead"],
         help="Repeatable target",
     )
     sync_parser.add_argument("--from", dest="date_from", help="Start date, e.g. 2026-01-01")
@@ -704,6 +704,28 @@ def build_parser() -> argparse.ArgumentParser:
         "--yes", action="store_true", help="Skip the typed-ID confirmation prompt"
     )
 
+    hammerhead_auth_url_parser = subparsers.add_parser(
+        "hammerhead-auth-url", help="Print the Hammerhead OAuth authorization URL"
+    )
+    hammerhead_exchange_parser = subparsers.add_parser(
+        "hammerhead-exchange", help="Exchange a Hammerhead OAuth code for tokens"
+    )
+    hammerhead_exchange_parser.add_argument("--code", required=True, help="OAuth code returned by Hammerhead")
+    hammerhead_exchange_parser.add_argument(
+        "--state", required=True, help="OAuth state returned to the registered redirect URI"
+    )
+    hammerhead_routes_parser = subparsers.add_parser(
+        "hammerhead-routes", help="List Hammerhead routes accessible to this API client"
+    )
+    hammerhead_routes_parser.add_argument("--limit", type=int, help="Maximum routes to print")
+    hammerhead_delete_route_parser = subparsers.add_parser(
+        "hammerhead-delete-route", help="Delete a route created by this API client"
+    )
+    hammerhead_delete_route_parser.add_argument("--route-id", required=True, help="Hammerhead route ID")
+    hammerhead_delete_route_parser.add_argument(
+        "--yes", action="store_true", help="Skip the typed-ID confirmation prompt"
+    )
+
     share_parser = subparsers.add_parser("share", help="Build GarSync friend and group invite links")
     share_actions = share_parser.add_subparsers(dest="share_action", required=True)
     friend_invite = share_actions.add_parser("friend-invite", help="Build a friend invite link")
@@ -929,6 +951,35 @@ def main(argv: list[str] | None = None) -> int:
             print(f"deleted=concept2:{args.activity_id}")
             return 0
 
+        if args.command == "hammerhead-auth-url":
+            print(engine.hammerhead_client.build_authorize_url())
+            return 0
+
+        if args.command == "hammerhead-exchange":
+            payload = engine.hammerhead_client.exchange_code(args.code, args.state)
+            print("Hammerhead tokens saved to SQLite.")
+            expires_at = engine.state_db.get_value("hammerhead_expires_at") or payload.get("expires_at")
+            print(f"expires_at={expires_at}")
+            return 0
+
+        if args.command == "hammerhead-routes":
+            routes = engine.get_hammerhead_source().list_routes(limit=args.limit)
+            print(json.dumps(routes, ensure_ascii=False, indent=2))
+            return 0
+
+        if args.command == "hammerhead-delete-route":
+            if not args.yes:
+                expected = args.route_id.strip()
+                confirmation = input(
+                    f"Permanently delete Hammerhead route {expected}? Type the ID to confirm: "
+                )
+                if confirmation.strip() != expected:
+                    print("Hammerhead route deletion cancelled.")
+                    return 1
+            engine.get_hammerhead_target().delete_route(args.route_id)
+            print(f"deleted=hammerhead-route:{args.route_id}")
+            return 0
+
         selected_sources = args.source or config.sources
         selected_targets = args.target or config.targets
         _validate_selection(selected_sources, engine.sources.keys(), "source")
@@ -995,9 +1046,9 @@ def _parse_target_format(value: str) -> tuple[str, str]:
     target, separator, activity_format = value.partition("=")
     target = target.strip().lower()
     activity_format = activity_format.strip().lower()
-    if not separator or target not in {"garmin", "strava", "wahoo"}:
+    if not separator or target not in {"garmin", "strava", "wahoo", "hammerhead"}:
         raise argparse.ArgumentTypeError(
-            "format must use TARGET=FORMAT with target garmin, strava, or wahoo"
+            "format must use TARGET=FORMAT with target garmin, strava, wahoo, or hammerhead"
         )
     if activity_format not in SUPPORTED_FORMATS:
         supported = ", ".join(sorted(SUPPORTED_FORMATS))

@@ -64,6 +64,13 @@ class AppConfig:
     concept2_refresh_token: str | None
     concept2_expires_at: str | None
     concept2_scope: str | None
+    hammerhead_client_id: str | None
+    hammerhead_client_secret: str | None
+    hammerhead_redirect_uri: str
+    hammerhead_access_token: str | None
+    hammerhead_refresh_token: str | None
+    hammerhead_expires_at: str | None
+    hammerhead_scope: str
     ai_api_base_url: str | None
     ai_api_key: str | None
     ai_model: str | None
@@ -137,6 +144,15 @@ class AppConfig:
             concept2_refresh_token=env_or_none("CONCEPT2_REFRESH_TOKEN"),
             concept2_expires_at=env_or_none("CONCEPT2_EXPIRES_AT"),
             concept2_scope=env_or_none("CONCEPT2_SCOPE"),
+            hammerhead_client_id=env_or_none("HAMMERHEAD_CLIENT_ID"),
+            hammerhead_client_secret=env_or_none("HAMMERHEAD_CLIENT_SECRET"),
+            hammerhead_redirect_uri=os.getenv("HAMMERHEAD_REDIRECT_URI", "http://localhost/").strip(),
+            hammerhead_access_token=env_or_none("HAMMERHEAD_ACCESS_TOKEN"),
+            hammerhead_refresh_token=env_or_none("HAMMERHEAD_REFRESH_TOKEN"),
+            hammerhead_expires_at=env_or_none("HAMMERHEAD_EXPIRES_AT"),
+            hammerhead_scope=os.getenv(
+                "HAMMERHEAD_SCOPE", "activity:read route:read route:write"
+            ).strip(),
             ai_api_base_url=env_or_none("AI_API_BASE_URL"),
             ai_api_key=env_or_none("AI_API_KEY"),
             ai_model=env_or_none("AI_MODEL"),
