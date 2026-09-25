@@ -8,10 +8,12 @@ import shutil
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
+from statistics import median
 from typing import Sequence
 
 from .coordinate_rules import CoordinateRule, COORDINATE_MODES
 from .formats import _copy_coordinate_marker, _fit_datetime
+from .gps_filter import GpsTrackPoint, smooth_gps_track
 
 
 @dataclass(frozen=True, slots=True)
@@ -185,6 +187,280 @@ def repair_fit_track_continuity(input_path: Path, output_path: Path) -> tuple[Pa
         raise
 
     return output_path, removed_records
+
+
+def smooth_fit_gps_track(
+    input_path: Path,
+    output_path: Path,
+    *,
+    accuracy_m: float | None = None,
+    q_metres_per_second: float = 2.5,
+    adaptive_q: bool = True,
+) -> tuple[Path, int]:
+    input_path = input_path.expanduser().resolve()
+    output_path = output_path.expanduser().resolve()
+    if input_path.suffix.lower() != ".fit":
+        raise ValueError("GPS smoothing requires a .fit input file")
+    if output_path.suffix.lower() != ".fit":
+        raise ValueError("GPS smoothing output must use the .fit extension")
+    if input_path == output_path:
+        raise ValueError("GPS smoothing requires a different output path")
+    if not input_path.is_file():
+        raise RuntimeError(f"FIT input file does not exist: {input_path}")
+    if accuracy_m is not None and (not math.isfinite(accuracy_m) or accuracy_m < 0):
+        raise ValueError("Fallback GPS accuracy must be a finite, non-negative number")
+    if not math.isfinite(q_metres_per_second) or q_metres_per_second < 0:
+        raise ValueError("Kalman Q must be a finite, non-negative number")
+    if _has_valid_gps_smoothing_marker(input_path):
+        return input_path, 0
+
+    try:
+        from fit_tool.fit_file import FitFile
+        from fit_tool.fit_file_builder import FitFileBuilder
+    except ImportError as exc:
+        raise RuntimeError("fit-tool is required for FIT GPS smoothing") from exc
+
+    try:
+        fit_file = FitFile.from_file(str(input_path))
+    except Exception as exc:
+        raise RuntimeError(f"Could not decode FIT file {input_path}: {exc}") from exc
+
+    builder = FitFileBuilder(auto_define=False)
+    track_records: list[tuple[object, object, object, GpsTrackPoint, bool]] = []
+    all_records: list[object] = []
+    measured_accuracies: list[float] = []
+
+    for record in fit_file.records:
+        message = getattr(record, "message", None)
+        all_records.append(message)
+        if getattr(message, "name", None) != "record":
+            continue
+
+        latitude_field = message.get_field_by_name("position_lat")
+        longitude_field = message.get_field_by_name("position_long")
+        timestamp_field = message.get_field_by_name("timestamp")
+        if (
+            latitude_field is None
+            or longitude_field is None
+            or timestamp_field is None
+            or not latitude_field.is_valid()
+            or not longitude_field.is_valid()
+            or not timestamp_field.is_valid()
+        ):
+            continue
+
+        latitude = _finite_number(latitude_field.get_value())
+        longitude = _finite_number(longitude_field.get_value())
+        timestamp = _fit_datetime(timestamp_field.get_value())
+        if (
+            latitude is None
+            or longitude is None
+            or timestamp is None
+            or not (-90 <= latitude <= 90 and -180 <= longitude <= 180)
+        ):
+            continue
+
+        accuracy = _fit_field_number(message, "gps_accuracy")
+        if accuracy is not None and accuracy >= 0:
+            measured_accuracies.append(accuracy)
+
+        speed = _fit_field_number(message, "speed")
+        if speed is None:
+            speed = _fit_field_number(message, "enhanced_speed")
+        if speed is not None and speed < 0:
+            speed = None
+
+        track_records.append(
+            (
+                message,
+                latitude_field,
+                longitude_field,
+                GpsTrackPoint(
+                    latitude=latitude,
+                    longitude=longitude,
+                    timestamp_ms=round(timestamp.timestamp() * 1000),
+                    accuracy_m=accuracy if accuracy is not None and accuracy >= 0 else 0.0,
+                    speed_mps=speed,
+                ),
+                accuracy is not None and accuracy >= 0,
+            )
+        )
+
+    if not track_records:
+        raise ValueError("GPS smoothing requires FIT records with valid coordinates and timestamps")
+    fallback_accuracy = accuracy_m
+    if fallback_accuracy is None and measured_accuracies:
+        fallback_accuracy = median(measured_accuracies)
+    if fallback_accuracy is None:
+        raise ValueError(
+            "FIT records do not contain GPS accuracy; supply --accuracy-m to set the fallback"
+        )
+
+    points = [
+        GpsTrackPoint(
+            point.latitude,
+            point.longitude,
+            point.timestamp_ms,
+            point.accuracy_m if has_accuracy else fallback_accuracy,
+            point.speed_mps,
+            _track_heading(track_records, index),
+        )
+        for index, (_, _, _, point, has_accuracy) in enumerate(track_records)
+    ]
+
+    smoothed = smooth_gps_track(
+        points,
+        q_metres_per_second=q_metres_per_second,
+        adaptive_q=adaptive_q,
+    )
+    changed_records = 0
+    for (_, latitude_field, longitude_field, _, _), (latitude, longitude) in zip(
+        track_records,
+        smoothed,
+        strict=True,
+    ):
+        if math.isclose(latitude, latitude_field.get_value(), abs_tol=1e-10) and math.isclose(
+            longitude,
+            longitude_field.get_value(),
+            abs_tol=1e-10,
+        ):
+            continue
+        latitude_field.set_value(0, latitude)
+        longitude_field.set_value(0, longitude)
+        changed_records += 1
+
+    for message in all_records:
+        builder.add(message)
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    temporary_path = _temporary_sibling(output_path)
+    temporary_gps_marker = _gps_smoothing_marker_path(temporary_path)
+    temporary_repair_marker = _fit_repair_marker_path(temporary_path)
+    temporary_coordinate_marker = _marker_path(temporary_path)
+    output_gps_marker = _gps_smoothing_marker_path(output_path)
+    output_repair_marker = _fit_repair_marker_path(output_path)
+    output_coordinate_marker = _marker_path(output_path)
+    try:
+        if changed_records:
+            builder.build().to_file(str(temporary_path))
+        else:
+            shutil.copyfile(input_path, temporary_path)
+        FitFile.from_file(str(temporary_path))
+        output_digest = _sha256(temporary_path)
+
+        _write_json_atomically(
+            temporary_gps_marker,
+            {
+                "format": 1,
+                "operation": "gps_kalman_smoothing",
+                "input_sha256": _sha256(input_path),
+                "output_sha256": output_digest,
+                "records_smoothed": changed_records,
+                "q_metres_per_second": q_metres_per_second,
+                "adaptive_q": adaptive_q,
+                "accuracy_fallback_m": fallback_accuracy,
+            },
+        )
+        has_coordinate_marker = _copy_coordinate_marker(
+            input_path,
+            temporary_path,
+            temporary_path.read_bytes(),
+        )
+        has_repair_marker = _copy_fit_repair_marker(
+            input_path,
+            temporary_repair_marker,
+            output_digest,
+        )
+
+        os.replace(temporary_path, output_path)
+        os.replace(temporary_gps_marker, output_gps_marker)
+        if has_coordinate_marker:
+            os.replace(temporary_coordinate_marker, output_coordinate_marker)
+        else:
+            output_coordinate_marker.unlink(missing_ok=True)
+        if has_repair_marker:
+            os.replace(temporary_repair_marker, output_repair_marker)
+        else:
+            output_repair_marker.unlink(missing_ok=True)
+    except Exception:
+        temporary_path.unlink(missing_ok=True)
+        temporary_gps_marker.unlink(missing_ok=True)
+        temporary_repair_marker.unlink(missing_ok=True)
+        temporary_coordinate_marker.unlink(missing_ok=True)
+        raise
+
+    return output_path, changed_records
+
+
+def _gps_smoothing_marker_path(path: Path) -> Path:
+    return Path(f"{path}.gps-smoothing.json")
+
+
+def _has_valid_gps_smoothing_marker(path: Path) -> bool:
+    marker_path = _gps_smoothing_marker_path(path)
+    if not marker_path.exists():
+        return False
+    try:
+        marker = json.loads(marker_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise RuntimeError(f"Could not read GPS smoothing marker {marker_path}: {exc}") from exc
+    if (
+        not isinstance(marker, dict)
+        or marker.get("format") != 1
+        or marker.get("operation") != "gps_kalman_smoothing"
+        or not isinstance(marker.get("output_sha256"), str)
+        or marker["output_sha256"] != _sha256(path)
+    ):
+        raise RuntimeError(
+            f"GPS smoothing marker does not match {path}; use the original FIT file or remove the marker"
+        )
+    return True
+
+
+def _copy_fit_repair_marker(input_path: Path, output_marker_path: Path, output_digest: str) -> bool:
+    if not _has_valid_fit_repair_marker(input_path):
+        return False
+    input_marker_path = _fit_repair_marker_path(input_path)
+    marker = json.loads(input_marker_path.read_text(encoding="utf-8"))
+    marker["output_sha256"] = output_digest
+    _write_json_atomically(output_marker_path, marker)
+    return True
+
+
+def _finite_number(value: object) -> float | None:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    number = float(value)
+    return number if math.isfinite(number) else None
+
+
+def _fit_field_number(message: object, name: str) -> float | None:
+    field = message.get_field_by_name(name)
+    if field is None or not field.is_valid():
+        return None
+    return _finite_number(field.get_value())
+
+
+def _track_heading(
+    track_records: Sequence[tuple[object, object, object, GpsTrackPoint, bool]],
+    index: int,
+) -> float | None:
+    if index == 0:
+        return None
+    previous = track_records[index - 1][3]
+    current = track_records[index][3]
+    latitude_1 = math.radians(previous.latitude)
+    latitude_2 = math.radians(current.latitude)
+    delta_longitude = math.radians(current.longitude - previous.longitude)
+    delta_longitude = (delta_longitude + math.pi) % (2 * math.pi) - math.pi
+    east = math.sin(delta_longitude) * math.cos(latitude_2)
+    north = (
+        math.cos(latitude_1) * math.sin(latitude_2)
+        - math.sin(latitude_1) * math.cos(latitude_2) * math.cos(delta_longitude)
+    )
+    if math.hypot(east, north) < 1e-12:
+        return None
+    return math.degrees(math.atan2(east, north)) % 360
 
 
 def _resolve_coordinate_mode(

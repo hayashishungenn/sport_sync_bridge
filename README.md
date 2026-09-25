@@ -260,6 +260,15 @@ python sync.py library repair-fit-continuity ride.fit --output ride.repaired.fit
 
 没有时间戳的记录会保留。输入文件不变，修复产物旁会保存校验标记，重复处理时会识别已修复文件。
 
+GarSync 的 GPS 卡尔曼滤波也可用于本地 FIT 轨迹：
+
+```powershell
+python sync.py library smooth-gps ride.fit --output ride.smoothed.fit
+python sync.py library smooth-gps ride.fit --output ride.smoothed.fit --accuracy-m 5
+```
+
+滤波使用记录中的 `gps_accuracy`、速度和相邻点估算的航向。缺失精度值会使用文件内有效精度的中位数；文件完全没有精度字段时，需通过 `--accuracy-m` 指定回退值。算法在以首点为中心的米制方位等距投影中计算，避免把米制精度直接用于经纬度角度。输入文件不变，输出旁会保存校验标记，重复处理时会识别已平滑文件。`--q` 默认是 2.5，`--no-adaptive-q` 可关闭按速度和转弯调整 Q。
+
 ## 本地活动库与 GarSync 离线功能
 
 从本地文件或目录导入活动。目录需要显式指定 `--recursive`；ZIP 会在内存中读取，不会按压缩包路径解压到磁盘。加密 ZIP 可通过 `ACTIVITY_ARCHIVE_PASSWORD` 提供密码。

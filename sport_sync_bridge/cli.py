@@ -84,7 +84,11 @@ from .health_sources import (
     fetch_intervals_icu_wellness,
 )
 from .targets import GarminTarget
-from .fit_tools import normalize_fit_coordinates, repair_fit_track_continuity
+from .fit_tools import (
+    normalize_fit_coordinates,
+    repair_fit_track_continuity,
+    smooth_fit_gps_track,
+)
 from .formats import SUPPORTED_FORMATS, TrackPoint, convert_activity_file, read_activity_file
 from .force_vector_analysis import (
     FORCE_VECTOR_FOCUSES,
@@ -204,6 +208,28 @@ def build_parser() -> argparse.ArgumentParser:
     )
     library_repair_fit.add_argument("input", type=Path, help="Input FIT file")
     library_repair_fit.add_argument("--output", required=True, type=Path, help="Repaired FIT output path")
+    library_smooth_gps = library_actions.add_parser(
+        "smooth-gps",
+        help="Smooth a FIT GPS track with an adaptive Kalman filter",
+    )
+    library_smooth_gps.add_argument("input", type=Path, help="Input FIT file")
+    library_smooth_gps.add_argument("--output", required=True, type=Path, help="Smoothed FIT output path")
+    library_smooth_gps.add_argument(
+        "--accuracy-m",
+        type=float,
+        help="Fallback GPS accuracy in metres for records without gps_accuracy",
+    )
+    library_smooth_gps.add_argument(
+        "--q",
+        type=float,
+        default=2.5,
+        help="Kalman process noise Q (default: 2.5)",
+    )
+    library_smooth_gps.add_argument(
+        "--no-adaptive-q",
+        action="store_true",
+        help="Disable speed- and turn-based Q adjustment",
+    )
     library_import = library_actions.add_parser("import", help="Import FIT, GPX, TCX, JSON, CSV, or ZIP files")
     library_import.add_argument("paths", nargs="+", type=Path, help="Files or directories to import")
     library_import.add_argument("--recursive", action="store_true", help="Scan directories recursively")
@@ -1329,6 +1355,20 @@ def _run_local_command(args: argparse.Namespace, config: AppConfig) -> int:
             print(f"records_removed={removed_records}")
             print(f"already_repaired={'yes' if repaired_path == input_path else 'no'}")
             print(f"output={repaired_path}")
+            return 0
+
+        if args.library_action == "smooth-gps":
+            input_path = args.input.expanduser().resolve()
+            smoothed_path, changed_records = smooth_fit_gps_track(
+                args.input,
+                args.output,
+                accuracy_m=args.accuracy_m,
+                q_metres_per_second=args.q,
+                adaptive_q=not args.no_adaptive_q,
+            )
+            print(f"records_smoothed={changed_records}")
+            print(f"already_smoothed={'yes' if smoothed_path == input_path else 'no'}")
+            print(f"output={smoothed_path}")
             return 0
 
         state = StateDB(config.db_path)
