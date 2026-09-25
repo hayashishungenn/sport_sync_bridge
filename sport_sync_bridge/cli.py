@@ -81,6 +81,10 @@ from .training_readiness import (
     summarize_training_readiness,
 )
 from .period_summary import calculate_period_summary, format_period_summary
+from .running_dynamics import (
+    analyze_running_dynamics_file,
+    format_running_dynamics,
+)
 from .samba import import_samba_activity, list_samba_directory
 from .state import StateDB
 from .training_balance import calculate_training_balance, format_training_balance
@@ -198,6 +202,12 @@ def build_parser() -> argparse.ArgumentParser:
     library_swim_css.add_argument("--time-400m", required=True, help="400 m time as M:SS or seconds")
     library_swim_css.add_argument("--pool-length", choices=[25, 50], type=int, default=25)
     library_swim_css.add_argument("--format", choices=["json", "txt"], default="json")
+    library_running_dynamics = library_actions.add_parser(
+        "running-dynamics", help="Analyze a local accelerometer and GPS event stream"
+    )
+    library_running_dynamics.add_argument("input", type=Path, help="JSON Lines sensor event file")
+    library_running_dynamics.add_argument("--height-cm", type=float, default=175.0)
+    library_running_dynamics.add_argument("--format", choices=["json", "txt"], default="json")
     library_report = library_actions.add_parser("report", help="Export local activity summaries")
     library_report.add_argument("--format", choices=["txt", "json", "csv", "html", "pdf"], default="txt")
     library_report.add_argument("--output", type=Path, help="Output path; omit to print text reports to stdout")
@@ -794,6 +804,11 @@ def _run_local_command(args: argparse.Namespace, config: AppConfig) -> int:
     if args.command == "library":
         if args.library_action == "samba":
             return _run_samba_command(args, config)
+
+        if args.library_action == "running-dynamics":
+            summary = analyze_running_dynamics_file(args.input, height_cm=args.height_cm)
+            print(format_running_dynamics(summary, args.format), end="")
+            return 0
 
         if args.library_action == "merge":
             result = merge_fit_files(args.paths, args.output, name=args.name)

@@ -28,6 +28,7 @@
 - 自动对下载后的 FIT 做坐标修正
 - 按 FIT 设备厂商、产品和固件版本选择坐标修正规则
 - 在 FIT、GPX、TCX 之间转换活动文件
+- 从本地传感器事件流计算跑步动态指标
 - 自动上传到 `Garmin Connect 国际区`
 - 自动上传到 `Strava`
 - 用 `SQLite` 记录同步状态，避免重复上传
@@ -179,6 +180,7 @@ python sync.py library stats
 python sync.py library period --from 2026-01-01 --to 2026-03-31 --threshold-hr 180
 python sync.py library balance --threshold-hr 180 --resting-hr 60 --from 2026-01-01
 python sync.py library vdot --from 2026-01-01 --format json
+python sync.py library running-dynamics .\run-sensors.jsonl --height-cm 175
 python sync.py library report --format html --output .\activities.html
 python sync.py library report --format pdf --output .\activities.pdf
 python sync.py library poster <活动ID前缀> --output .\activity.jpg --layout classic --ratio portrait --show-title
@@ -246,6 +248,8 @@ python sync.py library swim-css --time-200m 2:40 --time-400m 5:40 --pool-length 
 ```
 
 此命令计算显式提供的两项测试成绩；它还没有从本地历史游泳活动自动寻找最佳成绩或生成趋势曲线。
+
+`library running-dynamics` 读取按时间排序的 JSON Lines 事件。加速度事件使用 `type=accelerometer`、`timestamp_ms`、`x_mps2`、`y_mps2`、`z_mps2`；GPS 分段事件使用 `type=gps_segment`、`timestamp_ms`、`distance_m`、`step_delta`、`horizontal_accuracy_m`、`speed_mps`。时间戳为毫秒，GPS 距离和步数是相邻定位点之间的增量。输出包括步频、步幅、总步数、垂直振幅和垂直步幅比；身高默认 175 厘米，用于初始化步幅。计算公式按 APK AOT 的 Blutter ARM64 反汇编恢复，尚未用 GarSync 运行时传感器记录逐项对照。
 
 `library period` 默认汇总截至今天的近 90 天，也可指定日期范围和运动类型。报告提供周期总距离/时长/TSS、周一开周的周切片、跑步 VDOT 起止与最高值、活动日志，以及 APK 周期总结中可恢复的最长距离、最高 TSS、最快配速、最高 NP、最高爬升、最长时长和最高均速亮点。`avg_norm_power_w` 是各活动正值 NP 的等权平均，`avg_norm_power_activity_count` 表示参与平均的活动数；无有效值时平均值为空。`avg_cadence` 对已识别的跑步和骑行活动，按活动等权平均非空的活动踏频摘要，`avg_cadence_activity_count` 是参与活动数；零值计入，空值和其他运动类型不计入。GarSync 按跑步步频（步/分钟）和骑行踏频（转/分钟）分别取活动字段，本地 FIT 摘要目前根据轨迹 `cadence` 记录求均值，且运动细分类型映射尚未完全覆盖。`recorded_zone_time_s` 按区间编号累加本地 FIT `time_in_zone` 中已有的心率、速度、踏频和功率秒数，不从轨迹采样点重算；无原始区间数据时对应结果为空。`power_curve_w` 从原始 FIT、GPX、TCX 轨迹点按 AOT 恢复的 10 秒至 6 小时窗口计算均功率，并跨活动保留每个时长的最大整数瓦数。缺少可读取轨迹文件的活动计入 `power_curve_unavailable_activity_count`；有效文件没有足够时长或功率样本时，该活动不会生成曲线值。FIT 内已有的 TSS 优先；未带 TSS 时，提供 `--threshold-hr` 才按 HR-TSS 公式估算。训练类型分布和轨迹重算的区间分布仍在分析中；个人纪录变化见 `pr_changes`。它使用 APK 可确认的距离档位、正负 3% 候选范围、时长比较和 PRChange 输出字段。本地以区间开始日前的最快成绩为历史基准，只报告区间内更快的成绩，首次记录的旧成绩和提升率为空。赛事距离数值按标准米制距离换算，AOT ConstMap 中的精确数值尚未恢复。APK 的历史基准来源未完全恢复，当前基准范围按本地完整活动库适配，日期按 UTC 日界线分组。NP 与踏频平均算法已从 AOT 汇编确认；功率曲线尚未与 GarSync 运行输出逐项比对。
 
