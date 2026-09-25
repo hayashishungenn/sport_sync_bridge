@@ -79,7 +79,7 @@ class WahooTargetTests(unittest.TestCase):
         target.session = session or _Session()
         return target
 
-    def test_builds_authorization_url_with_minimum_upload_scopes(self) -> None:
+    def test_builds_authorization_url_with_read_and_upload_scopes(self) -> None:
         target = self._target()
 
         parsed = urlparse(target.build_authorize_url())
@@ -92,7 +92,7 @@ class WahooTargetTests(unittest.TestCase):
             {
                 "client_id": ["client-id"],
                 "redirect_uri": ["http://localhost/"],
-                "scope": ["user_read workouts_write"],
+                "scope": ["user_read workouts_read workouts_write"],
                 "response_type": ["code"],
             },
         )
@@ -106,7 +106,7 @@ class WahooTargetTests(unittest.TestCase):
                         "access_token": "new-access",
                         "refresh_token": "new-refresh",
                         "expires_in": 7200,
-                        "scope": "user_read workouts_write",
+                        "scope": "user_read workouts_read workouts_write",
                     }
                 )
             ]
@@ -128,19 +128,34 @@ class WahooTargetTests(unittest.TestCase):
         )
         self.assertEqual(state_db.values["wahoo_access_token"], "new-access")
         self.assertEqual(state_db.values["wahoo_refresh_token"], "new-refresh")
-        self.assertEqual(state_db.values["wahoo_scope"], "user_read workouts_write")
+        self.assertEqual(state_db.values["wahoo_scope"], "user_read workouts_read workouts_write")
         self.assertGreater(float(state_db.values["wahoo_expires_at"]), datetime.now(timezone.utc).timestamp())
 
-    def test_rejects_token_payload_without_upload_scope_before_persisting(self) -> None:
+    def test_accepts_read_only_scope_for_source_but_rejects_target_upload(self) -> None:
         state_db = _StateDB()
         target = self._target(state_db=state_db)
 
-        with self.assertRaisesRegex(RuntimeError, "workouts_write"):
-            target._persist_token_payload(
-                {"access_token": "access", "refresh_token": "refresh", "scope": "user_read"}
-            )
+        target._persist_token_payload(
+            {
+                "access_token": "access",
+                "refresh_token": "refresh",
+                "scope": "user_read workouts_read",
+            }
+        )
 
-        self.assertEqual(state_db.values, {})
+        self.assertEqual(state_db.values["wahoo_scope"], "user_read workouts_read")
+        target.authenticate_for_scope("workouts_read")
+        with self.assertRaisesRegex(RuntimeError, "workouts_write"):
+            target.authenticate()
+
+    def test_exchange_records_requested_scope_when_token_response_omits_it(self) -> None:
+        state_db = _StateDB()
+        session = _Session(post_responses=[_Response({"access_token": "new-access"})])
+        target = self._target(session=session, state_db=state_db)
+
+        target.exchange_code("auth-code")
+
+        self.assertEqual(state_db.values["wahoo_scope"], "user_read workouts_read workouts_write")
 
     def test_uploads_base64_fit_and_polls_until_complete(self) -> None:
         session = _Session(
@@ -294,6 +309,7 @@ class WahooTargetTests(unittest.TestCase):
             engine = SyncEngine(config)
             try:
                 self.assertIn("wahoo", engine.targets)
+                self.assertIn("wahoo", engine.sources)
                 with self.assertRaisesRegex(ValueError, "Unsupported target format mapping"):
                     engine.sync_once(
                         sources=["local"],

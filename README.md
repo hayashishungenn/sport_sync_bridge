@@ -151,17 +151,19 @@ python sync.py check --source strava --target garmin
 python sync.py sync --source strava --target garmin --dry-run
 ```
 
-### Wahoo FIT 上传
+### Wahoo 活动来源和 FIT 上传
 
-Wahoo 可作为可选上传目标，仅接受 FIT。先在 Wahoo 开发者门户注册自己的应用，并配置 `WAHOO_CLIENT_ID`、`WAHOO_CLIENT_SECRET` 和与门户一致的 `WAHOO_REDIRECT_URI`；不要使用 APK 中的客户端凭据。Sandbox 有调用限制，生产环境需要 Wahoo 审核。授权只请求 `user_read workouts_write`，token 会保存在本地 SQLite。
+Wahoo 可作为活动来源和上传目标。先在 [Wahoo 开发者门户](https://developers.wahooligan.com/cloud) 注册自己的应用，并配置 `WAHOO_CLIENT_ID`、`WAHOO_CLIENT_SECRET` 和与门户一致的 `WAHOO_REDIRECT_URI`；不要使用 APK 中的客户端凭据。Wahoo 限制 Cloud API 的使用，Sandbox 有调用限制，生产环境需要审核。读取活动需要 `workouts_read`，上传需要 `workouts_write`，默认授权请求 `user_read workouts_read workouts_write`，token 会保存在本地 SQLite。
 
 ```powershell
 python sync.py wahoo-auth-url
 python sync.py wahoo-exchange --code 你的code
+python sync.py check --source wahoo --target garmin
+python sync.py sync --source wahoo --target garmin
 python sync.py sync --source local --target wahoo --format wahoo=fit --dry-run
 ```
 
-完成授权后，从回调地址的查询参数复制 `code`，再运行 `wahoo-exchange` 保存令牌。FIT 文件按 Wahoo API 上传并轮询处理状态。Wahoo 只支持 FIT，因此 `--format wahoo=gpx` 和 `--format wahoo=tcx` 会被拒绝。
+完成授权后，从回调地址的查询参数复制 `code`，再运行 `wahoo-exchange` 保存令牌。来源只列出有训练摘要的已完成活动，并下载 Wahoo 提供的 FIT 文件；Wahoo 不会通过 Cloud API 分享由第三方应用产生的已完成训练。只读取活动时可将 `WAHOO_SCOPE` 设为 `user_read workouts_read`；上传则需要 `workouts_write`。上传会轮询 FIT 处理状态。Wahoo 只支持 FIT，因此 `--format wahoo=gpx` 和 `--format wahoo=tcx` 会被拒绝。
 
 ### Concept2 Logbook 活动来源
 

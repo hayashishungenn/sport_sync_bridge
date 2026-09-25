@@ -21,7 +21,7 @@ class WahooTarget(TargetAdapter):
     authorization_url = f"{api_root}/oauth/authorize"
     token_url = f"{api_root}/oauth/token"
     required_scope = "workouts_write"
-    default_scopes = "user_read workouts_write"
+    default_scopes = "user_read workouts_read workouts_write"
     upload_poll_attempts = 6
     upload_poll_interval_seconds = 1
 
@@ -38,7 +38,11 @@ class WahooTarget(TargetAdapter):
         )
 
     def authenticate(self) -> None:
+        self.authenticate_for_scope(self.required_scope)
+
+    def authenticate_for_scope(self, required_scope: str) -> None:
         self._ensure_access_token()
+        self._require_scope(required_scope)
 
     def build_authorize_url(self) -> str:
         self._require_client_credentials()
@@ -65,7 +69,10 @@ class WahooTarget(TargetAdapter):
                 "grant_type": "authorization_code",
             }
         )
-        self._persist_token_payload(payload)
+        self._persist_token_payload(
+            payload,
+            requested_scope=self.config.wahoo_scope or self.default_scopes,
+        )
         return payload
 
     def upload_file(self, file_path: Path, activity: Activity, external_id: str) -> UploadResult:
@@ -73,6 +80,7 @@ class WahooTarget(TargetAdapter):
             return UploadResult(status="failed", message="Wahoo accepts FIT uploads only")
 
         try:
+            self._require_scope(self.required_scope)
             file_data = base64.b64encode(file_path.read_bytes()).decode("ascii")
             form = {
                 "workout_file_upload[file]": f"data:application/vnd.fit;base64,{file_data}",
@@ -136,6 +144,9 @@ class WahooTarget(TargetAdapter):
             response = send(access_token)
         return response
 
+    def api_request(self, method: str, path: str, **kwargs) -> requests.Response:
+        return self._api_request(method, path, **kwargs)
+
     def _ensure_access_token(self) -> str:
         access_token = self.state_db.get_value("wahoo_access_token") or self.config.wahoo_access_token
         expires_at = self.state_db.get_value("wahoo_expires_at") or self.config.wahoo_expires_at
@@ -183,19 +194,19 @@ class WahooTarget(TargetAdapter):
         response.raise_for_status()
         return _response_object(response)
 
-    def _persist_token_payload(self, payload: dict) -> None:
+    def _persist_token_payload(self, payload: dict, *, requested_scope: str | None = None) -> None:
         access_token = payload.get("access_token")
         if not access_token:
             raise RuntimeError("Wahoo did not return an access token")
 
         scope_text = None
         scope = payload.get("scope")
+        if scope is None:
+            scope = requested_scope
         if scope is not None:
             if isinstance(scope, list):
                 scope = " ".join(str(value) for value in scope)
             scope_text = str(scope)
-            if self.required_scope not in set(scope_text.replace(",", " ").split()):
-                raise RuntimeError("Wahoo authorization is missing the workouts_write scope")
 
         self.state_db.set_value("wahoo_access_token", str(access_token))
 
@@ -218,6 +229,19 @@ class WahooTarget(TargetAdapter):
     def _require_client_credentials(self) -> None:
         if not self.config.wahoo_client_id or not self.config.wahoo_client_secret:
             raise RuntimeError("Wahoo client ID and client secret are not configured")
+
+    def _require_scope(self, required_scope: str) -> None:
+        scope = (
+            self.state_db.get_value("wahoo_scope")
+            or self.config.wahoo_scope
+            or self.default_scopes
+        )
+        scopes = set(str(scope).replace(",", " ").split())
+        if required_scope not in scopes:
+            raise RuntimeError(
+                f"Wahoo token is missing {required_scope}. Set WAHOO_SCOPE to include it, "
+                "then run `python sync.py wahoo-auth-url` and `python sync.py wahoo-exchange --code ...`."
+            )
 
 
 def _response_object(response: requests.Response) -> dict:

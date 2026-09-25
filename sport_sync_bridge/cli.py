@@ -161,6 +161,7 @@ def build_parser() -> argparse.ArgumentParser:
             "concept2",
             "hammerhead",
             "polar",
+            "wahoo",
         ],
         help="Repeatable source",
     )
@@ -664,6 +665,7 @@ def build_parser() -> argparse.ArgumentParser:
             "concept2",
             "hammerhead",
             "polar",
+            "wahoo",
         ],
         help="Repeatable source",
     )

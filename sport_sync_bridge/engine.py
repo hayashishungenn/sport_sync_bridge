@@ -23,6 +23,7 @@ from .state import StateDB
 from .hammerhead_target import HammerheadTarget
 from .targets import GarminTarget, StravaTarget, TargetAdapter
 from .wahoo_target import WahooTarget
+from .wahoo_source import WahooSource
 from .utils import ensure_directory, safe_filename, sha1_file, utcnow
 
 
@@ -322,6 +323,9 @@ class SyncEngine:
         strava_target = self.targets.get("strava")
         if isinstance(strava_target, StravaTarget):
             adapters += (StravaSource(self.config, strava_target),)
+        wahoo_target = self.targets.get("wahoo")
+        if isinstance(wahoo_target, WahooTarget):
+            adapters += (WahooSource(self.config, wahoo_target),)
         for adapter in adapters:
             if adapter.is_configured():
                 sources[adapter.name] = adapter
