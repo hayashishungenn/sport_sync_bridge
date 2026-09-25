@@ -609,6 +609,8 @@ def request_ai_analysis(
     prompt: str,
     timeout_seconds: int = 90,
     on_delta: Callable[[str], None] | None = None,
+    system_prompt: str = "你是运动训练记录分析助手。",
+    temperature: float = 0.3,
 ) -> str:
     import requests
 
@@ -630,10 +632,10 @@ def request_ai_analysis(
             json={
                 "model": model,
                 "messages": [
-                    {"role": "system", "content": "你是运动训练记录分析助手。"},
+                    {"role": "system", "content": system_prompt},
                     {"role": "user", "content": prompt},
                 ],
-                "temperature": 0.3,
+                "temperature": temperature,
                 "stream": True,
             },
             timeout=timeout_seconds,

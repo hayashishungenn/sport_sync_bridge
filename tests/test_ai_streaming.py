@@ -107,6 +107,30 @@ class AIStreamingTests(unittest.TestCase):
         self.assertEqual(emitted, [" JSON result "])
         self.assertTrue(response.closed)
 
+    def test_custom_system_prompt_and_temperature_are_sent(self) -> None:
+        response = FakeResponse(
+            [
+                'data: {"choices":[{"delta":{"content":"{}"}}]}',
+                "",
+                "data: [DONE]",
+            ]
+        )
+
+        with patch("requests.post", return_value=response) as post:
+            result = request_ai_analysis(
+                base_url="https://ai.example/v1",
+                model="test-model",
+                api_key=None,
+                prompt="create a plan",
+                system_prompt="planning assistant",
+                temperature=0.4,
+            )
+
+        self.assertEqual(result, "{}")
+        payload = post.call_args.kwargs["json"]
+        self.assertEqual(payload["messages"][0]["content"], "planning assistant")
+        self.assertEqual(payload["temperature"], 0.4)
+
     def test_invalid_streaming_event_is_rejected(self) -> None:
         response = FakeResponse(["data: not-json", ""])
 

@@ -84,22 +84,47 @@ def materialize_schedule(template: dict[str, object], start_date: date) -> list[
                         definition[override["field"]] = override.get("value")
                 scheduled_date = start_date + timedelta(weeks=week_number - 1, days=_DAY_OFFSETS[day_key])
                 rest_day = bool(definition.get("isRestDay"))
-                display_name = str(definition.get("name") or ("Rest day" if rest_day else "Workout"))
-                item_id = str(uuid5(NAMESPACE_URL, f"{template.get('id')}:{scheduled_date.isoformat()}:{day_key}"))
-                items.append(
-                    {
-                        "item_id": item_id,
-                        "scheduled_date": scheduled_date.isoformat(),
-                        "item_type": "rest" if rest_day else "workout",
-                        "name": display_name,
-                        "sport_type": definition.get("sportType"),
-                        "payload": {
-                            **definition,
-                            "week_number": week_number,
-                            "weekday": day_key,
-                        },
+                base_definition = {key: value for key, value in definition.items() if key != "workouts"}
+                nested_workouts = definition.get("workouts")
+                if rest_day:
+                    if nested_workouts:
+                        raise ValueError(f"Rest day {day_key} cannot contain workouts")
+                    sessions = [base_definition]
+                elif nested_workouts is None:
+                    sessions = [base_definition]
+                else:
+                    if not isinstance(nested_workouts, list) or not nested_workouts:
+                        raise ValueError(f"Workout day {day_key} must contain at least one session")
+                    if any(not isinstance(session, dict) for session in nested_workouts):
+                        raise ValueError(f"Workout day {day_key} contains an invalid session")
+                    sessions = [{**base_definition, **session} for session in nested_workouts]
+
+                for session_index, session in enumerate(sessions):
+                    session_is_rest = bool(session.get("isRestDay"))
+                    display_name = str(
+                        session.get("name") or ("Rest day" if session_is_rest else "Workout")
+                    )
+                    item_key = f"{template.get('id')}:{scheduled_date.isoformat()}:{day_key}"
+                    if len(sessions) > 1:
+                        item_key += f":session:{session_index + 1}"
+                    item_id = str(uuid5(NAMESPACE_URL, item_key))
+                    payload = {
+                        **session,
+                        "week_number": week_number,
+                        "weekday": day_key,
                     }
-                )
+                    if len(sessions) > 1:
+                        payload["session_number"] = session_index + 1
+                    items.append(
+                        {
+                            "item_id": item_id,
+                            "scheduled_date": scheduled_date.isoformat(),
+                            "item_type": "rest" if session_is_rest else "workout",
+                            "name": display_name,
+                            "sport_type": session.get("sportType"),
+                            "payload": payload,
+                        }
+                    )
     if not items:
         raise ValueError("Training plan has no usable scheduled days")
     return sorted(items, key=lambda item: (str(item["scheduled_date"]), str(item["item_id"])))
