@@ -858,6 +858,134 @@ def _format_kmh_to_pace(value: object) -> str | None:
     return f"{minutes}:{seconds:02d}"
 
 
+def _garmin_health_detail_metric_values(
+    dataset: str,
+    payload: object,
+    fingerprint: str,
+) -> dict[str, float | str]:
+    metrics: dict[str, float | str] = {}
+    for metric_name, raw_value, unit, _ in _garmin_health_detail_observations(
+        dataset, payload, fingerprint
+    ):
+        normalized = _normalize_metric(metric_name, raw_value, unit)
+        if normalized is not None:
+            metric, value, _ = normalized
+            metrics[metric] = value
+    return metrics
+
+
+def _garmin_health_detail_metrics_for_date(
+    state_db: StateDB,
+    calendar_date: str,
+    dataset: str,
+) -> dict[str, float | str]:
+    metrics: dict[str, float | str] = {}
+    for row in state_db.list_garmin_health_details(calendar_date, calendar_date, dataset):
+        try:
+            payload = json.loads(str(row["payload_json"]))
+        except (TypeError, ValueError) as exc:
+            raise ValueError(
+                f"Stored Garmin health detail for {dataset} on {calendar_date} is invalid JSON"
+            ) from exc
+        metrics.update(
+            _garmin_health_detail_metric_values(
+                dataset,
+                payload,
+                str(row["fingerprint"]),
+            )
+        )
+    return metrics
+
+
+def _garmin_sleep_context_before_activity(
+    state_db: StateDB,
+    activity_start: datetime,
+) -> dict[str, object] | None:
+    first_date = (activity_start.date() - timedelta(days=1)).isoformat()
+    last_date = (activity_start.date() + timedelta(days=1)).isoformat()
+    rows = state_db.list_garmin_health_details(first_date, last_date, "sleep")
+    candidates: list[tuple[datetime, dict[str, object]]] = []
+
+    for row in rows:
+        calendar_date = str(row["calendar_date"])
+        try:
+            payload = json.loads(str(row["payload_json"]))
+        except (TypeError, ValueError) as exc:
+            raise ValueError(
+                f"Stored Garmin health detail for sleep on {calendar_date} is invalid JSON"
+            ) from exc
+        if not isinstance(payload, dict):
+            continue
+        sleep_data = payload.get("dailySleepDTO")
+        if not isinstance(sleep_data, dict):
+            continue
+
+        sleep_end = parse_datetime(sleep_data.get("sleepEndTimestampGMT"))
+        if sleep_end is None or sleep_end > activity_start:
+            continue
+        sleep_start = parse_datetime(sleep_data.get("sleepStartTimestampGMT"))
+        if sleep_start is not None and (sleep_start >= sleep_end or sleep_start > activity_start):
+            continue
+
+        context: dict[str, object] = {
+            "calendar_date": calendar_date,
+            "sleep_end_utc": sleep_end.isoformat(),
+            **_garmin_health_detail_metric_values(
+                "sleep",
+                payload,
+                str(row["fingerprint"]),
+            ),
+        }
+        if sleep_start is not None:
+            context["sleep_start_utc"] = sleep_start.isoformat()
+
+        sleep_score = sleep_data.get("sleepScore")
+        sleep_quality = sleep_data.get("sleepQuality")
+        sleep_scores = sleep_data.get("sleepScores")
+        overall_score = sleep_scores.get("overall") if isinstance(sleep_scores, dict) else None
+        if isinstance(overall_score, dict):
+            if sleep_score is None:
+                sleep_score = overall_score.get("value")
+            if sleep_quality is None:
+                sleep_quality = overall_score.get("qualifierKey")
+        if sleep_score is not None:
+            normalized_score = _normalize_metric("sleep_score", sleep_score, "score")
+            if normalized_score is not None:
+                context["sleep_score"] = normalized_score[1]
+        if isinstance(sleep_quality, str) and sleep_quality.strip():
+            context["sleep_quality"] = " ".join(sleep_quality.split())
+
+        average_heart_rate = sleep_data.get("averageHeartRate")
+        if average_heart_rate is not None:
+            normalized_heart_rate = _normalize_metric("pulse_bpm", average_heart_rate, "bpm")
+            if normalized_heart_rate is not None:
+                context["sleep_avg_hr_bpm"] = normalized_heart_rate[1]
+
+        hrv = _garmin_health_detail_metrics_for_date(state_db, calendar_date, "hrv")
+        if "hrv_ms" in hrv:
+            context["sleep_avg_hrv_ms"] = hrv["hrv_ms"]
+        if "hrv_weekly_average_ms" in hrv:
+            context["hrv_7d_baseline_ms"] = hrv["hrv_weekly_average_ms"]
+
+        spo2 = _garmin_health_detail_metrics_for_date(
+            state_db, calendar_date, "spo2-acclimation"
+        )
+        if "avg_sleep_spo2_percent" in spo2:
+            context["sleep_avg_spo2_percent"] = spo2["avg_sleep_spo2_percent"]
+
+        respiration = _garmin_health_detail_metrics_for_date(
+            state_db, calendar_date, "respiration"
+        )
+        if "avg_sleep_respiration_bpm" in respiration:
+            context["sleep_avg_respiration_bpm"] = respiration["avg_sleep_respiration_bpm"]
+
+        candidates.append((sleep_end, context))
+
+    if not candidates:
+        return None
+    return max(candidates, key=lambda item: item[0])[1]
+
+
 def summarize_health_for_activity(
     state_db: StateDB,
     activity_start: object,
@@ -868,6 +996,7 @@ def summarize_health_for_activity(
             "before_activity": {},
             "after_activity": {},
             "training_readiness_before_activity": None,
+            "sleep_before_activity": None,
         }
     start = parse_datetime(activity_start)
     if start is None:
@@ -892,6 +1021,28 @@ def summarize_health_for_activity(
                 observed_before=end_of_day.isoformat(),
             )
         )
+    sleep_context = _garmin_sleep_context_before_activity(state_db, start)
+    if sleep_context is not None:
+        sleep_metric_pairs = (
+            ("sleep_hours", "sleep_hours"),
+            ("deep_sleep_seconds", "deep_sleep_seconds"),
+            ("light_sleep_seconds", "light_sleep_seconds"),
+            ("rem_sleep_seconds", "rem_sleep_seconds"),
+            ("awake_sleep_seconds", "awake_sleep_seconds"),
+            ("hrv_ms", "sleep_avg_hrv_ms"),
+            ("hrv_weekly_average_ms", "hrv_7d_baseline_ms"),
+            ("avg_sleep_spo2_percent", "sleep_avg_spo2_percent"),
+            ("avg_sleep_respiration_bpm", "sleep_avg_respiration_bpm"),
+        )
+        for observation_metric, sleep_field in sleep_metric_pairs:
+            observation = after.get(observation_metric)
+            sleep_value = sleep_context.get(sleep_field)
+            if (
+                isinstance(observation, dict)
+                and sleep_value is not None
+                and observation.get("value") == sleep_value
+            ):
+                after.pop(observation_metric, None)
     readiness = state_db.get_latest_training_readiness_before(start.isoformat())
     readiness_context = None
     if readiness is not None:
@@ -934,6 +1085,7 @@ def summarize_health_for_activity(
         "before_activity": before,
         "after_activity": after,
         "training_readiness_before_activity": readiness_context,
+        "sleep_before_activity": sleep_context,
     }
 
 

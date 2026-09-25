@@ -20,6 +20,7 @@ from sport_sync_bridge.cli import main
 from sport_sync_bridge.formats import read_activity_file
 from sport_sync_bridge.health import (
     format_health_summary_text,
+    import_garmin_health_details,
     import_health_csv,
     summarize_health,
     summarize_health_for_activity,
@@ -339,8 +340,126 @@ class GarSyncLocalFeatureTests(unittest.TestCase):
                 "before_activity": {},
                 "after_activity": {},
                 "training_readiness_before_activity": None,
+                "sleep_before_activity": None,
             },
         )
+
+    def test_ai_sleep_context_uses_latest_completed_garmin_sleep(self) -> None:
+        import_garmin_health_details(
+            self.state,
+            [
+                {
+                    "dataset": "sleep",
+                    "calendarDate": "2026-01-02",
+                    "payload": {
+                        "dailySleepDTO": {
+                            "calendarDate": "2026-01-02",
+                            "sleepStartTimestampGMT": 1767290400000,
+                            "sleepEndTimestampGMT": 1767322200000,
+                            "sleepTimeSeconds": 25200,
+                            "deepSleepSeconds": 5400,
+                            "lightSleepSeconds": 12600,
+                            "remSleepSeconds": 6300,
+                            "awakeSleepSeconds": 900,
+                            "averageHeartRate": 55,
+                            "sleepScores": {
+                                "overall": {"value": 82, "qualifierKey": "GOOD"}
+                            },
+                        }
+                    },
+                },
+                {
+                    "dataset": "hrv",
+                    "calendarDate": "2026-01-02",
+                    "payload": {
+                        "calendarDate": "2026-01-02",
+                        "lastNightAvg": 48,
+                        "weeklyAverage": 52,
+                    },
+                },
+                {
+                    "dataset": "spo2-acclimation",
+                    "calendarDate": "2026-01-02",
+                    "payload": {"calendarDate": "2026-01-02", "avgSleepSpo2": 96.4},
+                },
+                {
+                    "dataset": "respiration",
+                    "calendarDate": "2026-01-02",
+                    "payload": {
+                        "calendarDate": "2026-01-02",
+                        "avgSleepRespirationValue": 15.2,
+                    },
+                },
+            ],
+        )
+
+        context = summarize_health_for_activity(
+            self.state,
+            "2026-01-02T11:00:00+08:00",
+            "2026-01-02T12:00:00+08:00",
+        )
+        sleep = context["sleep_before_activity"]
+        self.assertIsInstance(sleep, dict)
+        self.assertEqual(sleep["sleep_end_utc"], "2026-01-02T02:50:00+00:00")
+        self.assertEqual(sleep["sleep_hours"], 7)
+        self.assertEqual(sleep["deep_sleep_seconds"], 5400)
+        self.assertEqual(sleep["sleep_score"], 82)
+        self.assertEqual(sleep["sleep_quality"], "GOOD")
+        self.assertEqual(sleep["sleep_avg_hr_bpm"], 55)
+        self.assertEqual(sleep["sleep_avg_hrv_ms"], 48)
+        self.assertEqual(sleep["hrv_7d_baseline_ms"], 52)
+        self.assertEqual(sleep["sleep_avg_spo2_percent"], 96.4)
+        self.assertEqual(sleep["sleep_avg_respiration_bpm"], 15.2)
+        self.assertEqual(context["after_activity"], {})
+
+        activity = read_activity_file(create_gpx(self.root / "sleep-context.gpx"))
+        prompt = build_ai_analysis_prompt(
+            summarize_activity(activity), [], health_summary=context
+        )
+        self.assertIn("### Sleep & Recovery — Night Before Activity:", prompt)
+        self.assertIn("- Sleep Duration: 7.0 hours", prompt)
+        self.assertIn("Deep: 1.5 h", prompt)
+        self.assertIn("- Sleep Avg HRV: 48.0 ms", prompt)
+        self.assertIn("- Sleep Avg SpO2: 96.4%", prompt)
+
+    def test_ai_sleep_context_excludes_sleep_that_overlaps_activity_or_lacks_end_time(self) -> None:
+        import_garmin_health_details(
+            self.state,
+            [
+                {
+                    "dataset": "sleep",
+                    "calendarDate": "2026-01-01",
+                    "payload": {
+                        "dailySleepDTO": {
+                            "calendarDate": "2026-01-01",
+                            "sleepTimeSeconds": 25200,
+                        }
+                    },
+                },
+                {
+                    "dataset": "sleep",
+                    "calendarDate": "2026-01-02",
+                    "payload": {
+                        "dailySleepDTO": {
+                            "calendarDate": "2026-01-02",
+                            "sleepStartTimestampGMT": "2026-01-02T02:30:00Z",
+                            "sleepEndTimestampGMT": "2026-01-02T03:30:00Z",
+                            "sleepTimeSeconds": 25200,
+                        }
+                    },
+                },
+            ],
+        )
+
+        context = summarize_health_for_activity(
+            self.state,
+            "2026-01-02T03:00:00Z",
+            "2026-01-02T04:00:00Z",
+        )
+
+        self.assertIsNone(context["sleep_before_activity"])
+        prompt = build_ai_analysis_prompt({}, [], health_summary=context)
+        self.assertNotIn("Sleep & Recovery — Night Before Activity", prompt)
 
     def test_ai_analysis_uses_only_latest_training_readiness_before_activity(self) -> None:
         import_training_readiness_records(

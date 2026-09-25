@@ -476,6 +476,13 @@ def write_activity_report_pdf(rows: Iterable[object], output_path: Path) -> Path
     return output_path
 
 
+def _format_sleep_stage_duration(seconds: object) -> str:
+    total_minutes = float(seconds) / 60
+    if total_minutes < 60:
+        return f"{total_minutes:g} min"
+    return f"{total_minutes / 60:.1f} h"
+
+
 def build_ai_analysis_prompt(
     activity_summary: dict[str, object],
     recent_rows: Iterable[object],
@@ -603,11 +610,56 @@ def build_ai_analysis_prompt(
             f"{week_start}: {values['activities']} 次，{values['distance_m'] / 1000:.2f} 公里，"
             f"{values['duration_s'] / 3600:.2f} 小时"
         )
+    sleep_context = (
+        health_summary.get("sleep_before_activity")
+        if isinstance(health_summary, dict)
+        else None
+    )
+    if isinstance(sleep_context, dict):
+        lines.extend(("", "### Sleep & Recovery — Night Before Activity:"))
+        calendar_date = sleep_context.get("calendar_date")
+        if calendar_date is not None:
+            lines.append(f"Garmin 睡眠日期：{calendar_date}")
+        sleep_end = sleep_context.get("sleep_end_utc")
+        if sleep_end is not None:
+            lines.append(f"Sleep End (UTC): {sleep_end}")
+        sleep_duration = sleep_context.get("sleep_hours")
+        if sleep_duration is not None:
+            lines.append(f"- Sleep Duration: {_display(sleep_duration)} hours")
+        for metric, label in (
+            ("deep_sleep_seconds", "Deep"),
+            ("light_sleep_seconds", "Light"),
+            ("rem_sleep_seconds", "REM"),
+            ("awake_sleep_seconds", "Awake"),
+        ):
+            seconds = sleep_context.get(metric)
+            if seconds is not None:
+                lines.append(f"{label}: {_format_sleep_stage_duration(seconds)}")
+        sleep_values = (
+            ("sleep_score", "Sleep Score", " / 100"),
+            ("sleep_quality", "Sleep Quality", ""),
+            ("sleep_avg_hr_bpm", "Sleep Avg HR", " bpm"),
+            ("sleep_avg_hrv_ms", "Sleep Avg HRV", " ms"),
+            ("hrv_7d_baseline_ms", "HRV 7-Day Baseline", " ms"),
+            ("sleep_avg_spo2_percent", "Sleep Avg SpO2", "%"),
+            ("sleep_avg_respiration_bpm", "Sleep Avg Respiration", " brpm"),
+        )
+        for field, label, unit in sleep_values:
+            value = sleep_context.get(field)
+            if value is not None:
+                lines.append(f"- {label}: {_display(value)}{unit}")
     health_before = (
         health_summary.get("before_activity")
         if isinstance(health_summary, dict)
         else None
     )
+    readiness = (
+        health_summary.get("training_readiness_before_activity")
+        if isinstance(health_summary, dict)
+        else None
+    )
+    if (isinstance(health_before, dict) and health_before) or isinstance(readiness, dict):
+        lines.extend(("", "### Morning Baseline — Day of Activity:"))
     if isinstance(health_before, dict) and health_before:
         lines.extend(("", "活动开始前每项指标最近一次记录（时间均早于活动开始，时间戳为 UTC）："))
         for metric, value in sorted(health_before.items()):
@@ -616,11 +668,6 @@ def build_ai_analysis_prompt(
                     f"{metric}: {value.get('value')} {value.get('unit', '')} "
                     f"({value.get('observed_at', 'unknown time')})"
                 )
-    readiness = (
-        health_summary.get("training_readiness_before_activity")
-        if isinstance(health_summary, dict)
-        else None
-    )
     if isinstance(readiness, dict):
         lines.extend(("", "活动开始前最近一次训练准备度记录（时间戳为 UTC）："))
         lines.append(f"记录时间：{readiness.get('observed_at', 'unknown time')}")
@@ -654,7 +701,13 @@ def build_ai_analysis_prompt(
                 lines.append(f"{label}：{rendered}")
     health_after = health_summary.get("after_activity") if isinstance(health_summary, dict) else None
     if isinstance(health_after, dict) and health_after:
-        lines.extend(("", "活动结束后至结束日 UTC 日末记录的健康指标（时间戳为 UTC）："))
+        lines.extend(
+            (
+                "",
+                "### Post-Activity — Same Day:",
+                "活动结束后至结束日 UTC 日末记录的健康指标（时间戳为 UTC）：",
+            )
+        )
         for metric, value in sorted(health_after.items()):
             if isinstance(value, dict):
                 lines.append(
