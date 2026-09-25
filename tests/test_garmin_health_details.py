@@ -80,6 +80,11 @@ class _FakeGarminClient:
         if dataset == "spo2-acclimation":
             return {
                 "calendarDate": calendar_date,
+                "averageSpO2": 97.5,
+                "lowestSpO2": 90,
+                "lastSevenDaysAvgSpo2": 96.7,
+                "avgSleepSpo2": 95.2,
+                "spO2HourlyAverages": [[1, 97], [2, 98]],
                 "spo2DailyAverageArray": [[1, 97], [2, 98]],
             }
         if dataset == "floors-chart":
@@ -203,7 +208,14 @@ class GarminHealthDetailTests(unittest.TestCase):
             {
                 "dataset": "spo2-acclimation",
                 "calendarDate": "2026-08-03",
-                "payload": {"spo2DailyAverageArray": [[1, 97], [2, 98]]},
+                "payload": {
+                    "averageSpO2": 97.5,
+                    "lowestSpO2": 90,
+                    "lastSevenDaysAvgSpo2": 96.7,
+                    "avgSleepSpo2": 95.2,
+                    "spO2HourlyAverages": [[1, 97], [2, 98]],
+                    "spo2DailyAverageArray": [[1, 97], [2, 98]],
+                },
             },
             {
                 "dataset": "floors-chart",
@@ -235,7 +247,7 @@ class GarminHealthDetailTests(unittest.TestCase):
 
         latest = summary["latest"]
         self.assertEqual(imported["snapshots_stored"], 5)
-        self.assertEqual(imported["observations_processed"], 10)
+        self.assertEqual(imported["observations_processed"], 14)
         self.assertEqual(latest["fitness_age_years"]["value"], 31)
         self.assertEqual(latest["achievable_fitness_age_years"]["value"], 29)
         self.assertEqual(latest["resting_hr_bpm"]["value"], 57)
@@ -246,6 +258,10 @@ class GarminHealthDetailTests(unittest.TestCase):
         self.assertEqual(latest["floors_goal"]["value"], 10)
         self.assertEqual(latest["steps"]["value"], 8123)
         self.assertEqual(latest["step_goal"]["value"], 9000)
+        self.assertEqual(latest["spo2_percent"]["value"], 97.5)
+        self.assertEqual(latest["spo2_low_percent"]["value"], 90)
+        self.assertEqual(latest["spo2_7d_average_percent"]["value"], 96.7)
+        self.assertEqual(latest["avg_sleep_spo2_percent"]["value"], 95.2)
         self.assertEqual(
             stored["records"][0]["payload"]["spo2DailyAverageArray"],
             [[1, 97], [2, 98]],
