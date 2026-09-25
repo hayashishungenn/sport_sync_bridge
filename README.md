@@ -184,6 +184,8 @@ python sync.py convert ride.gpx --to fit --output ride.fit
 
 从本地文件或目录导入活动。目录需要显式指定 `--recursive`；ZIP 会在内存中读取，不会按压缩包路径解压到磁盘。加密 ZIP 可通过 `ACTIVITY_ARCHIVE_PASSWORD` 提供密码。
 
+Huawei Health 历史数据 ZIP 可直接预览或导入。活动库会读取 `Motion path detail data & description` 中的运动记录 JSON，并把其中多条活动分别加入本地库；同一归档里的其他 JSON 不会当作活动导入。
+
 ```powershell
 python sync.py library preview .\activities.zip
 python sync.py library import .\activities.zip

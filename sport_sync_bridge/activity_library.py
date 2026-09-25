@@ -14,6 +14,11 @@ from typing import Iterable, Iterator
 
 from .activity_analysis import summarize_activity
 from .formats import ActivityFile, ActivityLap, TrackPoint, _write_gpx, read_activity_file
+from .huawei_archive import (
+    is_huawei_motion_detail_file,
+    parse_huawei_activity_json,
+    serialize_activity_json,
+)
 from .state import StateDB
 from .utils import parse_datetime
 
@@ -73,7 +78,9 @@ class LocalActivityLibrary:
             else:
                 if path.stat().st_size > MAX_FILE_BYTES:
                     raise ValueError(f"Activity file is too large: {path}")
-                results.append(self.import_payload(path.name, path.read_bytes(), source_label=str(path)))
+                results.extend(
+                    self._import_payloads(path.name, path.read_bytes(), source_label=str(path))
+                )
         return results
 
     def preview_paths(
@@ -102,8 +109,8 @@ class LocalActivityLibrary:
             else:
                 if path.stat().st_size > MAX_FILE_BYTES:
                     raise ValueError(f"Activity file is too large: {path}")
-                previews.append(
-                    self.preview_payload(path.name, path.read_bytes(), source_label=str(path))
+                previews.extend(
+                    self._preview_payloads(path.name, path.read_bytes(), source_label=str(path))
                 )
         return previews
 
@@ -164,14 +171,16 @@ class LocalActivityLibrary:
         source_label: str | None = None,
         password: bytes | None = None,
     ) -> list[ImportPreview]:
+        label = source_label or filename
         return [
-            self.preview_payload(
-                member_name,
-                member_payload,
-                source_label=f"{source_label or filename}!/{member_path}",
-            )
+            preview
             for member_name, member_path, member_payload in _iter_archive_activity_payloads(
                 filename, payload, password, action="preview"
+            )
+            for preview in self._preview_payloads(
+                member_name,
+                member_payload,
+                source_label=f"{label}!/{member_path}",
             )
         ]
 
@@ -271,16 +280,71 @@ class LocalActivityLibrary:
         source_label: str | None = None,
         password: bytes | None = None,
     ) -> list[ImportResult]:
+        label = source_label or filename
         return [
-            self.import_payload(
-                member_name,
-                member_payload,
-                source_label=f"{filename}!/{member_path}",
-            )
+            result
             for member_name, member_path, member_payload in _iter_archive_activity_payloads(
                 filename, payload, password
             )
+            for result in self._import_payloads(
+                member_name,
+                member_payload,
+                source_label=f"{label}!/{member_path}",
+            )
         ]
+
+    def _import_payloads(
+        self,
+        filename: str,
+        payload: bytes,
+        *,
+        source_label: str,
+    ) -> list[ImportResult]:
+        suffix = Path(filename).suffix.lower().lstrip(".")
+        huawei_activities = None
+        if suffix == "json" or is_huawei_motion_detail_file(filename):
+            huawei_activities = parse_huawei_activity_json(
+                payload,
+                Path(filename).stem,
+                required=is_huawei_motion_detail_file(filename),
+            )
+        if huawei_activities is not None:
+            for activity in huawei_activities:
+                _validate_coordinates(activity, filename)
+            return [
+                self.import_payload(
+                    f"{activity.name or Path(filename).stem}.json",
+                    serialize_activity_json(activity),
+                    source_label=f"{source_label}#activity-{index}",
+                )
+                for index, activity in enumerate(huawei_activities, start=1)
+            ]
+        return [self.import_payload(filename, payload, source_label=source_label)]
+
+    def _preview_payloads(
+        self,
+        filename: str,
+        payload: bytes,
+        *,
+        source_label: str,
+    ) -> list[ImportPreview]:
+        suffix = Path(filename).suffix.lower().lstrip(".")
+        if suffix == "json" or is_huawei_motion_detail_file(filename):
+            huawei_activities = parse_huawei_activity_json(
+                payload,
+                Path(filename).stem,
+                required=is_huawei_motion_detail_file(filename),
+            )
+            if huawei_activities is not None:
+                return [
+                    self.preview_payload(
+                        f"{activity.name or Path(filename).stem}.json",
+                        serialize_activity_json(activity),
+                        source_label=f"{source_label}#activity-{index}",
+                    )
+                    for index, activity in enumerate(huawei_activities, start=1)
+                ]
+        return [self.preview_payload(filename, payload, source_label=source_label)]
 
     def get_activity(self, identifier: str):
         row = self.state_db.get_local_activity(identifier)
@@ -310,6 +374,23 @@ def _collect_candidate_paths(
             if not recursive:
                 raise ValueError(f"Directory {operation} requires --recursive: {resolved}")
             entries = sorted(path for path in resolved.rglob("*") if path.is_file())
+            huawei_entries = [
+                path
+                for path in entries
+                if is_huawei_motion_detail_file(path.relative_to(resolved).as_posix())
+                and (
+                    path.suffix.lower() == ".json"
+                    or is_huawei_motion_detail_file(path.name)
+                )
+            ]
+            if huawei_entries:
+                huawei_paths = set(huawei_entries)
+                entries = [
+                    path
+                    for path in entries
+                    if path in huawei_paths
+                    or path.suffix.lower() in {".fit", ".gpx", ".tcx", ".csv", ".zip"}
+                ]
         else:
             entries = [resolved]
         for entry in entries:
@@ -337,16 +418,50 @@ def _iter_archive_activity_payloads(
                 raise ValueError(f"ZIP contains too many entries: {filename}")
             if sum(info.file_size for info in entries) > MAX_ARCHIVE_BYTES:
                 raise ValueError(f"ZIP expands beyond the allowed size: {filename}")
-            supported_entries = [
+            huawei_entries = [
                 info
                 for info in entries
-                if Path(PurePosixPath(info.filename).name).suffix.lower().lstrip(".")
-                in ACTIVITY_FORMATS
+                if is_huawei_motion_detail_file(info.filename)
+                and (
+                    Path(PurePosixPath(info.filename).name).suffix.lower() == ".json"
+                    or is_huawei_motion_detail_file(PurePosixPath(info.filename).name)
+                )
+                and not any(
+                    part == "__MACOSX" or part == ".DS_Store" or part.startswith("._")
+                    for part in PurePosixPath(info.filename).parts
+                )
             ]
+            if huawei_entries:
+                huawei_paths = {info.filename for info in huawei_entries}
+                supported_entries = [
+                    info
+                    for info in entries
+                    if (
+                        info.filename in huawei_paths
+                        or Path(PurePosixPath(info.filename).name).suffix.lower().lstrip(".")
+                        in ACTIVITY_FORMATS - {"json"}
+                    )
+                    and not any(
+                        part == "__MACOSX" or part == ".DS_Store" or part.startswith("._")
+                        for part in PurePosixPath(info.filename).parts
+                    )
+                ]
+            else:
+                supported_entries = [
+                    info
+                    for info in entries
+                    if Path(PurePosixPath(info.filename).name).suffix.lower().lstrip(".")
+                    in ACTIVITY_FORMATS
+                ]
             if not supported_entries:
                 raise ValueError(f"ZIP contains no supported activity files: {filename}")
             for info in supported_entries:
                 member_name = PurePosixPath(info.filename).name
+                if (
+                    is_huawei_motion_detail_file(info.filename)
+                    and Path(member_name).suffix.lower().lstrip(".") not in ACTIVITY_FORMATS
+                ):
+                    member_name = f"{member_name}.json"
                 if info.file_size > MAX_FILE_BYTES:
                     raise ValueError(f"ZIP member is too large: {member_name}")
                 try:
