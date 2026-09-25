@@ -16,6 +16,7 @@ FEED_ENDPOINTS = {
     "follow": "/feed/follow",
 }
 THUMB_ENDPOINT = "/thumb"
+PUBLISH_ENDPOINT = "/publish"
 
 
 class SocialFeedError(ValueError):
@@ -139,6 +140,33 @@ class SocialFeedClient:
 
     def thumb(self, activity_id: str) -> None:
         self._change_thumb(self._post, "POST", activity_id)
+
+    def publish(self, publish_data: dict[str, object]) -> dict[str, object]:
+        if not isinstance(publish_data, dict):
+            raise SocialFeedError("publish data must be a JSON object")
+        try:
+            response = self._post(
+                f"{self._base_url}{PUBLISH_ENDPOINT}",
+                json=publish_data,
+                headers={
+                    "Authorization": f"Bearer {self._auth_token}",
+                    "Content-Type": "application/json",
+                },
+                timeout=30,
+            )
+        except requests.RequestException as exc:
+            raise SocialFeedError("social publish request failed") from exc
+        if not 200 <= response.status_code < 300:
+            raise SocialFeedError(
+                f"POST {PUBLISH_ENDPOINT} failed with HTTP {response.status_code}"
+            )
+        try:
+            payload = response.json()
+        except ValueError as exc:
+            raise SocialFeedError("social publish response was not valid JSON") from exc
+        if not isinstance(payload, dict):
+            raise SocialFeedError("social publish response must be a JSON object")
+        return payload
 
     def unthumb(self, activity_id: str) -> None:
         self._change_thumb(self._delete, "DELETE", activity_id)

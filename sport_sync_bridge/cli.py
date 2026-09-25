@@ -134,6 +134,7 @@ from .samba import import_samba_activity, list_samba_directory
 from .share_links import build_friend_invite_url, build_group_invite_url
 from .social_feed import SocialFeedClient, SocialFeedError
 from .social_friends import NakamaFriendsClient, NakamaFriendsError
+from .social_publish import build_activity_publish_data
 from .state import StateDB
 from .training_balance import calculate_training_balance, format_training_balance
 from .swim_css import (
@@ -853,9 +854,33 @@ def build_parser() -> argparse.ArgumentParser:
     group_invite.add_argument("--name", help="Optional inviter name included in the link")
 
     social_parser = subparsers.add_parser(
-        "social", help="Read GarSync activity feeds and manage Nakama friends"
+        "social", help="Read and publish GarSync activity feeds and manage Nakama friends"
     )
     social_actions = social_parser.add_subparsers(dest="social_action", required=True)
+    social_publish = social_actions.add_parser(
+        "publish", help="Publish a local activity summary to the GarSync social feed"
+    )
+    social_publish.add_argument("input", type=Path, help="FIT, GPX, or TCX activity file")
+    social_publish.add_argument("--activity-id", required=True, help="GarSync activity ID")
+    social_publish.add_argument("--display-name", required=True, help="Name shown on the post")
+    social_publish.add_argument("--title", help="Post title (defaults to the activity name)")
+    social_publish.add_argument("--avatar-url", help="Optional profile avatar URL")
+    social_publish.add_argument(
+        "--location-name", help="Optional location label; no reverse-geocoding service is called"
+    )
+    social_publish.add_argument(
+        "--base-url",
+        help="Social API base URL (defaults to GARSYNC_SOCIAL_BASE_URL)",
+    )
+    social_publish.add_argument(
+        "--token-env",
+        default="GARSYNC_NAKAMA_AUTH_TOKEN",
+        help="Environment variable containing the Nakama session token",
+    )
+    social_publish.add_argument(
+        "--dry-run", action="store_true", help="Print the post JSON without sending it"
+    )
+
     social_feed = social_actions.add_parser("feed", help="Fetch a user, nearby, newest, hot, or follow feed")
     social_feed.add_argument("kind", choices=["user", "nearby", "newest", "hot", "follow"])
     social_feed.add_argument(
@@ -966,6 +991,8 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "weather":
         return _run_weather(args, config)
     if args.command == "social":
+        if args.social_action == "publish":
+            return _run_social_publish_command(args)
         if args.social_action == "feed":
             return _run_social_feed_command(args)
         if args.social_action == "friends":
@@ -2111,6 +2138,48 @@ def _run_share_command(args: argparse.Namespace) -> int:
         return 2
 
     print(invite_url)
+    return 0
+
+
+def _run_social_publish_command(args: argparse.Namespace) -> int:
+    try:
+        activity = read_activity_file(args.input)
+        if not activity.name:
+            activity.name = args.input.stem
+        publish_data = build_activity_publish_data(
+            activity,
+            activity_id=args.activity_id,
+            display_name=args.display_name,
+            title=args.title,
+            avatar_url=args.avatar_url,
+            location_name=args.location_name,
+        )
+    except (OSError, RuntimeError, ValueError) as exc:
+        print(f"social_error={exc}", file=sys.stderr)
+        return 2
+
+    if args.dry_run:
+        print(json.dumps(publish_data, ensure_ascii=False, indent=2, allow_nan=False))
+        return 0
+
+    base_url = args.base_url or os.environ.get("GARSYNC_SOCIAL_BASE_URL")
+    if not base_url:
+        print("social_error=set GARSYNC_SOCIAL_BASE_URL or pass --base-url", file=sys.stderr)
+        return 2
+    auth_token = os.environ.get(args.token_env)
+    if not auth_token:
+        print(
+            "social_error=the configured Nakama session token environment variable is missing or empty",
+            file=sys.stderr,
+        )
+        return 2
+
+    try:
+        result = SocialFeedClient(base_url, auth_token).publish(publish_data)
+    except SocialFeedError as exc:
+        print(f"social_error={exc}", file=sys.stderr)
+        return 2
+    print(json.dumps(result, ensure_ascii=False, indent=2))
     return 0
 
 

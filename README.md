@@ -344,6 +344,15 @@ python sync.py social thumb <动态ID>
 python sync.py social unthumb <动态ID>
 ```
 
+`social publish <文件>` 按 APK `ActivitySeedHelper` 的发布摘要字段从 FIT、GPX 或 TCX 生成动态并 POST 到 `/publish`。需要显式提供 GarSync 活动 ID 和显示名称；默认标题取文件中的活动名。动态包含可用的路线折线和首个 GPS 坐标，发布前可用 `--dry-run` 检查 JSON。`--location-name` 接受手动地点名称，不调用 APK 使用的第三方逆向地理编码服务，也不移植其中的服务凭据。
+
+```powershell
+python sync.py social publish .data/local_imports/ride.fit --activity-id <GarSync活动ID> --display-name "显示名称" --dry-run
+python sync.py social publish .data/local_imports/ride.fit --activity-id <GarSync活动ID> --display-name "显示名称" --location-name "上海"
+```
+
+实际发布使用 `GARSYNC_SOCIAL_BASE_URL` 和 `GARSYNC_NAKAMA_AUTH_TOKEN`；`--base-url` 和 `--token-env` 可覆盖默认值。发布会发送活动摘要和 GPS 路线，先检查 `--dry-run` 输出再移除该参数。
+
 ### BLE 运动传感器
 
 BLE 命令可扫描附近设备、保存设备名称和首选类型、读取标准电量服务，并记录心率、跑步步频、骑行速度/踏频、功率计测量与功率向量、室内单车的标准通知。`heart-rate` 命令输出 CSV；`record` 可将发现的标准测量通知输出到终端或 JSON Lines 文件。CSC 和功率计的轮速传感数据只有在提供轮周长时才会推算速度和距离；设备只提供计数器时仍保留原始计数。普通测量采集只订阅并读取测量数据。BigRun ECG 命令会启动心电带并将原始通知字节以十六进制写入 JSON Lines；`bigrun-ecg-decode` 可将其中的 `0x41` 波形帧解码为 125 Hz 样本，并保留每帧采集时间；`bigrun-ecg-mode` 可设置 `standard`、`hrv` 或 `ecg` 工作模式。波形解码命令可加 --normalize，将整段样本按全局振幅范围映射至 -5 到 5；幅度范围小于 1e-9 时输出零值。该步骤仅处理波形显示尺度，不生成诊断结论。
