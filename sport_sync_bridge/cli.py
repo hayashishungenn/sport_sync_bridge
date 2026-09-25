@@ -115,6 +115,7 @@ from .running_dynamics import (
 from .samba import import_samba_activity, list_samba_directory
 from .share_links import build_friend_invite_url, build_group_invite_url
 from .social_feed import SocialFeedClient, SocialFeedError
+from .social_friends import NakamaFriendsClient, NakamaFriendsError
 from .state import StateDB
 from .training_balance import calculate_training_balance, format_training_balance
 from .swim_css import calculate_swim_css, format_swim_css, parse_swim_time
@@ -640,7 +641,9 @@ def build_parser() -> argparse.ArgumentParser:
     group_invite.add_argument("--group-name", help="Optional group name included in the link")
     group_invite.add_argument("--name", help="Optional inviter name included in the link")
 
-    social_parser = subparsers.add_parser("social", help="Read GarSync social activity feeds")
+    social_parser = subparsers.add_parser(
+        "social", help="Read GarSync activity feeds and manage Nakama friends"
+    )
     social_actions = social_parser.add_subparsers(dest="social_action", required=True)
     social_feed = social_actions.add_parser("feed", help="Fetch a user, nearby, newest, hot, or follow feed")
     social_feed.add_argument("kind", choices=["user", "nearby", "newest", "hot", "follow"])
@@ -663,6 +666,42 @@ def build_parser() -> argparse.ArgumentParser:
         action="append",
         help="Follow-feed user ID; repeat for multiple IDs",
     )
+
+    social_friends = social_actions.add_parser("friends", help="List or change Nakama friends")
+    friend_actions = social_friends.add_subparsers(dest="friends_action", required=True)
+    friends_list = friend_actions.add_parser("list", help="List friends and their raw server state")
+    friends_list.add_argument(
+        "--base-url",
+        help="Nakama API base URL (defaults to GARSYNC_NAKAMA_BASE_URL)",
+    )
+    friends_list.add_argument(
+        "--token-env",
+        default="GARSYNC_NAKAMA_AUTH_TOKEN",
+        help="Environment variable containing the Nakama session token",
+    )
+    friends_list.add_argument("--limit", type=int, default=2000, help="Maximum entries (default: 2000)")
+    friends_list.add_argument("--cursor", help="Nakama pagination cursor")
+    friends_list.add_argument(
+        "--state",
+        type=int,
+        help="Optional numeric Nakama friendship state filter",
+    )
+
+    for action, help_text in (
+        ("add", "Send a friend request by Nakama user ID"),
+        ("remove", "Remove a friend by Nakama user ID"),
+    ):
+        friend_change = friend_actions.add_parser(action, help=help_text)
+        friend_change.add_argument("user_id", help="Nakama user ID")
+        friend_change.add_argument(
+            "--base-url",
+            help="Nakama API base URL (defaults to GARSYNC_NAKAMA_BASE_URL)",
+        )
+        friend_change.add_argument(
+            "--token-env",
+            default="GARSYNC_NAKAMA_AUTH_TOKEN",
+            help="Environment variable containing the Nakama session token",
+        )
 
     parser.set_defaults(command="sync")
     return parser
@@ -696,7 +735,9 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "weather":
         return _run_weather(args, config)
     if args.command == "social":
-        return _run_social_feed_command(args)
+        if args.social_action == "feed":
+            return _run_social_feed_command(args)
+        return _run_social_friends_command(args)
     if args.command in {
         "library",
         "plans",
@@ -1630,6 +1671,50 @@ def _run_social_feed_command(args: argparse.Namespace) -> int:
         return 2
 
     print(json.dumps(payload, ensure_ascii=False, indent=2))
+    return 0
+
+
+def _run_social_friends_command(args: argparse.Namespace) -> int:
+    base_url = args.base_url or os.environ.get("GARSYNC_NAKAMA_BASE_URL")
+    if not base_url:
+        print("social_error=set GARSYNC_NAKAMA_BASE_URL or pass --base-url", file=sys.stderr)
+        return 2
+    auth_token = os.environ.get(args.token_env)
+    if not auth_token:
+        print(
+            "social_error=the configured Nakama session token environment variable is missing or empty",
+            file=sys.stderr,
+        )
+        return 2
+
+    try:
+        client = NakamaFriendsClient(base_url, auth_token)
+        if args.friends_action == "list":
+            payload = client.list_friends(
+                limit=args.limit,
+                cursor=args.cursor,
+                state=args.state,
+            )
+            print(json.dumps(payload, ensure_ascii=False, indent=2))
+            return 0
+        if args.friends_action == "add":
+            client.add_friend(args.user_id)
+        else:
+            client.remove_friend(args.user_id)
+    except NakamaFriendsError as exc:
+        print(f"social_error={exc}", file=sys.stderr)
+        return 2
+
+    print(
+        json.dumps(
+            {
+                "operation": args.friends_action,
+                "status": "ok",
+                "userId": args.user_id.strip(),
+            },
+            ensure_ascii=False,
+        )
+    )
     return 0
 
 

@@ -232,6 +232,19 @@ python sync.py share friend-invite <用户UUID> --name "显示名称"
 python sync.py share group-invite <群组UUID> --group-name "周末骑行" --name "邀请人"
 ```
 
+### 社交动态与好友
+
+`social feed` 读取 GarSync 的用户、附近、最新、热门和关注动态，接口地址从 `GARSYNC_SOCIAL_BASE_URL` 读取。`social friends` 使用 Nakama REST API 列出好友、发送好友请求或移除好友；默认列表上限为 2000 条，`--cursor` 可继续读取下一页，`--state` 将数字状态筛选原样传给服务器。列表保留服务器返回的原始状态字段。
+
+Nakama API 地址从 `GARSYNC_NAKAMA_BASE_URL` 读取，会在本地请求 `/v2/friend`。会话令牌默认从 `GARSYNC_NAKAMA_AUTH_TOKEN` 读取，也可用 `--token-env` 指定其他环境变量。不要把令牌写入命令行参数。
+
+```powershell
+python sync.py social friends list
+python sync.py social friends list --limit 2000 --cursor "<游标>"
+python sync.py social friends add <用户ID>
+python sync.py social friends remove <用户ID>
+```
+
 ### BLE 运动传感器
 
 BLE 命令可扫描附近设备、保存设备名称和首选类型、读取标准电量服务，并记录心率、跑步步频、骑行速度/踏频、功率计测量与功率向量、室内单车的标准通知。`heart-rate` 命令输出 CSV；`record` 可将发现的标准测量通知输出到终端或 JSON Lines 文件。CSC 和功率计的轮速传感数据只有在提供轮周长时才会推算速度和距离；设备只提供计数器时仍保留原始计数。普通测量采集只订阅并读取测量数据。BigRun ECG 命令会启动心电带并将原始通知字节以十六进制写入 JSON Lines；`bigrun-ecg-decode` 可将其中的 `0x41` 波形帧解码为 125 Hz 样本，并保留每帧采集时间；`bigrun-ecg-mode` 可设置 `standard`、`hrv` 或 `ecg` 工作模式。波形解码命令可加 --normalize，将整段样本按全局振幅范围映射至 -5 到 5；幅度范围小于 1e-9 时输出零值。该步骤仅处理波形显示尺度，不生成诊断结论。
