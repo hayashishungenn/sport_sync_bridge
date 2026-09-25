@@ -33,7 +33,11 @@ class _FakeGarminClient:
         params = kwargs.get("params")
         if isinstance(params, dict) and "date" in params:
             calendar_date = str(params["date"])
-            dataset = "sleep"
+            dataset = next(
+                name
+                for name, endpoint in GARMIN_HEALTH_DETAIL_ENDPOINTS.items()
+                if path == endpoint
+            )
         else:
             calendar_date = path.rsplit("/", 1)[-1]
             dataset = next(
@@ -60,6 +64,34 @@ class _FakeGarminClient:
             return {"calendarDate": calendar_date, "valueInML": 1500}
         if dataset == "blood-pressure":
             return {"calendarDate": calendar_date, "bloodPressureMeasurements": []}
+        if dataset == "heart-rate":
+            return {
+                "calendarDate": calendar_date,
+                "restingHR": 57,
+                "wellnessMaxAvgHR": 190,
+                "wellnessMinAvgHR": 45,
+            }
+        if dataset == "fitness-age":
+            return {
+                "calendarDate": calendar_date,
+                "fitnessAge": 31,
+                "achievableFitnessAge": 29,
+            }
+        if dataset == "spo2-acclimation":
+            return {
+                "calendarDate": calendar_date,
+                "spo2DailyAverageArray": [[1, 97], [2, 98]],
+            }
+        if dataset == "floors-chart":
+            return {
+                "calendarDate": calendar_date,
+                "floorsAscended": 17,
+                "floorsDescended": 12,
+                "floorsGoal": 10,
+                "timeSeries": [],
+            }
+        if dataset == "steps":
+            return {"calendarDate": calendar_date, "totalSteps": 8123, "dailyStepGoal": 9000}
         raise AssertionError(dataset)
 
 
@@ -114,6 +146,109 @@ class GarminHealthDetailTests(unittest.TestCase):
                 ("/wellness-service/wellness/daily/respiration/2026-08-03", {}),
                 ("/usersummary-service/usersummary/hydration/allData/2026-08-03", {}),
             ],
+        )
+
+    def test_fetches_additional_confirmed_garmin_health_endpoints(self) -> None:
+        client = _FakeGarminClient()
+
+        records = fetch_garmin_health_details(
+            client,
+            ["heart-rate", "fitness-age", "spo2-acclimation", "floors-chart", "steps"],
+            "2026-08-03",
+            "2026-08-03",
+        )
+
+        self.assertEqual(
+            client.calls,
+            [
+                (
+                    "/wellness-service/wellness/dailyHeartRate",
+                    {"params": {"date": "2026-08-03"}},
+                ),
+                ("/fitnessage-service/fitnessage/2026-08-03", {}),
+                (
+                    "/wellness-service/wellness/daily/spo2acclimation/2026-08-03",
+                    {},
+                ),
+                (
+                    "/wellness-service/wellness/floorsChartData/daily/2026-08-03",
+                    {},
+                ),
+                (
+                    "/wellness-service/wellness/wellness-goals/consolidated/steps/2026-08-03",
+                    {},
+                ),
+            ],
+        )
+        self.assertEqual(len(records), 5)
+        self.assertEqual(records[0]["payload"]["restingHR"], 57)
+        self.assertEqual(records[2]["payload"]["spo2DailyAverageArray"][0], [1, 97])
+
+    def test_imports_fitness_age_heart_rate_and_floor_chart_metrics(self) -> None:
+        records = [
+            {
+                "dataset": "heart-rate",
+                "calendarDate": "2026-08-03",
+                "payload": {
+                    "restingHR": 57,
+                    "wellnessMaxAvgHR": 190,
+                    "wellnessMinAvgHR": 45,
+                },
+            },
+            {
+                "dataset": "fitness-age",
+                "calendarDate": "2026-08-03",
+                "payload": {"fitnessAge": 31, "achievableFitnessAge": 29},
+            },
+            {
+                "dataset": "spo2-acclimation",
+                "calendarDate": "2026-08-03",
+                "payload": {"spo2DailyAverageArray": [[1, 97], [2, 98]]},
+            },
+            {
+                "dataset": "floors-chart",
+                "calendarDate": "2026-08-03",
+                "payload": {
+                    "floorsAscended": 17,
+                    "floorsDescended": 12,
+                    "floorsGoal": 10,
+                    "timeSeries": [],
+                },
+            },
+            {
+                "dataset": "steps",
+                "calendarDate": "2026-08-03",
+                "payload": {"totalSteps": 8123, "dailyStepGoal": 9000},
+            },
+        ]
+
+        with tempfile.TemporaryDirectory() as directory:
+            state = StateDB(Path(directory) / "health.db")
+            try:
+                imported = import_garmin_health_details(state, records)
+                summary = summarize_health(state)
+                stored = list_garmin_health_details(
+                    state, "2026-08-03", "2026-08-03", "spo2-acclimation"
+                )
+            finally:
+                state.close()
+
+        latest = summary["latest"]
+        self.assertEqual(imported["snapshots_stored"], 5)
+        self.assertEqual(imported["observations_processed"], 10)
+        self.assertEqual(latest["fitness_age_years"]["value"], 31)
+        self.assertEqual(latest["achievable_fitness_age_years"]["value"], 29)
+        self.assertEqual(latest["resting_hr_bpm"]["value"], 57)
+        self.assertEqual(latest["max_heart_rate_bpm"]["value"], 190)
+        self.assertEqual(latest["min_heart_rate_bpm"]["value"], 45)
+        self.assertEqual(latest["floors"]["value"], 17)
+        self.assertEqual(latest["floors_descended"]["value"], 12)
+        self.assertEqual(latest["floors_goal"]["value"], 10)
+        self.assertEqual(latest["steps"]["value"], 8123)
+        self.assertEqual(latest["step_goal"]["value"], 9000)
+        self.assertEqual(
+            stored["records"][0]["payload"]["spo2DailyAverageArray"],
+            [[1, 97], [2, 98]],
         )
 
     def test_rejects_bad_range_dataset_response_and_mismatched_date(self) -> None:

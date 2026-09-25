@@ -466,7 +466,7 @@ def build_parser() -> argparse.ArgumentParser:
         action="append",
         choices=tuple(GARMIN_HEALTH_DETAIL_ENDPOINTS),
         required=True,
-        help="Repeat for each dataset: sleep, hrv, stress, body-battery, respiration, hydration, blood-pressure",
+        help="Repeat for each supported Garmin health dataset",
     )
     health_garmin_detail_fetch.add_argument(
         "--start-date", required=True, help="Start date, YYYY-MM-DD"

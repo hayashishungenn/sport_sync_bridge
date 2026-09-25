@@ -28,6 +28,11 @@ GARMIN_HEALTH_DETAIL_ENDPOINTS = {
     "respiration": "/wellness-service/wellness/daily/respiration",
     "hydration": "/usersummary-service/usersummary/hydration/allData",
     "blood-pressure": "/bloodpressure-service/bloodpressure/dayview",
+    "heart-rate": "/wellness-service/wellness/dailyHeartRate",
+    "fitness-age": "/fitnessage-service/fitnessage",
+    "spo2-acclimation": "/wellness-service/wellness/daily/spo2acclimation",
+    "floors-chart": "/wellness-service/wellness/floorsChartData/daily",
+    "steps": "/wellness-service/wellness/wellness-goals/consolidated/steps",
 }
 
 
@@ -155,8 +160,10 @@ def fetch_garmin_health_details(
         for dataset in datasets:
             path = GARMIN_HEALTH_DETAIL_ENDPOINTS[dataset]
             params: dict[str, object] = {}
-            if dataset == "sleep":
-                params = {"date": current_date, "nonSleepBufferMinutes": 60}
+            if dataset in {"sleep", "heart-rate"}:
+                params = {"date": current_date}
+                if dataset == "sleep":
+                    params["nonSleepBufferMinutes"] = 60
             elif dataset == "hrv":
                 path = f"{path}/{current_date}/{current_date}"
             else:

@@ -307,7 +307,7 @@ python sync.py health readiness --format json
 
 `health fetch-garmin-summary` 按包含首尾的日期范围读取 Garmin Connect 每日汇总。原始 JSON 按日期保存在本地数据库，可用 `health summaries` 查看；步数、楼层、心率、HRV、睡眠、血氧、压力、身体电量、距离、卡路里和呼吸等已识别指标也会进入健康历史及 AI 活动分析上下文。每日汇总指标按对应日期的 UTC 日末记时，不会被当作同日活动开始前的测量值。命令需要已配置 Garmin 登录信息。
 
-`health fetch-garmin-details` 可重复指定 `--dataset`，支持睡眠、HRV、压力、身体电量、呼吸、饮水和血压。原始返回值按日期和数据集保存在本地 SQLite，可用 `health details` 查看；识别到的睡眠时长与阶段、HRV、压力、呼吸、饮水和血压数值会进入健康历史及 AI 活动分析上下文。身体电量事件保留原始数据。日期范围最多 366 天，命令需要已配置 Garmin 登录信息。
+`health fetch-garmin-details` 可重复指定 `--dataset`，支持睡眠、HRV、压力、身体电量、呼吸、饮水、血压、心率、健身年龄、血氧适应、楼层图表和步数。原始返回值按日期和数据集保存在本地 SQLite，可用 `health details` 查看；识别到的睡眠时长与阶段、HRV、压力、呼吸、饮水、血压、心率、健身年龄、楼层和步数会进入健康历史及 AI 活动分析上下文。身体电量、血氧适应和楼层图表数据保留原始返回值。日期范围最多 366 天，命令需要已配置 Garmin 登录信息。
 
 AI 运动分析保留为可选功能。它把单次活动摘要、最近活动的周汇总和本地健康指标发送给 OpenAI 兼容的 Chat Completions 接口，不发送 GPS 坐标。可先检查提示词，再配置自己使用的远端或本地模型：
 
