@@ -114,6 +114,7 @@ from .running_dynamics import (
 )
 from .samba import import_samba_activity, list_samba_directory
 from .share_links import build_friend_invite_url, build_group_invite_url
+from .social_feed import SocialFeedClient, SocialFeedError
 from .state import StateDB
 from .training_balance import calculate_training_balance, format_training_balance
 from .swim_css import calculate_swim_css, format_swim_css, parse_swim_time
@@ -639,6 +640,30 @@ def build_parser() -> argparse.ArgumentParser:
     group_invite.add_argument("--group-name", help="Optional group name included in the link")
     group_invite.add_argument("--name", help="Optional inviter name included in the link")
 
+    social_parser = subparsers.add_parser("social", help="Read GarSync social activity feeds")
+    social_actions = social_parser.add_subparsers(dest="social_action", required=True)
+    social_feed = social_actions.add_parser("feed", help="Fetch a user, nearby, newest, hot, or follow feed")
+    social_feed.add_argument("kind", choices=["user", "nearby", "newest", "hot", "follow"])
+    social_feed.add_argument(
+        "--base-url",
+        help="Social API base URL (defaults to GARSYNC_SOCIAL_BASE_URL)",
+    )
+    social_feed.add_argument(
+        "--token-env",
+        default="GARSYNC_NAKAMA_AUTH_TOKEN",
+        help="Environment variable containing the Nakama session token",
+    )
+    social_feed.add_argument("--page", type=int, default=0, help="Zero-based result page (default: 0)")
+    social_feed.add_argument("--limit", type=int, default=40, help="Results per page (default: 40)")
+    social_feed.add_argument("--user-id", help="Required for the user feed")
+    social_feed.add_argument("--lat", type=float, help="Latitude for the nearby feed")
+    social_feed.add_argument("--lng", type=float, help="Longitude for the nearby feed")
+    social_feed.add_argument(
+        "--following-id",
+        action="append",
+        help="Follow-feed user ID; repeat for multiple IDs",
+    )
+
     parser.set_defaults(command="sync")
     return parser
 
@@ -670,6 +695,8 @@ def main(argv: list[str] | None = None) -> int:
         return _convert_file(args, config)
     if args.command == "weather":
         return _run_weather(args, config)
+    if args.command == "social":
+        return _run_social_feed_command(args)
     if args.command in {
         "library",
         "plans",
@@ -1574,6 +1601,35 @@ def _run_share_command(args: argparse.Namespace) -> int:
         return 2
 
     print(invite_url)
+    return 0
+
+
+def _run_social_feed_command(args: argparse.Namespace) -> int:
+    base_url = args.base_url or os.environ.get("GARSYNC_SOCIAL_BASE_URL")
+    if not base_url:
+        print("social_error=set GARSYNC_SOCIAL_BASE_URL or pass --base-url", file=sys.stderr)
+        return 2
+    auth_token = os.environ.get(args.token_env)
+    if not auth_token:
+        print("social_error=the configured Nakama session token environment variable is missing or empty", file=sys.stderr)
+        return 2
+
+    try:
+        client = SocialFeedClient(base_url, auth_token)
+        payload = client.get_feed(
+            args.kind,
+            page=args.page,
+            limit=args.limit,
+            user_id=args.user_id,
+            latitude=args.lat,
+            longitude=args.lng,
+            following_ids=args.following_id,
+        )
+    except SocialFeedError as exc:
+        print(f"social_error={exc}", file=sys.stderr)
+        return 2
+
+    print(json.dumps(payload, ensure_ascii=False, indent=2))
     return 0
 
 
