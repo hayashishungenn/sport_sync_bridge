@@ -229,6 +229,8 @@ BLE 命令可扫描附近设备、保存设备名称和首选类型、读取标�
 BLE 命令可扫描附近设备、保存设备名称和首选类型、读取标准电量服务，并记录心率、跑步步频、骑行速度/踏频、功率计测量与功率向量、室内单车的标准通知。`heart-rate` 命令输出 CSV；`record` 可将发现的标准测量通知输出到终端或 JSON Lines 文件。CSC 和功率计的轮速传感数据只有在提供轮周长时才会推算速度和距离；设备只提供计数器时仍保留原始计数。`trainer set-power` 会连接支持 FTMS 的训练台、请求控制权、写入目标功率并等待设备响应。普通测量采集只订阅并读取测量数据。BigRun ECG 命令会启动心电带并将原始通知字节以十六进制写入 JSON Lines；`bigrun-ecg-decode` 可将其中的 `0x41` 波形帧解码为 125 Hz 样本，并保留每帧采集时间；`bigrun-ecg-mode` 可设置 `standard`、`hrv` 或 `ecg` 工作模式。波形解码命令可加 --normalize，将整段样本按全局振幅范围映射至 -5 到 5；幅度范围小于 1e-9 时输出零值。该步骤仅处理波形显示尺度，不生成诊断结论。
 
 ```powershell
+python sync.py ble guide
+python sync.py ble guide --locale en
 python sync.py ble scan --save
 python sync.py ble devices
 python sync.py ble battery <设备地址>
@@ -247,6 +249,8 @@ python sync.py ble rename <设备地址> "胸带"
 python sync.py ble prefer <设备地址> --type heart_rate
 python sync.py ble remove <设备地址>
 ```
+
+`ble guide` 说明蓝牙传感器所需的系统访问权限，以及不使用传感器时如何跳过。它不会扫描设备、打开系统设置或触发 Android 授权弹窗；实际权限由运行 CLI 的操作系统管理。
 
 `trainer preview` 不连接蓝牙，可预览内置示例课程或指定课程文件。课程 JSON 使用顶层 `name` 和 `segments`；每段包含 `start_time_s`、`end_time_s`、`start_power_w`、`end_power_w`，`label` 可选。也可直接把 AI 生成骑行训练对应的 `.fit.meta` 文件作为课程输入。使用 `%FTP` 或缺省功率目标时要提供 `--ftp`。`trainer ride` 连接支持 FTMS 的训练台并生成 FIT 活动，默认保存到 `.data/virtual_rides/`；设备提供标准 Indoor Bike Data 时记录功率、速度、距离、心率和踏频，否则仍保存计时数据。交互终端支持 `+`/`-` 每次调整 5% 强度、`s` 跳过当前间歇、`p` 暂停或继续。暂停时目标功率设为 0 W，暂停时长计入 FIT 经过时间，但不计入计时器时间。
 

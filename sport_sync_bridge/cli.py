@@ -58,6 +58,7 @@ from .ble_bigrun_ecg import (
     stream_bigrun_ecg,
     validate_bigrun_ecg_options,
 )
+from .ble_permission_guide import format_ble_permission_guide
 from .ble_trainer import RideRunResult, run_trainer_course, set_trainer_target_power
 from .virtual_ride import (
     RideCourse,
@@ -312,6 +313,8 @@ def build_parser() -> argparse.ArgumentParser:
 
     ble_parser = subparsers.add_parser("ble", help="Scan and manage BLE sports sensors")
     ble_actions = ble_parser.add_subparsers(dest="ble_action", required=True)
+    ble_guide = ble_actions.add_parser("guide", help="Show BLE permission and sensor setup guidance")
+    ble_guide.add_argument("--locale", choices=["en", "zh"], default="zh")
     ble_scan = ble_actions.add_parser("scan", help="Scan for nearby BLE sensors")
     ble_scan.add_argument("--timeout", type=float, default=8.0, help="Scan duration in seconds")
     ble_scan.add_argument("--save", action="store_true", help="Save discovered sensors locally")
@@ -1543,6 +1546,10 @@ def _run_local_command(args: argparse.Namespace, config: AppConfig) -> int:
 
 
 def _run_ble_command(args: argparse.Namespace, config: AppConfig) -> int:
+    if args.ble_action == "guide":
+        print(format_ble_permission_guide(args.locale))
+        return 0
+
     registry = BleDeviceRegistry(config.data_dir / "ble_devices.json")
     try:
         if args.ble_action == "scan":
