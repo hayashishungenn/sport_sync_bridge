@@ -517,6 +517,87 @@ class GarSyncLocalFeatureTests(unittest.TestCase):
         self.assertIn("本次训练节奏稳定。", output.getvalue())
         self.assertIn("第二次分析已保存。", output.getvalue())
 
+    def test_cli_exports_cached_ai_analysis_as_markdown_and_pdf(self) -> None:
+        activity_path = create_gpx(self.root / "ai-export-ride.gpx")
+        imported = self.library.import_paths([activity_path])[0]
+        older_id = self.state.save_ai_analysis_result(
+            activity_id=imported.fingerprint,
+            model_name="test-model-old",
+            content="## Training Analysis\n\nOLDER_REPORT_BODY_MARKER & <safe text>",
+        )
+        latest_id = self.state.save_ai_analysis_result(
+            activity_id=imported.fingerprint,
+            model_name="test-model-latest",
+            content="## Improvement Advice\n\nLATEST_REPORT_BODY_MARKER & <safe text>\n- Reduce intensity tomorrow.",
+        )
+        saved = self.state.list_ai_analysis_results(imported.fingerprint)
+        latest = next(result for result in saved if result["id"] == latest_id)
+        config = SimpleNamespace(
+            data_dir=self.root / ".data",
+            db_path=self.state.path,
+            log_level="INFO",
+            log_path=self.root / "sync.log",
+        )
+        output = io.StringIO()
+        pdf_path = self.root / "exports" / "coach-report.pdf"
+
+        with (
+            patch("sport_sync_bridge.cli.AppConfig.load", return_value=config),
+            patch("sport_sync_bridge.cli.configure_logging"),
+            patch("sport_sync_bridge.cli.SyncEngine", side_effect=AssertionError("export is local")),
+            patch(
+                "sport_sync_bridge.activity_analysis.request_ai_analysis",
+                side_effect=AssertionError("export must not contact AI"),
+            ) as request,
+            contextlib.redirect_stdout(output),
+        ):
+            self.assertEqual(
+                main(
+                    [
+                        "ai-report-export",
+                        imported.fingerprint,
+                        "--format",
+                        "markdown",
+                        "--result-id",
+                        older_id[:10],
+                    ]
+                ),
+                0,
+            )
+            self.assertEqual(
+                main(
+                    [
+                        "ai-report-export",
+                        imported.fingerprint,
+                        "--format",
+                        "pdf",
+                        "--output",
+                        str(pdf_path),
+                    ]
+                ),
+                0,
+            )
+
+        markdown_path = (
+            self.root
+            / ".data"
+            / "ai_analysis"
+            / imported.fingerprint
+            / f"{older_id}.md"
+        )
+        markdown = markdown_path.read_text(encoding="utf-8")
+        metadata = json.loads(markdown.splitlines()[1])
+        self.assertEqual(metadata["result_id"], older_id)
+        self.assertEqual(metadata["created_at"], next(r["created_at"] for r in saved if r["id"] == older_id))
+        self.assertIn("OLDER_REPORT_BODY_MARKER & <safe text>", markdown)
+        pdf = pdf_path.read_bytes()
+        self.assertTrue(pdf.startswith(b"%PDF-"))
+        self.assertGreater(len(pdf), 500)
+        self.assertIn("written=" + str(markdown_path), output.getvalue())
+        self.assertIn("written=" + str(pdf_path), output.getvalue())
+        self.assertEqual(request.call_count, 0)
+        self.assertEqual(latest["model_name"], "test-model-latest")
+
     def test_wifi_upload_page_accepts_activity_multipart(self) -> None:
         sample = create_gpx(self.root / "wifi.gpx").read_bytes()
         server = ThreadingHTTPServer(("127.0.0.1", 0), _make_handler(self.library, 1024 * 1024))

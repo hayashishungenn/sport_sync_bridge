@@ -776,16 +776,23 @@ def write_ai_analysis_markdown(
     result_id: str,
     model_name: str,
     content: str,
+    created_at: str | None = None,
+    output_path: Path | None = None,
 ) -> Path:
     if not activity_id or not result_id or not model_name.strip() or not content.strip():
         raise ValueError("AI analysis activity, result, model, and content must be non-empty")
 
-    activity_dir = ensure_directory(directory / safe_filename(activity_id))
-    output_path = activity_dir / f"{safe_filename(result_id)}.md"
+    if output_path is None:
+        output_path = directory / safe_filename(activity_id) / f"{safe_filename(result_id)}.md"
+    else:
+        output_path = Path(output_path).expanduser().resolve()
+    if output_path.suffix.lower() != ".md":
+        raise ValueError("AI analysis Markdown output path must use .md")
+    ensure_directory(output_path.parent)
     metadata = json.dumps(
         {
             "activity_id": activity_id,
-            "created_at": datetime.now(timezone.utc).isoformat(),
+            "created_at": created_at or datetime.now(timezone.utc).isoformat(),
             "model_name": model_name,
             "result_id": result_id,
         },
@@ -799,13 +806,262 @@ def write_ai_analysis_markdown(
             mode="w",
             encoding="utf-8",
             newline="\n",
-            dir=activity_dir,
+            dir=output_path.parent,
             prefix=f".{safe_filename(result_id)}-",
             suffix=".tmp",
             delete=False,
         ) as handle:
             temporary_path = Path(handle.name)
             handle.write(document)
+        os.replace(temporary_path, output_path)
+    finally:
+        if temporary_path is not None:
+            temporary_path.unlink(missing_ok=True)
+    return output_path
+
+
+def write_ai_analysis_pdf(
+    output_path: Path,
+    *,
+    activity_id: str,
+    activity_name: str,
+    result_id: str,
+    model_name: str,
+    created_at: str,
+    content: str,
+) -> Path:
+    if not all((activity_id, activity_name.strip(), result_id, model_name.strip(), content.strip())):
+        raise ValueError("AI analysis activity, result, model, and content must be non-empty")
+    output_path = Path(output_path).expanduser().resolve()
+    if output_path.suffix.lower() != ".pdf":
+        raise ValueError("AI analysis PDF output path must use .pdf")
+
+    try:
+        from reportlab.lib import colors
+        from reportlab.lib.pagesizes import A4
+        from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+        from reportlab.pdfbase import pdfmetrics
+        from reportlab.pdfbase.cidfonts import UnicodeCIDFont
+        from reportlab.platypus import HRFlowable, Paragraph, SimpleDocTemplate, Spacer
+    except ImportError as exc:
+        raise RuntimeError("PDF reports require ReportLab; install the project requirements") from exc
+
+    font_name = "STSong-Light"
+    if font_name not in pdfmetrics.getRegisteredFontNames():
+        pdfmetrics.registerFont(UnicodeCIDFont(font_name))
+
+    sample_styles = getSampleStyleSheet()
+    title_style = ParagraphStyle(
+        "AiAnalysisPdfTitle",
+        parent=sample_styles["Title"],
+        fontName=font_name,
+        fontSize=18,
+        leading=24,
+        textColor=colors.HexColor("#172554"),
+        alignment=0,
+        spaceAfter=8,
+    )
+    metadata_style = ParagraphStyle(
+        "AiAnalysisPdfMetadata",
+        parent=sample_styles["BodyText"],
+        fontName=font_name,
+        fontSize=8,
+        leading=12,
+        textColor=colors.HexColor("#475569"),
+        spaceAfter=14,
+        wordWrap="CJK",
+    )
+    body_style = ParagraphStyle(
+        "AiAnalysisPdfBody",
+        parent=sample_styles["BodyText"],
+        fontName=font_name,
+        fontSize=10,
+        leading=15,
+        spaceAfter=7,
+        wordWrap="CJK",
+    )
+    heading_styles = {
+        1: ParagraphStyle(
+            "AiAnalysisPdfHeading1",
+            parent=sample_styles["Heading1"],
+            fontName=font_name,
+            fontSize=15,
+            leading=20,
+            textColor=colors.HexColor("#172554"),
+            spaceBefore=9,
+            spaceAfter=6,
+            keepWithNext=True,
+        ),
+        2: ParagraphStyle(
+            "AiAnalysisPdfHeading2",
+            parent=sample_styles["Heading2"],
+            fontName=font_name,
+            fontSize=12,
+            leading=16,
+            textColor=colors.HexColor("#1E3A8A"),
+            spaceBefore=8,
+            spaceAfter=5,
+            keepWithNext=True,
+        ),
+        3: ParagraphStyle(
+            "AiAnalysisPdfHeading3",
+            parent=sample_styles["Heading3"],
+            fontName=font_name,
+            fontSize=11,
+            leading=14,
+            textColor=colors.HexColor("#334155"),
+            spaceBefore=6,
+            spaceAfter=4,
+            keepWithNext=True,
+        ),
+    }
+    quote_style = ParagraphStyle(
+        "AiAnalysisPdfQuote",
+        parent=body_style,
+        leftIndent=14,
+        borderColor=colors.HexColor("#CBD5E1"),
+        borderWidth=1,
+        borderPadding=5,
+        backColor=colors.HexColor("#F8FAFC"),
+    )
+    code_style = ParagraphStyle(
+        "AiAnalysisPdfCode",
+        parent=body_style,
+        fontSize=8,
+        leading=11,
+        leftIndent=10,
+        rightIndent=10,
+        borderPadding=4,
+        backColor=colors.HexColor("#F1F5F9"),
+    )
+
+    def clean_text(value: str) -> str:
+        return re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f]", "", value)
+
+    def inline_markup(value: str) -> str:
+        value = clean_text(value)
+        value = re.sub(r"\[([^\]]+)\]\(([^)]+)\)", r"\1 (\2)", value)
+        code_fragments: dict[str, str] = {}
+
+        def hold_code(match: re.Match[str]) -> str:
+            marker = f"AIANALYSISCODE{len(code_fragments)}TOKEN"
+            code_fragments[marker] = html.escape(match.group(1), quote=False).replace(" ", "&nbsp;")
+            return marker
+
+        value = re.sub(r"`([^`\n]+)`", hold_code, value)
+        value = html.escape(value, quote=False)
+        value = re.sub(r"\*\*(.+?)\*\*", r"<b>\1</b>", value)
+        value = re.sub(r"(?<!\*)\*([^*\n]+)\*(?!\*)", r"<i>\1</i>", value)
+        value = re.sub(r"~~(.+?)~~", r"<strike>\1</strike>", value)
+        for marker, code in code_fragments.items():
+            value = value.replace(
+                marker,
+                f'<font name="{font_name}" backColor="#F1F5F9">{code}</font>',
+            )
+        return value or "&nbsp;"
+
+    story = [
+        Paragraph("AI Coach 分析报告", title_style),
+        Paragraph(
+            "活动：{}<br/>活动 ID：{}<br/>模型：{}<br/>生成时间：{}".format(
+                html.escape(clean_text(activity_name), quote=False),
+                html.escape(clean_text(activity_id), quote=False),
+                html.escape(clean_text(model_name), quote=False),
+                html.escape(clean_text(created_at or "未知时间"), quote=False),
+            ),
+            metadata_style,
+        ),
+    ]
+    paragraph_lines: list[str] = []
+    code_lines: list[str] | None = None
+
+    def flush_paragraph() -> None:
+        if paragraph_lines:
+            story.append(Paragraph(inline_markup(" ".join(line.strip() for line in paragraph_lines)), body_style))
+            paragraph_lines.clear()
+
+    def flush_code() -> None:
+        if code_lines:
+            for line in code_lines:
+                escaped = html.escape(clean_text(line), quote=False).replace("\t", "&nbsp;&nbsp;&nbsp;&nbsp;")
+                escaped = escaped.replace(" ", "&nbsp;") or "&nbsp;"
+                story.append(Paragraph(escaped, code_style))
+            code_lines.clear()
+
+    for raw_line in content.replace("\r\n", "\n").replace("\r", "\n").split("\n"):
+        line = raw_line.rstrip()
+        stripped = line.strip()
+        if stripped.startswith("```"):
+            flush_paragraph()
+            if code_lines is None:
+                code_lines = []
+            else:
+                flush_code()
+                code_lines = None
+            continue
+        if code_lines is not None:
+            code_lines.append(line)
+            continue
+        if not stripped:
+            flush_paragraph()
+            continue
+        heading = re.match(r"^(#{1,6})\s+(.+)$", stripped)
+        if heading:
+            flush_paragraph()
+            level = min(len(heading.group(1)), 3)
+            story.append(Paragraph(inline_markup(heading.group(2)), heading_styles[level]))
+            continue
+        if re.fullmatch(r"(?:-{3,}|\*{3,}|_{3,})", stripped):
+            flush_paragraph()
+            story.append(HRFlowable(width="100%", thickness=0.5, color=colors.HexColor("#CBD5E1"), spaceAfter=8))
+            continue
+        quote = re.match(r"^>\s?(.*)$", stripped)
+        if quote:
+            flush_paragraph()
+            story.append(Paragraph(inline_markup(quote.group(1)), quote_style))
+            continue
+        bullet = re.match(r"^\s*[-*+]\s+(.+)$", line)
+        if bullet:
+            flush_paragraph()
+            story.append(Paragraph("• " + inline_markup(bullet.group(1)), body_style))
+            continue
+        numbered = re.match(r"^\s*(\d+)[.)]\s+(.+)$", line)
+        if numbered:
+            flush_paragraph()
+            story.append(Paragraph(f"{numbered.group(1)}. " + inline_markup(numbered.group(2)), body_style))
+            continue
+        if stripped.startswith("|"):
+            flush_paragraph()
+            story.append(Paragraph(inline_markup(stripped), code_style))
+            continue
+        paragraph_lines.append(line)
+    flush_paragraph()
+    if code_lines is not None:
+        flush_code()
+    story.append(Spacer(1, 6))
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    temporary_path: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="wb",
+            dir=output_path.parent,
+            prefix=f".{output_path.name}-",
+            suffix=".tmp",
+            delete=False,
+        ) as handle:
+            temporary_path = Path(handle.name)
+        document = SimpleDocTemplate(
+            str(temporary_path),
+            pagesize=A4,
+            leftMargin=48,
+            rightMargin=48,
+            topMargin=44,
+            bottomMargin=44,
+            title="AI Coach Analysis Report",
+            author="sport_sync_bridge",
+        )
+        document.build(story)
         os.replace(temporary_path, output_path)
     finally:
         if temporary_path is not None:

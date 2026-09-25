@@ -405,6 +405,13 @@ python sync.py ai-settings reset
 
 在 `.env` 中设置 `AI_API_BASE_URL`、`AI_MODEL`，远端服务需要时再设置 `AI_API_KEY`。请求成功后会在本地 SQLite 保存模型名和分析正文，并在数据目录的 `ai_analysis/<活动指纹>/<结果ID>.md` 保存 Markdown 副本；可用 `python sync.py ai-analysis <活动ID前缀> --history` 查看数据库历史。项目不会附带 GarSync 的服务凭据或计费代码。
 
+`ai-report-export` 可从本地缓存导出 Markdown 或 PDF，不会再次请求 AI。省略 `--result-id` 时导出该活动最新的分析；指定完整 ID 或唯一前缀可选择历史结果。`--output` 可指定目标文件。
+
+```powershell
+python sync.py ai-report-export <活动ID前缀> --format markdown
+python sync.py ai-report-export <活动ID前缀> --format pdf --result-id <结果ID>
+```
+
 Wi-Fi 文件导入页默认只监听本机。要让手机从同一局域网访问，显式绑定局域网接口：
 
 ```powershell

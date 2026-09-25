@@ -21,6 +21,7 @@ from .activity_analysis import (
     validate_ai_language_code,
     write_activity_report_pdf,
     write_ai_analysis_markdown,
+    write_ai_analysis_pdf,
 )
 from .ai_workout import (
     build_ai_single_workout_prompts,
@@ -135,7 +136,7 @@ from .training import (
     list_training_templates,
     list_workout_templates,
 )
-from .utils import configure_logging, ensure_directory, pack_directory_to_base64_zip, parse_datetime
+from .utils import configure_logging, ensure_directory, pack_directory_to_base64_zip, parse_datetime, safe_filename
 from .weather import WeatherError, format_weather_report, get_weather
 from .wifi_transfer import serve_transfer
 
@@ -620,6 +621,17 @@ def build_parser() -> argparse.ArgumentParser:
     ai_settings_set.add_argument("--detail", choices=list(AI_ANALYSIS_DETAILS))
     ai_settings_actions.add_parser("reset", help="Reset preferences to performance and normal")
 
+    ai_export_parser = subparsers.add_parser(
+        "ai-report-export", help="Export a saved AI analysis as Markdown or PDF"
+    )
+    ai_export_parser.add_argument("activity_id", help="Activity fingerprint or its unique prefix")
+    ai_export_parser.add_argument(
+        "--result-id",
+        help="Saved analysis ID or unique prefix (defaults to the most recent analysis)",
+    )
+    ai_export_parser.add_argument("--format", required=True, choices=["markdown", "pdf"])
+    ai_export_parser.add_argument("--output", type=Path, help="Output file path")
+
     receive_parser = subparsers.add_parser("receive", help="Start a local Wi-Fi file import page")
     receive_parser.add_argument("--host", default="127.0.0.1", help="Bind address; use 0.0.0.0 for LAN access")
     receive_parser.add_argument("--port", type=int, default=8765)
@@ -802,6 +814,7 @@ def main(argv: list[str] | None = None) -> int:
         "health",
         "ai-analysis",
         "ai-settings",
+        "ai-report-export",
         "receive",
         "ble",
     }:
@@ -1579,6 +1592,68 @@ def _run_local_command(args: argparse.Namespace, config: AppConfig) -> int:
             else:
                 preferences = reset_ai_analysis_preferences(state)
             print(json.dumps(preferences, ensure_ascii=False, indent=2))
+            return 0
+        finally:
+            state.close()
+
+    if args.command == "ai-report-export":
+        state = StateDB(config.db_path)
+        try:
+            activity = state.get_local_activity(args.activity_id)
+            if activity is None:
+                raise ValueError(f"Local activity was not found: {args.activity_id}")
+            analyses = state.list_ai_analysis_results(activity["fingerprint"])
+            if not analyses:
+                raise ValueError("No saved AI analyses are available for this activity")
+            if args.result_id is None:
+                analysis = analyses[0]
+            else:
+                prefix = args.result_id.strip().casefold()
+                if not prefix:
+                    raise ValueError("AI analysis result ID cannot be empty")
+                matches = [
+                    result
+                    for result in analyses
+                    if str(result["id"]).casefold().startswith(prefix)
+                ]
+                if not matches:
+                    raise ValueError(f"Saved AI analysis was not found: {args.result_id}")
+                if len(matches) > 1:
+                    raise ValueError(f"AI analysis result ID prefix is ambiguous: {args.result_id}")
+                analysis = matches[0]
+
+            result_id = str(analysis["id"])
+            activity_id = str(activity["fingerprint"])
+            model_name = str(analysis["model_name"])
+            content = str(analysis["content"])
+            created_at = str(analysis["created_at"])
+            if args.format == "markdown":
+                output_path = write_ai_analysis_markdown(
+                    config.data_dir / "ai_analysis",
+                    activity_id=activity_id,
+                    result_id=result_id,
+                    model_name=model_name,
+                    content=content,
+                    created_at=created_at,
+                    output_path=args.output,
+                )
+            else:
+                output_path = args.output or (
+                    config.data_dir
+                    / "ai_analysis"
+                    / safe_filename(activity_id)
+                    / f"{safe_filename(result_id)}.pdf"
+                )
+                output_path = write_ai_analysis_pdf(
+                    output_path,
+                    activity_id=activity_id,
+                    activity_name=str(activity["name"]),
+                    result_id=result_id,
+                    model_name=model_name,
+                    created_at=created_at,
+                    content=content,
+                )
+            print(f"written={output_path}")
             return 0
         finally:
             state.close()
