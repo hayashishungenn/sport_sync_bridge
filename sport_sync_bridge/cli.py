@@ -121,7 +121,7 @@ def build_parser() -> argparse.ArgumentParser:
     sync_parser.add_argument(
         "--source",
         action="append",
-        choices=["igpsport", "onelap", "intervals_icu", "local", "strava"],
+        choices=["igpsport", "onelap", "intervals_icu", "local", "garmin", "strava"],
         help="Repeatable source",
     )
     sync_parser.add_argument("--target", action="append", choices=["garmin", "strava"], help="Repeatable target")
@@ -512,7 +512,7 @@ def build_parser() -> argparse.ArgumentParser:
     check_parser.add_argument(
         "--source",
         action="append",
-        choices=["igpsport", "onelap", "intervals_icu", "local", "strava"],
+        choices=["igpsport", "onelap", "intervals_icu", "local", "garmin", "strava"],
         help="Repeatable source",
     )
     check_parser.add_argument("--target", action="append", choices=["garmin", "strava"], help="Repeatable target")

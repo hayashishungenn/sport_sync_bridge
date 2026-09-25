@@ -9,6 +9,7 @@ from typing import cast
 from .config import AppConfig
 from .fit_tools import normalize_fit_coordinates
 from .formats import SUPPORTED_FORMATS, convert_activity_file
+from .garmin_source import GarminSource
 from .intervals_icu import IntervalsIcuSource
 from .models import FileBundle, UploadResult
 from .sources import IGPSportSource, LocalFileSource, OneLapSource, SourceAdapter
@@ -278,6 +279,9 @@ class SyncEngine:
             IntervalsIcuSource(self.config),
             LocalFileSource(self.config, self.state_db),
         )
+        garmin_target = self.targets.get("garmin")
+        if isinstance(garmin_target, GarminTarget):
+            adapters += (GarminSource(self.config, garmin_target),)
         strava_target = self.targets.get("strava")
         if isinstance(strava_target, StravaTarget):
             adapters += (StravaSource(self.config, strava_target),)

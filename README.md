@@ -110,6 +110,13 @@ python sync.py check --source intervals_icu --target garmin
 python sync.py sync --source intervals_icu --target garmin --dry-run
 ```
 
+Garmin Connect 国际区也可以作为可选活动来源，使用 `GARMIN_EMAIL` 和 `GARMIN_PASSWORD` 配置的同一登录会话。来源下载原始 ZIP 并读取其中的 FIT 文件：
+
+```powershell
+python sync.py check --source garmin --target strava
+python sync.py sync --source garmin --target strava --dry-run
+```
+
 ### 4. Strava 授权
 
 先输出授权 URL:
