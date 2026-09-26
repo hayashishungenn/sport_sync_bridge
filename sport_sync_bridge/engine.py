@@ -26,6 +26,7 @@ from .hammerhead_target import HammerheadTarget
 from .targets import GarminTarget, StravaTarget, TargetAdapter
 from .wahoo_target import WahooTarget
 from .wahoo_source import WahooSource
+from .withings_source import WithingsClient, WithingsSource
 from .utils import ensure_directory, safe_filename, sha1_file, utcnow
 
 
@@ -43,6 +44,7 @@ class SyncEngine:
         self.hammerhead_client = HammerheadClient(config, self.state_db)
         self.google_health_client = GoogleHealthClient(config, self.state_db)
         self.polar_client = PolarClient(config, self.state_db)
+        self.withings_client = WithingsClient(config, self.state_db)
         self.targets = self._build_targets()
         self.sources = self._build_sources()
 
@@ -319,6 +321,7 @@ class SyncEngine:
             HammerheadSource(self.config, self.hammerhead_client),
             PolarSource(self.config, self.polar_client),
             GoogleHealthSource(self.config, self.google_health_client),
+            WithingsSource(self.config, self.withings_client),
             LocalFileSource(self.config, self.state_db),
         )
         garmin_target = self.targets.get("garmin")

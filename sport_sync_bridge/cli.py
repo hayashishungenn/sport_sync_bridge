@@ -193,6 +193,7 @@ def build_parser() -> argparse.ArgumentParser:
             "polar",
             "wahoo",
             "fitbit",
+            "withings",
         ],
         help="Repeatable source",
     )
@@ -775,6 +776,7 @@ def build_parser() -> argparse.ArgumentParser:
             "polar",
             "wahoo",
             "fitbit",
+            "withings",
         ],
         help="Repeatable source",
     )
@@ -819,6 +821,17 @@ def build_parser() -> argparse.ArgumentParser:
         "--code", required=True, help="OAuth code from the registered redirect URL"
     )
     google_health_exchange_parser.add_argument(
+        "--state", required=True, help="OAuth state from the registered redirect URL"
+    )
+
+    subparsers.add_parser("withings-auth-url", help="Print the Withings OAuth authorization URL")
+    withings_exchange_parser = subparsers.add_parser(
+        "withings-exchange", help="Exchange a Withings OAuth code for local tokens"
+    )
+    withings_exchange_parser.add_argument(
+        "--code", required=True, help="OAuth code from the registered redirect URL"
+    )
+    withings_exchange_parser.add_argument(
         "--state", required=True, help="OAuth state from the registered redirect URL"
     )
 
@@ -1110,6 +1123,17 @@ def main(argv: list[str] | None = None) -> int:
             result = engine.google_health_client.exchange_code(args.code, args.state)
             print("Google Health credentials saved to local SQLite for the Fitbit source.")
             print(f"expires_at={result.get('expires_at')}")
+            return 0
+
+        if args.command == "withings-auth-url":
+            print(engine.withings_client.build_authorize_url())
+            return 0
+
+        if args.command == "withings-exchange":
+            result = engine.withings_client.exchange_code(args.code, args.state)
+            print("Withings tokens saved to local SQLite.")
+            print(f"expires_at={result.get('expires_at')}")
+            print(f"scope={result.get('scope')}")
             return 0
 
         if args.command == "concept2-auth-url":

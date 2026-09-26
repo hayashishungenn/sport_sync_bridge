@@ -9,6 +9,7 @@
 - `Hammerhead`（公开 API 活动来源）
 - `Polar Flow`（AccessLink API 活动来源）
 - `Fitbit`（Google Health API 活动来源）
+- `Withings`（Public API 活动来源）
 - 本地活动库（`FIT` / `GPX` / `TCX` / `ZIP` / 轨迹 `JSON` / `CSV`）
 
 当前实现的目标平台:
@@ -233,6 +234,19 @@ python sync.py health fetch-fitbit --dataset daily-summary --start-date 2026-08-
 ```
 
 `health fetch-fitbit` 支持重复 `--dataset` 选择 `sleep`、`weight`、`steps`、`heart-rate`、`daily-resting-heart-rate` 或 `daily-summary`，日期范围包含首尾两天。每日摘要使用 Google Health `dailyRollUp` 获取步数、距离、总卡路里和活动能量，并读取每日静息心率；这些汇总按 Google Health 的 first-party 数据源聚合，可能合并 Fitbit 与 Google 来源。Google 的 `active-energy-burned` 不含基础代谢，因此它不等同于 Fitbit Web API 的 `activityCalories`。睡眠阶段、体重及健康指标写入本地健康记录，供健康摘要和活动分析使用。授权刷新令牌只保存在本地 SQLite。Google Health API 使用独立 OAuth 客户端，[旧 Fitbit Web API 令牌不能直接复用](https://developers.google.com/health/migration/data-access)。公开分发受限数据权限需要 Google 应用验证；Google 可能要求 CASA 第三方安全评估，官方列出的费用为 500–4,500 美元，取决于应用复杂度，详见[验证说明](https://developers.google.com/health/app-verification)。本项目只说明个人测试用法，不包含该发布流程。
+
+### Withings 活动来源
+
+Withings 通过 Public API 的 `user.activity` scope 读取训练摘要、GPS 和日内心率，并在同步时生成 FIT 文件。先在 Withings Developer Portal 注册自己的 Public API 应用，在 `.env` 中填写 `WITHINGS_CLIENT_ID`、`WITHINGS_CLIENT_SECRET` 和已登记的 `WITHINGS_REDIRECT_URI`，再把 `withings` 加入 `SYNC_SOURCES`。OAuth 授权方式和该 scope 可访问的活动接口见 [Withings 官方授权说明](https://developer.withings.com/developer-guide/v3/integration-guide/public-health-data-api/get-access/oauth-authorization-url/)。
+
+```powershell
+python sync.py withings-auth-url
+python sync.py withings-exchange --code 回调中的code --state 回调中的state
+python sync.py check --source withings --target garmin
+python sync.py sync --source withings --target garmin --dry-run
+```
+
+Withings 授权码有效期为 30 秒，授权后应立即运行 `withings-exchange`。访问令牌和刷新令牌存入本地 SQLite；刷新时会替换成 Withings 返回的新刷新令牌，详见[官方令牌说明](https://developer.withings.com/developer-guide/v3/integration-guide/public-health-data-api/get-access/access-and-refresh-tokens-no-recover/)。Withings 是只读活动来源，不支持向 Withings 上传第三方活动文件。项目不包含 APK 中的账号凭据。
 
 ### 5. 首次同步
 
