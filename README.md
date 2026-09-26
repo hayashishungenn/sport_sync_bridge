@@ -11,6 +11,7 @@
 - `Fitbit`（Google Health API 活动来源）
 - `Withings`（Public API 活动来源）
 - `COROS`（官方 MCP 活动来源）
+- `Ride with GPS`（官方 API 活动来源）
 - 本地活动库（`FIT` / `GPX` / `TCX` / `ZIP` / 轨迹 `JSON` / `CSV`）
 
 当前实现的目标平台:
@@ -19,6 +20,7 @@
 - `Strava`
 - `Wahoo`（FIT 上传）
 - `Hammerhead`（路线上传）
+- `Ride with GPS`（FIT / GPX / TCX 活动上传）
 
 这个项目参考了以下公开实现，并抽成了统一的 `source adapter + target adapter + SQLite state` 架构：
 
@@ -206,6 +208,28 @@ python sync.py hammerhead-delete-route --route-id 路线ID
 ```
 
 活动列表按 API 页码读取，活动 FIT 从公开活动文件端点下载。同步到 Hammerhead 时，FIT、GPX 或 TCX 会作为路线文件上传，不会创建 Hammerhead 活动。删除只适用于由本 API 客户端创建的路线，并要求输入完整路线 ID 确认。API 许可协议当前写明不收许可费，同时保留今后收费的权利；若之后开始收费，请勿启用此连接器。
+
+### Ride with GPS 活动来源和目标
+
+Ride with GPS 适配器使用[官方 API](https://ridewithgps.com/api/v1/doc/)，不复用 APK 私有登录接口或其中的客户端凭据。官方 API 条款说明使用 API 不要求付费套餐，但需要 Ride with GPS 账号和 API client。登录 Ride with GPS 后，在开发者设置中创建自己的 API client，登记重定向地址，并将 client ID、client secret 和完全一致的重定向地址填入 `.env`：
+
+```dotenv
+RIDEWITHGPS_CLIENT_ID=
+RIDEWITHGPS_CLIENT_SECRET=
+RIDEWITHGPS_REDIRECT_URI=http://localhost/
+```
+
+生成 OAuth 链接，在浏览器授权后，把回调地址中的 `code` 交给 `ridewithgps-exchange`。令牌会先通过当前用户接口验证，再保存到本地 SQLite。已授权后可读取活动 FIT，也可把本地活动以 FIT、GPX 或 TCX 上传；上传后的异步处理会由 CLI 等待并检查结果。Ride with GPS 要求上传活动包含记录时间点，只有规划路线而没有时间戳的文件会被拒绝。
+
+```powershell
+python sync.py ridewithgps-auth-url
+python sync.py ridewithgps-exchange --code 回调中的code
+python sync.py check --source ridewithgps --target ridewithgps
+python sync.py sync --source ridewithgps --target strava --dry-run
+python sync.py sync --source local --target ridewithgps --format ridewithgps=fit --dry-run
+```
+
+`ridewithgps-delete --trip-id ID` 可删除当前账号自己的 Ride with GPS 活动。命令会要求再次输入完整 ID 确认。
 
 ### Polar Flow 活动来源
 

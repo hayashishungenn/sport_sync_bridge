@@ -85,6 +85,10 @@ class AppConfig:
     coros_mcp_url: str
     coros_mcp_timezone: str | None
     smashrun_access_token: str | None
+    ridewithgps_client_id: str | None
+    ridewithgps_client_secret: str | None
+    ridewithgps_redirect_uri: str
+    ridewithgps_access_token: str | None
     ai_api_base_url: str | None
     ai_api_key: str | None
     ai_model: str | None
@@ -183,6 +187,10 @@ class AppConfig:
             coros_mcp_url=os.getenv("COROS_MCP_URL", "https://mcp.coros.com/mcp").strip(),
             coros_mcp_timezone=env_or_none("COROS_TIMEZONE"),
             smashrun_access_token=env_or_none("SMASHRUN_ACCESS_TOKEN"),
+            ridewithgps_client_id=env_or_none("RIDEWITHGPS_CLIENT_ID"),
+            ridewithgps_client_secret=env_or_none("RIDEWITHGPS_CLIENT_SECRET"),
+            ridewithgps_redirect_uri=os.getenv("RIDEWITHGPS_REDIRECT_URI", "http://localhost/").strip(),
+            ridewithgps_access_token=env_or_none("RIDEWITHGPS_ACCESS_TOKEN"),
             ai_api_base_url=env_or_none("AI_API_BASE_URL"),
             ai_api_key=env_or_none("AI_API_KEY"),
             ai_model=env_or_none("AI_MODEL"),

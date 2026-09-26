@@ -197,13 +197,14 @@ def build_parser() -> argparse.ArgumentParser:
             "withings",
             "coros",
             "smashrun",
+            "ridewithgps",
         ],
         help="Repeatable source",
     )
     sync_parser.add_argument(
         "--target",
         action="append",
-        choices=["garmin", "strava", "wahoo", "hammerhead", "intervals_icu"],
+        choices=["garmin", "strava", "wahoo", "hammerhead", "intervals_icu", "ridewithgps"],
         help="Repeatable target",
     )
     sync_parser.add_argument("--from", dest="date_from", help="Start date, e.g. 2026-01-01")
@@ -782,13 +783,14 @@ def build_parser() -> argparse.ArgumentParser:
             "withings",
             "coros",
             "smashrun",
+            "ridewithgps",
         ],
         help="Repeatable source",
     )
     check_parser.add_argument(
         "--target",
         action="append",
-        choices=["garmin", "strava", "wahoo", "hammerhead", "intervals_icu"],
+        choices=["garmin", "strava", "wahoo", "hammerhead", "intervals_icu", "ridewithgps"],
         help="Repeatable target",
     )
 
@@ -815,6 +817,20 @@ def build_parser() -> argparse.ArgumentParser:
         "wahoo-exchange", help="Exchange a Wahoo OAuth code for tokens"
     )
     wahoo_exchange_parser.add_argument("--code", required=True, help="OAuth code returned by Wahoo")
+
+    subparsers.add_parser(
+        "ridewithgps-auth-url", help="Print the Ride with GPS OAuth authorization URL"
+    )
+    ridewithgps_exchange_parser = subparsers.add_parser(
+        "ridewithgps-exchange", help="Exchange a Ride with GPS OAuth code and save the token"
+    )
+    ridewithgps_exchange_parser.add_argument(
+        "--code", required=True, help="OAuth code returned by Ride with GPS"
+    )
+    ridewithgps_delete_parser = subparsers.add_parser(
+        "ridewithgps-delete", help="Permanently delete a Ride with GPS trip"
+    )
+    ridewithgps_delete_parser.add_argument("--trip-id", required=True, help="Ride with GPS trip ID")
 
     google_health_auth_url_parser = subparsers.add_parser(
         "google-health-auth-url", help="Print the Fitbit Google Health OAuth authorization URL"
@@ -1127,6 +1143,29 @@ def main(argv: list[str] | None = None) -> int:
             expires_at = engine.state_db.get_value("wahoo_expires_at") or payload.get("expires_at")
             print(f"expires_at={expires_at}")
             print(f"scope={payload.get('scope')}")
+            return 0
+
+        if args.command == "ridewithgps-auth-url":
+            print(engine.ridewithgps_client.build_authorize_url())
+            return 0
+
+        if args.command == "ridewithgps-exchange":
+            result = engine.ridewithgps_client.exchange_code(args.code)
+            print("Ride with GPS access token validated and saved to SQLite.")
+            print(f"user_id={result.get('user_id')}")
+            print(f"scope={result.get('scope')}")
+            return 0
+
+        if args.command == "ridewithgps-delete":
+            expected = args.trip_id.strip()
+            confirmation = input(
+                f"Permanently delete Ride with GPS trip {expected}? Type the ID to confirm: "
+            )
+            if confirmation.strip() != expected:
+                print("Ride with GPS trip deletion cancelled.")
+                return 1
+            engine.ridewithgps_client.delete_trip(expected)
+            print(f"deleted=ridewithgps:{expected}")
             return 0
 
         if args.command == "google-health-auth-url":

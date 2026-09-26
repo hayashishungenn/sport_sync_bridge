@@ -20,6 +20,9 @@ from .intervals_icu_target import IntervalsIcuTarget
 from .models import FileBundle, UploadResult
 from .polar_api import PolarClient
 from .polar_source import PolarSource
+from .ridewithgps_api import RideWithGPSClient
+from .ridewithgps_source import RideWithGPSSource
+from .ridewithgps_target import RideWithGPSTarget
 from .sources import IGPSportSource, LocalFileSource, OneLapSource, SourceAdapter
 from .smashrun_source import SmashrunSource
 from .strava_source import StravaSource
@@ -48,6 +51,7 @@ class SyncEngine:
         self.polar_client = PolarClient(config, self.state_db)
         self.withings_client = WithingsClient(config, self.state_db)
         self.smashrun_source = SmashrunSource(config, self.state_db)
+        self.ridewithgps_client = RideWithGPSClient(config, self.state_db)
         self.targets = self._build_targets()
         self.sources = self._build_sources()
 
@@ -333,6 +337,7 @@ class SyncEngine:
             PolarSource(self.config, self.polar_client),
             GoogleHealthSource(self.config, self.google_health_client),
             WithingsSource(self.config, self.withings_client),
+            RideWithGPSSource(self.config, self.ridewithgps_client),
             LocalFileSource(self.config, self.state_db),
         )
         garmin_target = self.targets.get("garmin")
@@ -370,6 +375,10 @@ class SyncEngine:
         hammerhead = HammerheadTarget(self.config, self.hammerhead_client)
         if hammerhead.is_configured():
             targets[hammerhead.name] = hammerhead
+
+        ridewithgps = RideWithGPSTarget(self.ridewithgps_client)
+        if ridewithgps.is_configured():
+            targets[ridewithgps.name] = ridewithgps
 
         return targets
 
