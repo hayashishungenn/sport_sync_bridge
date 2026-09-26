@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import csv
+import getpass
 import json
 import os
 import sys
@@ -195,6 +196,7 @@ def build_parser() -> argparse.ArgumentParser:
             "fitbit",
             "withings",
             "coros",
+            "smashrun",
         ],
         help="Repeatable source",
     )
@@ -779,6 +781,7 @@ def build_parser() -> argparse.ArgumentParser:
             "fitbit",
             "withings",
             "coros",
+            "smashrun",
         ],
         help="Repeatable source",
     )
@@ -840,6 +843,10 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers.add_parser(
         "coros-auth",
         help="Authorize this CLI with COROS MCP and store the OAuth session locally",
+    )
+    subparsers.add_parser(
+        "smashrun-auth",
+        help="Validate a personal Smashrun token and store it in local SQLite",
     )
 
     concept2_auth_url_parser = subparsers.add_parser(
@@ -1146,6 +1153,14 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "coros-auth":
             engine.get_coros_source().authenticate()
             print("COROS MCP authorization is saved in local SQLite.")
+            return 0
+
+        if args.command == "smashrun-auth":
+            token = getpass.getpass("Smashrun access token from the API Explorer: ").strip()
+            if not token:
+                raise ValueError("Smashrun access token must not be empty")
+            engine.smashrun_source.save_access_token(token)
+            print("Smashrun read access validated and saved in local SQLite.")
             return 0
 
         if args.command == "concept2-auth-url":

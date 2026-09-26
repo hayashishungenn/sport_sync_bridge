@@ -21,6 +21,7 @@ from .models import FileBundle, UploadResult
 from .polar_api import PolarClient
 from .polar_source import PolarSource
 from .sources import IGPSportSource, LocalFileSource, OneLapSource, SourceAdapter
+from .smashrun_source import SmashrunSource
 from .strava_source import StravaSource
 from .state import StateDB
 from .hammerhead_target import HammerheadTarget
@@ -46,6 +47,7 @@ class SyncEngine:
         self.google_health_client = GoogleHealthClient(config, self.state_db)
         self.polar_client = PolarClient(config, self.state_db)
         self.withings_client = WithingsClient(config, self.state_db)
+        self.smashrun_source = SmashrunSource(config, self.state_db)
         self.targets = self._build_targets()
         self.sources = self._build_sources()
 
@@ -326,6 +328,7 @@ class SyncEngine:
             IntervalsIcuSource(self.config),
             Concept2Source(self.config, self.state_db),
             CorosMcpSource(self.config, self.state_db),
+            self.smashrun_source,
             HammerheadSource(self.config, self.hammerhead_client),
             PolarSource(self.config, self.polar_client),
             GoogleHealthSource(self.config, self.google_health_client),
