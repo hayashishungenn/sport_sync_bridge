@@ -12,6 +12,9 @@ from .coros_source import CorosMcpSource
 from .cycling_analytics import CyclingAnalyticsClient, CyclingAnalyticsSource, CyclingAnalyticsTarget
 from .fit_tools import normalize_fit_coordinates
 from .formats import SUPPORTED_FORMATS, convert_activity_file
+from .giant_api import GiantClient
+from .giant_source import GiantSource
+from .giant_target import GiantTarget
 from .garmin_source import GarminSource
 from .google_health import GoogleHealthClient, GoogleHealthSource
 from .hammerhead_api import HammerheadClient
@@ -66,6 +69,7 @@ class SyncEngine:
         self.smashrun_source = SmashrunSource(config, self.state_db)
         self.mapmyfitness_client = MapMyFitnessClient(config, self.state_db)
         self.zwift_client = ZwiftClient(config, self.state_db)
+        self.giant_client = GiantClient(config, self.state_db)
         self.ridewithgps_client = RideWithGPSClient(config, self.state_db)
         self.nolio_client = NolioClient(config, self.state_db)
         self.suunto_client = SuuntoClient(config, self.state_db)
@@ -100,12 +104,14 @@ class SyncEngine:
                 "cycling_analytics",
                 "nolio",
                 "suunto",
+                "giant",
             }
             or not isinstance(value, str)
             or value.lower() not in SUPPORTED_FORMATS
             or (target == "wahoo" and value.lower() != "fit")
             or (target == "nolio" and value.lower() not in {"fit", "tcx"})
             or (target == "suunto" and value.lower() != "fit")
+            or (target == "giant" and value.lower() != "fit")
         }
         if invalid_formats:
             details = ", ".join(f"{target}={value}" for target, value in sorted(invalid_formats.items()))
@@ -393,6 +399,7 @@ class SyncEngine:
             CyclingAnalyticsSource(self.config, self.cycling_analytics_client),
             MyWhooshSource(self.config, self.state_db),
             ZwiftSource(self.config, self.zwift_client),
+            GiantSource(self.config, self.giant_client),
             LocalFileSource(self.config, self.state_db),
         )
         garmin_target = self.targets.get("garmin")
@@ -442,6 +449,10 @@ class SyncEngine:
         suunto = SuuntoTarget(self.suunto_client)
         if suunto.is_configured():
             targets[suunto.name] = suunto
+
+        giant = GiantTarget(self.giant_client)
+        if giant.is_configured():
+            targets[giant.name] = giant
 
         cycling_analytics = CyclingAnalyticsTarget(self.cycling_analytics_client)
         if cycling_analytics.is_configured():

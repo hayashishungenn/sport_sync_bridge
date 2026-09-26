@@ -206,6 +206,7 @@ def build_parser() -> argparse.ArgumentParser:
             "cycling_analytics",
             "mywhoosh",
             "zwift",
+            "giant",
         ],
         help="Repeatable source",
     )
@@ -222,6 +223,7 @@ def build_parser() -> argparse.ArgumentParser:
             "nolio",
             "suunto",
             "cycling_analytics",
+            "giant",
         ],
         help="Repeatable target",
     )
@@ -822,6 +824,7 @@ def build_parser() -> argparse.ArgumentParser:
             "cycling_analytics",
             "mywhoosh",
             "zwift",
+            "giant",
         ],
         help="Repeatable source",
     )
@@ -838,6 +841,7 @@ def build_parser() -> argparse.ArgumentParser:
             "nolio",
             "suunto",
             "cycling_analytics",
+            "giant",
         ],
         help="Repeatable target",
     )
@@ -886,6 +890,8 @@ def build_parser() -> argparse.ArgumentParser:
     )
     subparsers.add_parser("zwift-auth", help="Authenticate Zwift and save tokens locally")
     subparsers.add_parser("zwift-logout", help="Revoke the saved Zwift session and clear local tokens")
+    subparsers.add_parser("giant-auth", help="Authenticate Giant RideLife and save tokens locally")
+    subparsers.add_parser("giant-logout", help="Clear the saved Giant session")
     subparsers.add_parser("nolio-auth-url", help="Print the Nolio OAuth authorization URL")
     nolio_exchange_parser = subparsers.add_parser(
         "nolio-exchange", help="Exchange a Nolio OAuth code and save tokens locally"
@@ -1275,6 +1281,18 @@ def main(argv: list[str] | None = None) -> int:
             print("Zwift session cleared from local SQLite.")
             return 0
 
+        if args.command == "giant-auth":
+            user_id = engine.giant_client.authenticate()
+            engine.giant_client.authenticate_web()
+            print("Giant app and upload sessions validated and saved to local SQLite.")
+            print(f"user_id={user_id}")
+            return 0
+
+        if args.command == "giant-logout":
+            engine.giant_client.logout()
+            print("Giant session cleared from local SQLite.")
+            return 0
+
         if args.command == "nolio-auth-url":
             print(engine.nolio_client.build_authorize_url())
             return 0
@@ -1517,10 +1535,11 @@ def _parse_target_format(value: str) -> tuple[str, str]:
         "cycling_analytics",
         "nolio",
         "suunto",
+        "giant",
     }:
         raise argparse.ArgumentTypeError(
             "format must use TARGET=FORMAT with target garmin, strava, wahoo, hammerhead, "
-            "intervals_icu, cycling_analytics, nolio, or suunto"
+            "intervals_icu, cycling_analytics, nolio, suunto, or giant"
         )
     if activity_format not in SUPPORTED_FORMATS:
         supported = ", ".join(sorted(SUPPORTED_FORMATS))
@@ -1529,6 +1548,8 @@ def _parse_target_format(value: str) -> tuple[str, str]:
         raise argparse.ArgumentTypeError("Nolio uploads only support FIT and TCX")
     if target == "suunto" and activity_format != "fit":
         raise argparse.ArgumentTypeError("Suunto uploads only support FIT")
+    if target == "giant" and activity_format != "fit":
+        raise argparse.ArgumentTypeError("Giant uploads only support FIT")
     return target, activity_format
 
 

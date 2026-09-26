@@ -367,6 +367,17 @@ ZWIFT_PASSWORD=
 
 运行 `python sync.py zwift-auth` 验证账号并把访问令牌、刷新令牌和玩家 ID 保存到本地 SQLite。账号密码只从环境读取。之后可用 `python sync.py check --source zwift` 检查连接，或用 `python sync.py sync --source zwift --target strava --dry-run` 查看待同步活动。`python sync.py zwift-logout` 会撤销保存的会话并清除本地令牌。
 
+### Giant RideLife 活动来源与上传目标
+
+Giant 适配器依据 APK 中还原的移动端登录、年份和月份活动列表、FIT 详情下载，以及 RideLife FIT 上传接口实现。将账号凭据放入 .env，按需把 giant 加入 SYNC_SOURCES 或 SYNC_TARGETS：
+
+~~~dotenv
+GIANT_USERNAME=
+GIANT_PASSWORD=
+~~~
+
+运行 python sync.py giant-auth 会验证移动端和 RideLife 上传会话，并把令牌保存到本地 SQLite。设备 ID 由本地随机生成并保存在 SQLite，不会复用 APK 中的固定值。GIANT_APP_VERSION、GIANT_DEVICE_OS_VERSION 和 GIANT_DEVICE_MODEL 可用于调整登录请求携带的客户端信息。Giant 上传只接受 FIT 文件；同步时省略格式映射即可使用 FIT。接口没有公开稳定文档，当前实现尚未使用真实账号进行在线验证。
+
 ### 5. 首次同步
 
 ```powershell

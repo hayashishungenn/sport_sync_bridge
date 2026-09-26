@@ -107,6 +107,11 @@ class AppConfig:
     mywhoosh_password: str | None
     zwift_username: str | None
     zwift_password: str | None
+    giant_username: str | None
+    giant_password: str | None
+    giant_app_version: str
+    giant_device_os_version: str
+    giant_device_model: str
     ai_api_base_url: str | None
     ai_api_key: str | None
     ai_model: str | None
@@ -231,6 +236,11 @@ class AppConfig:
             mywhoosh_password=env_or_none("MYWHOOSH_PASSWORD"),
             zwift_username=env_or_none("ZWIFT_USERNAME"),
             zwift_password=env_or_none("ZWIFT_PASSWORD"),
+            giant_username=env_or_none("GIANT_USERNAME"),
+            giant_password=env_or_none("GIANT_PASSWORD"),
+            giant_app_version=os.getenv("GIANT_APP_VERSION", "4.1.3").strip(),
+            giant_device_os_version=os.getenv("GIANT_DEVICE_OS_VERSION", "25").strip(),
+            giant_device_model=os.getenv("GIANT_DEVICE_MODEL", "sport-sync-bridge").strip(),
             ai_api_base_url=env_or_none("AI_API_BASE_URL"),
             ai_api_key=env_or_none("AI_API_KEY"),
             ai_model=env_or_none("AI_MODEL"),
