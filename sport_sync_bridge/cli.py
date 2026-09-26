@@ -201,6 +201,7 @@ def build_parser() -> argparse.ArgumentParser:
             "smashrun",
             "ridewithgps",
             "nolio",
+            "suunto",
             "cycling_analytics",
             "mywhoosh",
         ],
@@ -217,6 +218,7 @@ def build_parser() -> argparse.ArgumentParser:
             "intervals_icu",
             "ridewithgps",
             "nolio",
+            "suunto",
             "cycling_analytics",
         ],
         help="Repeatable target",
@@ -814,6 +816,7 @@ def build_parser() -> argparse.ArgumentParser:
             "smashrun",
             "ridewithgps",
             "nolio",
+            "suunto",
             "cycling_analytics",
             "mywhoosh",
         ],
@@ -830,6 +833,7 @@ def build_parser() -> argparse.ArgumentParser:
             "intervals_icu",
             "ridewithgps",
             "nolio",
+            "suunto",
             "cycling_analytics",
         ],
         help="Repeatable target",
@@ -874,6 +878,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     nolio_exchange_parser.add_argument("--code", required=True, help="OAuth code returned by Nolio")
     nolio_exchange_parser.add_argument("--state", required=True, help="OAuth state returned to the redirect URI")
+    subparsers.add_parser("suunto-auth-url", help="Print the Suunto OAuth authorization URL")
+    suunto_exchange_parser = subparsers.add_parser(
+        "suunto-exchange", help="Exchange a Suunto OAuth code and save tokens locally"
+    )
+    suunto_exchange_parser.add_argument("--code", required=True, help="OAuth code returned by Suunto")
+    suunto_exchange_parser.add_argument("--state", required=True, help="OAuth state returned to the redirect URI")
     ridewithgps_delete_parser = subparsers.add_parser(
         "ridewithgps-delete", help="Permanently delete a Ride with GPS trip"
     )
@@ -1222,6 +1232,17 @@ def main(argv: list[str] | None = None) -> int:
             print(f"scope={result.get('scope')}")
             return 0
 
+        if args.command == "suunto-auth-url":
+            print(engine.suunto_client.build_authorize_url())
+            return 0
+
+        if args.command == "suunto-exchange":
+            result = engine.suunto_client.exchange_code(args.code, args.state)
+            print("Suunto tokens saved to SQLite.")
+            print(f"expires_in={result.get('expires_in')}")
+            print(f"scope={result.get('scope')}")
+            return 0
+
         if args.command == "ridewithgps-delete":
             expected = args.trip_id.strip()
             confirmation = input(
@@ -1426,16 +1447,19 @@ def _parse_target_format(value: str) -> tuple[str, str]:
         "intervals_icu",
         "cycling_analytics",
         "nolio",
+        "suunto",
     }:
         raise argparse.ArgumentTypeError(
             "format must use TARGET=FORMAT with target garmin, strava, wahoo, hammerhead, "
-            "intervals_icu, cycling_analytics, or nolio"
+            "intervals_icu, cycling_analytics, nolio, or suunto"
         )
     if activity_format not in SUPPORTED_FORMATS:
         supported = ", ".join(sorted(SUPPORTED_FORMATS))
         raise argparse.ArgumentTypeError(f"format must be one of: {supported}")
     if target == "nolio" and activity_format not in {"fit", "tcx"}:
         raise argparse.ArgumentTypeError("Nolio uploads only support FIT and TCX")
+    if target == "suunto" and activity_format != "fit":
+        raise argparse.ArgumentTypeError("Suunto uploads only support FIT")
     return target, activity_format
 
 

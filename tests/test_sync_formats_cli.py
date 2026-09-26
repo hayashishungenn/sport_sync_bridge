@@ -202,6 +202,34 @@ class SyncFormatTests(unittest.TestCase):
         self.assertEqual(engine.state_db.recorded[0]["target"], "nolio")
         self.assertEqual(engine.state_db.recorded[0]["status"], "success")
 
+    def test_suunto_receives_fit_from_the_sync_pipeline(self) -> None:
+        fit_path = create_fit(self.root / "download.fit")
+        original_hash = hashlib.sha256(fit_path.read_bytes()).hexdigest()
+        activity = Activity("igpsport", "42", "Ride", "cycling")
+        engine = SyncEngine.__new__(SyncEngine)
+        engine.config = SimpleNamespace(
+            sources=["igpsport"], targets=["suunto"], lookback_days=0,
+            downloads_dir=self.root / "downloads", repaired_dir=self.root / "repaired",
+            converted_dir=self.root / "converted", coordinate_rules=(),
+            igpsport_coord_mode="none", igpsport_coord_strict=True,
+            onelap_coord_mode="none", onelap_coord_strict=True,
+        )
+        engine.state_db = _State()
+        engine.sources = {"igpsport": _Source(activity, fit_path)}
+        suunto = _Target()
+        engine.targets = {"suunto": suunto}
+
+        count = engine.sync_once(target_formats={"suunto": "fit"})
+
+        self.assertEqual(count, 1)
+        self.assertEqual(len(suunto.uploaded), 1)
+        self.assertEqual(suunto.uploaded[0].suffix, ".fit")
+        self.assertIn("suunto", suunto.uploaded[0].parts)
+        self.assertNotEqual(suunto.uploaded[0], fit_path)
+        self.assertEqual(hashlib.sha256(fit_path.read_bytes()).hexdigest(), original_hash)
+        self.assertEqual(engine.state_db.recorded[0]["target"], "suunto")
+        self.assertEqual(engine.state_db.recorded[0]["status"], "success")
+
     def test_format_argument_mapping_and_validation(self) -> None:
         args = build_parser().parse_args(
             [

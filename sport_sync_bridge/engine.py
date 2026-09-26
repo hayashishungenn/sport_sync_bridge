@@ -23,6 +23,9 @@ from .mywhoosh_source import MyWhooshSource
 from .nolio_api import NolioClient
 from .nolio_source import NolioSource
 from .nolio_target import NolioTarget
+from .suunto_api import SuuntoClient
+from .suunto_source import SuuntoSource
+from .suunto_target import SuuntoTarget
 from .polar_api import PolarClient
 from .polar_source import PolarSource
 from .ridewithgps_api import RideWithGPSClient
@@ -59,6 +62,7 @@ class SyncEngine:
         self.smashrun_source = SmashrunSource(config, self.state_db)
         self.ridewithgps_client = RideWithGPSClient(config, self.state_db)
         self.nolio_client = NolioClient(config, self.state_db)
+        self.suunto_client = SuuntoClient(config, self.state_db)
         self.targets = self._build_targets()
         self.sources = self._build_sources()
 
@@ -89,11 +93,13 @@ class SyncEngine:
                 "intervals_icu",
                 "cycling_analytics",
                 "nolio",
+                "suunto",
             }
             or not isinstance(value, str)
             or value.lower() not in SUPPORTED_FORMATS
             or (target == "wahoo" and value.lower() != "fit")
             or (target == "nolio" and value.lower() not in {"fit", "tcx"})
+            or (target == "suunto" and value.lower() != "fit")
         }
         if invalid_formats:
             details = ", ".join(f"{target}={value}" for target, value in sorted(invalid_formats.items()))
@@ -361,6 +367,7 @@ class SyncEngine:
             WithingsSource(self.config, self.withings_client),
             RideWithGPSSource(self.config, self.ridewithgps_client),
             NolioSource(self.config, self.nolio_client),
+            SuuntoSource(self.config, self.suunto_client),
             CyclingAnalyticsSource(self.config, self.cycling_analytics_client),
             MyWhooshSource(self.config, self.state_db),
             LocalFileSource(self.config, self.state_db),
@@ -408,6 +415,10 @@ class SyncEngine:
         nolio = NolioTarget(self.nolio_client)
         if nolio.is_configured():
             targets[nolio.name] = nolio
+
+        suunto = SuuntoTarget(self.suunto_client)
+        if suunto.is_configured():
+            targets[suunto.name] = suunto
 
         cycling_analytics = CyclingAnalyticsTarget(self.cycling_analytics_client)
         if cycling_analytics.is_configured():

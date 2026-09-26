@@ -253,6 +253,20 @@ python sync.py sync --source nolio --target garmin --dry-run
 python sync.py sync --source local --target nolio --format nolio=tcx
 ```
 
+### Suunto Cloud API 活动来源和目标
+
+Suunto Cloud API 可以读取 Suunto 活动 FIT，也可以上传 FIT。官方 API 当前不收取使用费，但需要申请并获准加入 Suunto Developer API 合作计划，还要在 API Zone 创建自己的 OAuth 应用并订阅 API。项目不会复用 APK 内的 OAuth 客户端 ID 或任何凭据。按官方 OAuth 和请求要求，在 .env 中配置 SUUNTO_CLIENT_ID、SUUNTO_CLIENT_SECRET、SUUNTO_REDIRECT_URI 和 SUUNTO_SUBSCRIPTION_KEY；如使用不同区域端点，可设置 SUUNTO_API_ROOT 和 SUUNTO_OAUTH_ROOT。
+
+运行 python sync.py suunto-auth-url 后，在浏览器授权并把回调中的 code 和 state 交给 python sync.py suunto-exchange --code ... --state ...。FIT 上传会先申请临时存储地址，再上传文件并轮询 Suunto 的处理状态。同步目标只接受 FIT。
+
+```powershell
+python sync.py suunto-auth-url
+python sync.py suunto-exchange --code 回调中的code --state 回调中的state
+python sync.py check --source suunto --target suunto
+python sync.py sync --source suunto --target garmin --dry-run
+python sync.py sync --source local --target suunto
+```
+
 ### Polar Flow 活动来源
 
 Polar 使用官方 [AccessLink API](https://www.polar.com/accesslink-api/) 读取活动。先用自己的 Polar Flow 账号在 AccessLink 管理页注册应用并接受 API 许可协议，再配置 `POLAR_CLIENT_ID`、`POLAR_CLIENT_SECRET` 和已登记的可选 `POLAR_REDIRECT_URI`。项目不包含 APK 中的凭据；OAuth 用户令牌保存在本地 SQLite。AccessLink 要求授权后先注册用户，`polar-exchange` 会自动完成注册，失败后可运行 `polar-register` 重试。

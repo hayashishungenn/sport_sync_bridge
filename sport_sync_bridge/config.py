@@ -93,6 +93,12 @@ class AppConfig:
     nolio_client_secret: str | None
     nolio_redirect_uri: str
     nolio_athlete_id: str | None
+    suunto_client_id: str | None
+    suunto_client_secret: str | None
+    suunto_redirect_uri: str
+    suunto_subscription_key: str | None
+    suunto_api_root: str
+    suunto_oauth_root: str
     cycling_analytics_access_token: str | None
     mywhoosh_username: str | None
     mywhoosh_password: str | None
@@ -202,6 +208,14 @@ class AppConfig:
             nolio_client_secret=env_or_none("NOLIO_CLIENT_SECRET"),
             nolio_redirect_uri=os.getenv("NOLIO_REDIRECT_URI", "http://localhost/").strip(),
             nolio_athlete_id=env_or_none("NOLIO_ATHLETE_ID"),
+            suunto_client_id=env_or_none("SUUNTO_CLIENT_ID"),
+            suunto_client_secret=env_or_none("SUUNTO_CLIENT_SECRET"),
+            suunto_redirect_uri=os.getenv("SUUNTO_REDIRECT_URI", "http://localhost/").strip(),
+            suunto_subscription_key=env_or_none("SUUNTO_SUBSCRIPTION_KEY"),
+            suunto_api_root=os.getenv("SUUNTO_API_ROOT", "https://cloudapi.suunto.com").strip().rstrip("/"),
+            suunto_oauth_root=os.getenv(
+                "SUUNTO_OAUTH_ROOT", "https://cloudapi-oauth.suunto.com"
+            ).strip().rstrip("/"),
             cycling_analytics_access_token=env_or_none("CYCLING_ANALYTICS_ACCESS_TOKEN"),
             mywhoosh_username=env_or_none("MYWHOOSH_USERNAME"),
             mywhoosh_password=env_or_none("MYWHOOSH_PASSWORD"),
