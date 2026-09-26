@@ -34,6 +34,7 @@ class WorkoutTemplate:
     estimated_distance_m: float | None
     steps: tuple[dict[str, object], ...]
     fit_path: Path
+    description: str = ""
 
 
 def list_training_templates(
@@ -566,6 +567,7 @@ def list_workout_templates(
                     estimated_distance_m=_optional_number(metadata.get("estimatedDistance")),
                     steps=tuple(step for step in steps if isinstance(step, dict)),
                     fit_path=fit_path,
+                    description=str(metadata.get("description") or ""),
                 )
             )
     return sorted(templates, key=lambda item: (item.name.casefold(), item.template_id))

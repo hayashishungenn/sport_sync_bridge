@@ -9,7 +9,7 @@ import uuid
 from collections.abc import Mapping
 from datetime import datetime, timezone
 from pathlib import Path
-from urllib.parse import urljoin, urlparse
+from urllib.parse import quote, urljoin, urlparse
 from typing import Any
 
 import requests
@@ -25,6 +25,7 @@ class MyWhooshSource(SourceAdapter):
     name = "mywhoosh"
     login_url = "https://services.mywhoosh.com/http-service/api/login"
     api_root = "https://service14.mywhoosh.com/v2"
+    coaching_api_root = "https://coaching.mywhoosh.com/api/v2"
     page_size = 50
     access_token_key = "mywhoosh_access_token"
     token_expiry_key = "mywhoosh_token_expiry"
@@ -145,6 +146,104 @@ class MyWhooshSource(SourceAdapter):
             if temporary_path is not None:
                 temporary_path.unlink(missing_ok=True)
         return path
+
+    def list_workouts(self) -> list[dict[str, Any]]:
+        response = self._coaching_request("GET", "/workout-builder/my-workouts")
+        payload = _json_object(response, "workout list")
+        _ensure_success(payload, "workout list")
+        data = payload.get("data")
+        if data is None:
+            return []
+        if isinstance(data, Mapping):
+            for key in ("workouts", "results", "data"):
+                rows = data.get(key)
+                if isinstance(rows, list):
+                    data = rows
+                    break
+        if not isinstance(data, list):
+            raise RuntimeError("MyWhoosh workout list did not contain a workouts array")
+        workouts: list[dict[str, Any]] = []
+        for index, item in enumerate(data):
+            if not isinstance(item, Mapping):
+                raise RuntimeError(f"MyWhoosh workout item {index} must be an object")
+            workouts.append(dict(item))
+        return workouts
+
+    def upload_workout(self, workout: Mapping[str, object]) -> dict[str, Any]:
+        if not isinstance(workout, Mapping):
+            raise ValueError("MyWhoosh workout data must be an object")
+        token = self._get_access_token()
+        user_id = _jwt_user_id(token)
+        response = self._coaching_request(
+            "POST",
+            "/client/custom-workout-upload",
+            token=token,
+            json_body={
+                "UserId": user_id,
+                "SportsModeType": 0,
+                "WorkoutsData": [dict(workout)],
+            },
+            accepted_statuses={200, 201},
+        )
+        return _optional_json_object(response, "workout upload")
+
+    def delete_workout(self, workout_id: str | int) -> int:
+        identifier = str(workout_id).strip()
+        if not identifier.isascii() or not identifier.isdecimal():
+            raise ValueError("MyWhoosh workout ID must be a positive integer")
+        if int(identifier) <= 0:
+            raise ValueError("MyWhoosh workout ID must be a positive integer")
+        token = self._get_access_token()
+        user_id = _jwt_user_id(token)
+        path = (
+            "/client/custom-workout-upload/"
+            f"{quote(str(user_id), safe='')}/{quote(identifier, safe='')}"
+        )
+        response = self._coaching_request(
+            "DELETE", path, token=token, accepted_statuses={200, 204}
+        )
+        return int(response.status_code)
+
+    def _coaching_request(
+        self,
+        method: str,
+        path: str,
+        *,
+        token: str | None = None,
+        json_body: dict[str, object] | None = None,
+        accepted_statuses: set[int] | None = None,
+    ) -> Any:
+        if not path.startswith("/") or "?" in path or "#" in path:
+            raise ValueError("Invalid MyWhoosh workout API path")
+        access_token = token or self._get_access_token()
+        headers = {
+            "Authorization": f"Bearer {access_token}",
+            "Source": "connect",
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+        }
+        request_method = getattr(self.session, method.lower(), None)
+        if request_method is None:
+            raise ValueError(f"Unsupported MyWhoosh workout API method: {method}")
+        try:
+            kwargs: dict[str, object] = {"headers": headers, "timeout": 30}
+            if json_body is not None:
+                kwargs["json"] = json_body
+            response = request_method(f"{self.coaching_api_root}{path}", **kwargs)
+        except requests.RequestException as exc:
+            raise RuntimeError("MyWhoosh workout API request failed: network error") from exc
+
+        status = getattr(response, "status_code", None)
+        allowed = {200} if accepted_statuses is None else accepted_statuses
+        if status not in allowed:
+            try:
+                response.raise_for_status()
+            except requests.RequestException as exc:
+                raise RuntimeError(
+                    f"MyWhoosh workout API request failed: HTTP {status}"
+                ) from exc
+            raise RuntimeError(f"MyWhoosh workout API request failed: HTTP {status}")
+        return response
 
     def _get_access_token(self) -> str:
         now = time.time()
@@ -355,6 +454,16 @@ def _sport_type(value: object) -> str | None:
 
 
 def _jwt_expiry(token: str) -> float | None:
+    claims = _jwt_claims(token)
+    if claims is None:
+        return None
+    try:
+        return float(claims["exp"])
+    except (KeyError, TypeError, ValueError):
+        return None
+
+
+def _jwt_claims(token: str) -> Mapping[str, Any] | None:
     parts = token.split(".")
     if len(parts) < 2:
         return None
@@ -365,10 +474,31 @@ def _jwt_expiry(token: str) -> float | None:
         return None
     if not isinstance(claims, Mapping):
         return None
+    return claims
+
+
+def _jwt_user_id(token: str) -> str | int:
+    claims = _jwt_claims(token)
+    user_id = claims.get("userId") if claims is not None else None
+    if isinstance(user_id, bool) or not isinstance(user_id, (str, int)):
+        raise RuntimeError("MyWhoosh access token did not contain a user ID")
+    if not str(user_id).strip():
+        raise RuntimeError("MyWhoosh access token did not contain a user ID")
+    return user_id
+
+
+def _optional_json_object(response: Any, operation: str) -> dict[str, Any]:
     try:
-        return float(claims["exp"])
-    except (KeyError, TypeError, ValueError):
-        return None
+        payload = response.json()
+    except (TypeError, ValueError):
+        if not getattr(response, "content", b""):
+            return {}
+        raise RuntimeError(f"MyWhoosh {operation} response was not valid JSON")
+    if payload is None and not getattr(response, "content", b""):
+        return {}
+    if not isinstance(payload, Mapping):
+        raise RuntimeError(f"MyWhoosh {operation} response must be a JSON object")
+    return dict(payload)
 
 
 def _as_utc(value: datetime | None) -> datetime | None:

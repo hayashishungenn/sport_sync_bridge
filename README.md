@@ -289,16 +289,24 @@ python sync.py sync --source coros --target strava --limit 5
 
 每次同步只在有待上传目标时下载对应 FIT。程序会本地限制 FIT 下载请求不超过每 24 小时 50 次；检查连接和列出活动不消耗 FIT 下载额度。COROS MCP 仅作为活动来源，项目不会把运动文件上传回 COROS。
 
-### MyWhoosh 活动来源
+### MyWhoosh 活动与课程
 
-MyWhoosh 连接依据 APK 中的登录、活动列表和 FIT 下载接口重新实现。MyWhoosh 没有为这些接口提供公开稳定的 API 文档，因此服务端调整可能导致连接失效。仅在 `.env` 中填写自己的 `MYWHOOSH_USERNAME` 和 `MYWHOOSH_PASSWORD`，并将 `mywhoosh` 加入 `SYNC_SOURCES`；账号密码不会写入 SQLite，登录令牌和本机生成的设备 ID 保存在本地状态库。
+MyWhoosh 连接依据 APK 中的登录、活动列表、FIT 下载和自定义课程接口重新实现。MyWhoosh 没有为这些接口提供公开稳定的 API 文档，因此服务端调整可能导致连接失效。仅在 `.env` 中填写自己的 `MYWHOOSH_USERNAME` 和 `MYWHOOSH_PASSWORD`，并将 `mywhoosh` 加入 `SYNC_SOURCES`；账号密码不会写入 SQLite，登录令牌和本机生成的设备 ID 保存在本地状态库。
 
 ```powershell
 python sync.py check --source mywhoosh --target garmin
 python sync.py sync --source mywhoosh --target strava --dry-run
 ```
 
-MyWhoosh 在本项目中只作为活动来源。活动 FIT 下载后会验证文件签名，再交给现有同步流程处理。
+在活动同步流程中，MyWhoosh 作为活动来源。活动 FIT 下载后会验证文件签名，再交给现有同步流程处理。
+
+也可以管理 MyWhoosh 账号中的骑行课程。上传会读取本地 `workouts list` 显示的课程元数据，重复上传同一课程会通过稳定 ID 跳过。当前转换保留计时步骤和 `% FTP` 目标；非 `% FTP` 目标、步骤备注、精确重复组结构以及 IF/TSS/KJ 计算会列在命令结果的 `losses` 中。跑步、游泳、距离步骤和开放时长不会上传。
+
+```powershell
+python sync.py workouts mywhoosh list
+python sync.py workouts mywhoosh upload <课程ID>
+python sync.py workouts mywhoosh delete <MyWhoosh课程ID>
+```
 
 ### 5. 首次同步
 
@@ -520,6 +528,8 @@ python sync.py workouts list --sport CYCLING
 python sync.py workouts show <课表ID>
 python sync.py workouts export <课表ID> --output .\workout.fit
 python sync.py workouts generate --sport running --task "节奏跑，间歇后放松" --target-mode pace --target-duration 45min --prompt-only
+python sync.py workouts mywhoosh list
+python sync.py workouts mywhoosh upload <课程ID>
 ```
 
 `plans schedule` 会列出已安装计划的日期、课表项 ID 和可解析的距离、时长、配速及 TSS 目标。用 `link-activity` 将本地活动关联到一个训练项，`unlink-activity` 可解除关联；同一计划内一项活动只能关联到一个训练项。`plans progress` 对照已关联活动与可读取的目标指标，并报告实际值和差值；`--format json` 输出机器可读结果。

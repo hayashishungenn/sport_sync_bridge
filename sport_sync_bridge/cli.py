@@ -92,6 +92,8 @@ from .google_health import (
     validate_google_health_date_range,
 )
 from .intervals_icu import IntervalsIcuSource
+from .mywhoosh_source import MyWhooshSource
+from .mywhoosh_workouts import remote_workout_summary, upload_mywhoosh_workout
 from .health_sources import (
     GARMIN_HEALTH_DETAIL_ENDPOINTS,
     fetch_garmin_health_details,
@@ -549,7 +551,7 @@ def build_parser() -> argparse.ArgumentParser:
     plans_export.add_argument("plan_id")
     plans_export.add_argument("--output", type=Path, required=True)
 
-    workouts_parser = subparsers.add_parser("workouts", help="Browse and export bundled FIT workout templates")
+    workouts_parser = subparsers.add_parser("workouts", help="Browse, generate, and manage workout templates")
     workouts_actions = workouts_parser.add_subparsers(dest="workouts_action", required=True)
     workouts_list = workouts_actions.add_parser("list", help="List FIT workout templates")
     workouts_list.add_argument("--sport", help="Filter by sport type")
@@ -585,6 +587,21 @@ def build_parser() -> argparse.ArgumentParser:
     workouts_generate.add_argument(
         "--prompt-only", action="store_true", help="Print the prompts without contacting the AI service"
     )
+    workouts_mywhoosh = workouts_actions.add_parser(
+        "mywhoosh", help="List, upload, or delete MyWhoosh cycling workouts"
+    )
+    workouts_mywhoosh_actions = workouts_mywhoosh.add_subparsers(
+        dest="mywhoosh_workout_action", required=True
+    )
+    workouts_mywhoosh_actions.add_parser("list", help="List workouts in the MyWhoosh account")
+    workouts_mywhoosh_upload = workouts_mywhoosh_actions.add_parser(
+        "upload", help="Upload a local cycling workout template"
+    )
+    workouts_mywhoosh_upload.add_argument("template_id")
+    workouts_mywhoosh_delete = workouts_mywhoosh_actions.add_parser(
+        "delete", help="Delete a MyWhoosh workout by its remote workout ID"
+    )
+    workouts_mywhoosh_delete.add_argument("workout_id")
 
     health_parser = subparsers.add_parser("health", help="Import and summarize local health measurements")
     health_actions = health_parser.add_subparsers(dest="health_action", required=True)
@@ -1971,6 +1988,8 @@ def _run_local_command(args: argparse.Namespace, config: AppConfig) -> int:
     if args.command == "workouts":
         if args.workouts_action == "generate":
             return _run_ai_workout_generation(args, config)
+        if args.workouts_action == "mywhoosh":
+            return _run_mywhoosh_workouts(args, config)
         if args.workouts_action == "list":
             templates = list_workout_templates(args.sport, generated_dir=config.data_dir / "generated_workouts")
             for workout in templates:
@@ -3076,6 +3095,35 @@ def _run_ai_workout_generation(args: argparse.Namespace, config: AppConfig) -> i
         )
     )
     return 0
+
+
+def _run_mywhoosh_workouts(args: argparse.Namespace, config: AppConfig) -> int:
+    state = StateDB(config.db_path)
+    try:
+        source = MyWhooshSource(config, state)
+        if args.mywhoosh_workout_action == "list":
+            workouts = source.list_workouts()
+            for workout in workouts:
+                print(json.dumps(remote_workout_summary(workout), ensure_ascii=False))
+            print(f"workouts={len(workouts)}")
+            return 0
+        if args.mywhoosh_workout_action == "delete":
+            status_code = source.delete_workout(args.workout_id)
+            print(json.dumps({"status": "deleted", "workout_id": args.workout_id, "http_status": status_code}))
+            return 0
+
+        template = get_workout_template(
+            args.template_id,
+            generated_dir=config.data_dir / "generated_workouts",
+        )
+        result = upload_mywhoosh_workout(source, template)
+        print(json.dumps(result, ensure_ascii=False))
+        return 0
+    except (OSError, RuntimeError, ValueError) as exc:
+        print(f"mywhoosh_workout_error={exc}", file=sys.stderr)
+        return 2
+    finally:
+        state.close()
 
 
 def _template_week_count(template: dict[str, object]) -> int:
