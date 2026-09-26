@@ -884,6 +884,24 @@ def build_parser() -> argparse.ArgumentParser:
     )
     suunto_exchange_parser.add_argument("--code", required=True, help="OAuth code returned by Suunto")
     suunto_exchange_parser.add_argument("--state", required=True, help="OAuth state returned to the redirect URI")
+    suunto_routes_parser = subparsers.add_parser(
+        "suunto-routes", help="List routes from the Suunto account"
+    )
+    suunto_routes_parser.add_argument("--limit", type=int, help="Maximum routes to print")
+    suunto_route_export_parser = subparsers.add_parser(
+        "suunto-route-export", help="Export a Suunto route as GPX"
+    )
+    suunto_route_export_parser.add_argument("--route-id", required=True, help="Suunto route ID")
+    suunto_route_export_parser.add_argument("--output", required=True, type=Path, help="Output GPX path")
+    suunto_route_import_parser = subparsers.add_parser(
+        "suunto-route-import", help="Import a GPX route to Suunto"
+    )
+    suunto_route_import_parser.add_argument("input", type=Path, help="Input GPX file")
+    suunto_route_import_parser.add_argument(
+        "--activities",
+        default="1",
+        help="Comma-separated Suunto activity IDs associated with the route (default: running)",
+    )
     ridewithgps_delete_parser = subparsers.add_parser(
         "ridewithgps-delete", help="Permanently delete a Ride with GPS trip"
     )
@@ -1241,6 +1259,21 @@ def main(argv: list[str] | None = None) -> int:
             print("Suunto tokens saved to SQLite.")
             print(f"expires_in={result.get('expires_in')}")
             print(f"scope={result.get('scope')}")
+            return 0
+
+        if args.command == "suunto-routes":
+            routes = engine.get_suunto_source().list_routes(limit=args.limit)
+            print(json.dumps(routes, ensure_ascii=False, indent=2))
+            return 0
+
+        if args.command == "suunto-route-export":
+            output_path = engine.get_suunto_source().download_route(args.route_id, args.output)
+            print(f"exported={output_path}")
+            return 0
+
+        if args.command == "suunto-route-import":
+            result = engine.get_suunto_target().import_route(args.input, activities=args.activities)
+            print(json.dumps(result, ensure_ascii=False, indent=2))
             return 0
 
         if args.command == "ridewithgps-delete":

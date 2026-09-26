@@ -86,6 +86,15 @@ def _config(**overrides: object) -> SimpleNamespace:
     return SimpleNamespace(**values)
 
 
+def _route_gpx() -> bytes:
+    return (
+        b'<?xml version="1.0"?><gpx xmlns="http://www.topografix.com/GPX/1/1" '
+        b'version="1.1" creator="sport-sync-bridge"><trk><name>Test route</name><trkseg>'
+        b'<trkpt lat="60.1" lon="24.9"/><trkpt lat="60.2" lon="25.0"/>'
+        b'</trkseg></trk></gpx>'
+    )
+
+
 class _ClientStub:
     def __init__(self, config: SimpleNamespace, *, json_values=None, responses=None):
         self.config = config
@@ -323,6 +332,45 @@ class SuuntoSourceTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "invalid FIT signature"):
                 source.download_fit(Activity("suunto", "w-1", "Run"), Path(temporary))
 
+    def test_lists_routes_from_route_api(self) -> None:
+        client = _ClientStub(
+            _config(),
+            json_values=[{"payload": [{"id": "route-1", "description": "Forest loop"}]}],
+        )
+        source = SuuntoSource(_config(), client)
+
+        routes = source.list_routes(limit=1)
+
+        self.assertEqual(routes, [{"id": "route-1", "description": "Forest loop"}])
+        self.assertEqual(client.json_calls, [("/v2/route", {"page": 0, "size": 1})])
+
+    def test_exports_route_as_validated_gpx(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            client = _ClientStub(_config(), responses=[_Response(content=_route_gpx())])
+            source = SuuntoSource(_config(), client)
+            output_path = Path(temporary) / "route.gpx"
+
+            result = source.download_route("route/1", output_path)
+
+            self.assertEqual(result, output_path.resolve())
+            self.assertEqual(result.read_bytes(), _route_gpx())
+            self.assertEqual(
+                client.api_calls[0][0:2],
+                ("GET", "/v2/route/route%2F1/export"),
+            )
+            self.assertEqual(
+                client.api_calls[0][2]["headers"],
+                {"Accept": "application/gpx+xml"},
+            )
+
+    def test_route_export_rejects_invalid_gpx(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            client = _ClientStub(_config(), responses=[_Response(content=b"<not-gpx />")])
+            source = SuuntoSource(_config(), client)
+
+            with self.assertRaisesRegex(RuntimeError, "GPX root"):
+                source.download_route("route-1", Path(temporary) / "route.gpx")
+
 
 class SuuntoTargetTests(unittest.TestCase):
     def test_uploads_fit_without_forwarding_api_credentials_to_blob_storage(self) -> None:
@@ -399,6 +447,39 @@ class SuuntoTargetTests(unittest.TestCase):
             self.assertEqual(result.status, "failed")
             self.assertIn("HTTPS", result.message or "")
 
+    def test_imports_gpx_route_with_activity_ids(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            route_path = Path(temporary) / "route.gpx"
+            route_path.write_bytes(_route_gpx())
+            client = _ClientStub(
+                _config(),
+                responses=[_Response({"id": "new-route"}, status_code=201)],
+            )
+            target = SuuntoTarget(client)
+
+            result = target.import_route(route_path, activities="1,3")
+
+            self.assertEqual(result, {"id": "new-route"})
+            self.assertEqual(client.api_calls[0][0:2], ("POST", "/v2/route/import"))
+            self.assertEqual(client.api_calls[0][2]["params"], {"activities": "1,3"})
+            self.assertEqual(
+                client.api_calls[0][2]["headers"],
+                {"Content-Type": "application/gpx+xml"},
+            )
+            self.assertEqual(client.api_calls[0][2]["data"], _route_gpx())
+
+    def test_route_import_rejects_bad_file_and_activity_ids(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            route_path = Path(temporary) / "route.gpx"
+            route_path.write_bytes(_route_gpx())
+            target = SuuntoTarget(_ClientStub(_config()))
+
+            with self.assertRaisesRegex(ValueError, "positive integers"):
+                target.import_route(route_path, activities="1,nope")
+            route_path.write_bytes(b"invalid")
+            with self.assertRaisesRegex(RuntimeError, "valid GPX XML"):
+                target.import_route(route_path)
+
 
 class SuuntoIntegrationTests(unittest.TestCase):
     def test_cli_accepts_suunto_source_and_fit_target_only(self) -> None:
@@ -412,6 +493,12 @@ class SuuntoIntegrationTests(unittest.TestCase):
         )
         self.assertEqual(check_args.source, ["suunto"])
         self.assertEqual(check_args.target, ["suunto"])
+
+        route_args = build_parser().parse_args(
+            ["suunto-route-import", "route.gpx", "--activities", "1,3"]
+        )
+        self.assertEqual(route_args.activities, "1,3")
+        self.assertEqual(route_args.input, Path("route.gpx"))
 
         with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
             build_parser().parse_args(["sync", "--format", "suunto=tcx"])

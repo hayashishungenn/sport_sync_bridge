@@ -280,6 +280,18 @@ class SyncEngine:
             raise RuntimeError("Hammerhead target is not configured")
         return cast(HammerheadTarget, target)
 
+    def get_suunto_source(self) -> SuuntoSource:
+        source = self.sources.get("suunto")
+        if source is None:
+            raise RuntimeError("Suunto source is not configured")
+        return cast(SuuntoSource, source)
+
+    def get_suunto_target(self) -> SuuntoTarget:
+        target = self.targets.get("suunto")
+        if target is None:
+            raise RuntimeError("Suunto target is not configured")
+        return cast(SuuntoTarget, target)
+
     def get_cycling_analytics_target(self) -> CyclingAnalyticsTarget:
         target = self.targets.get("cycling_analytics")
         if target is None:

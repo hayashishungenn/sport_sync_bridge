@@ -265,7 +265,12 @@ python sync.py suunto-exchange --code 回调中的code --state 回调中的state
 python sync.py check --source suunto --target suunto
 python sync.py sync --source suunto --target garmin --dry-run
 python sync.py sync --source local --target suunto
+python sync.py suunto-routes --limit 20
+python sync.py suunto-route-export --route-id ROUTE_ID --output route.gpx
+python sync.py suunto-route-import route.gpx --activities 1,3
 ```
+
+路线接口使用 Suunto 的 `/v2/route` 列表、GPX 导出和 GPX 导入接口。导入默认关联跑步活动 ID `1`，也可用 `--activities` 指定逗号分隔的活动 ID。路线删除接口未在 APK 中得到支持，因此 CLI 不提供删除命令。
 
 ### Polar Flow 活动来源
 

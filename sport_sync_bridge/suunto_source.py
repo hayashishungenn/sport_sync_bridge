@@ -14,6 +14,7 @@ from .config import AppConfig
 from .models import Activity
 from .sources import SourceAdapter
 from .suunto_api import SuuntoClient, raise_for_response, unwrap_payload
+from .suunto_route import validate_route_gpx
 from .utils import fit_signature_ok, safe_filename
 
 
@@ -145,6 +146,71 @@ class SuuntoSource(SourceAdapter):
             if temporary_path is not None:
                 temporary_path.unlink(missing_ok=True)
 
+    def list_routes(self, limit: int | None = None) -> list[dict[str, Any]]:
+        if limit is not None and limit <= 0:
+            return []
+
+        routes: list[dict[str, Any]] = []
+        page = 0
+        while limit is None or len(routes) < limit:
+            page_size = _PAGE_SIZE if limit is None else min(_PAGE_SIZE, limit - len(routes))
+            payload = self.client.get_json(
+                "/v2/route",
+                params={"page": page, "size": page_size},
+            )
+            rows, has_more = _route_rows(payload, page_size)
+            for index, item in enumerate(rows):
+                if not isinstance(item, Mapping):
+                    raise RuntimeError(f"Suunto route {page * page_size + index} must be a JSON object")
+                route = dict(item)
+                route_id = route.get("id")
+                if route_id in (None, ""):
+                    raise RuntimeError(f"Suunto route {page * page_size + index} is missing its ID")
+                route["id"] = str(route_id)
+                routes.append(route)
+                if limit is not None and len(routes) >= limit:
+                    break
+            if not rows or not has_more:
+                break
+            page += 1
+        return routes[:limit] if limit is not None else routes
+
+    def download_route(self, route_id: str, output_path: Path) -> Path:
+        normalized_id = route_id.strip()
+        if not normalized_id:
+            raise ValueError("Suunto route ID cannot be empty")
+        output_path = output_path.resolve()
+        if output_path.suffix.casefold() != ".gpx":
+            raise ValueError("Suunto route output must use the .gpx extension")
+
+        response = self.client.api_request(
+            "GET",
+            f"/v2/route/{quote(normalized_id, safe='')}/export",
+            headers={"Accept": "application/gpx+xml"},
+            timeout=90,
+        )
+        raise_for_response(response, "route export")
+        validate_route_gpx(response.content)
+
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        temporary_path: Path | None = None
+        try:
+            with tempfile.NamedTemporaryFile(
+                mode="wb",
+                prefix=".suunto-route-",
+                suffix=".gpx",
+                dir=output_path.parent,
+                delete=False,
+            ) as stream:
+                temporary_path = Path(stream.name)
+                stream.write(response.content)
+            os.replace(temporary_path, output_path)
+            temporary_path = None
+            return output_path
+        finally:
+            if temporary_path is not None:
+                temporary_path.unlink(missing_ok=True)
+
 
 def _workout_rows(payload: Any) -> tuple[list[Any], bool]:
     value = unwrap_payload(payload)
@@ -166,6 +232,31 @@ def _workout_rows(payload: Any) -> tuple[list[Any], bool]:
         if isinstance(candidate, Mapping):
             return _workout_rows(candidate)
     raise RuntimeError("Suunto workout list response did not contain workouts")
+
+
+def _route_rows(payload: Any, page_size: int) -> tuple[list[Any], bool]:
+    value = unwrap_payload(payload)
+    if isinstance(value, list):
+        return value, len(value) >= page_size
+    if not isinstance(value, Mapping):
+        raise RuntimeError("Suunto route list response must contain a JSON array")
+    for key in ("routes", "items", "data", "results"):
+        candidate = value.get(key)
+        if isinstance(candidate, list):
+            has_more = value.get("hasMore")
+            if isinstance(has_more, bool):
+                return candidate, has_more
+            total_pages = value.get("totalPages")
+            response_page = value.get("page")
+            if isinstance(total_pages, int) and isinstance(response_page, int):
+                return candidate, response_page + 1 < total_pages
+            total = value.get("total")
+            if isinstance(total, int):
+                return candidate, (response_page or 0) * page_size + len(candidate) < total
+            return candidate, len(candidate) >= page_size
+        if isinstance(candidate, Mapping):
+            return _route_rows(candidate, page_size)
+    raise RuntimeError("Suunto route list response did not contain routes")
 
 
 def _activity_from_workout(item: Mapping[str, object], index: int) -> Activity:

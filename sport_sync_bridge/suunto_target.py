@@ -3,13 +3,14 @@ from __future__ import annotations
 import time
 from collections.abc import Mapping
 from pathlib import Path
-from urllib.parse import quote, urlparse
 from typing import Any
+from urllib.parse import quote, urlparse
 
 import requests
 
 from .models import Activity, UploadResult
 from .suunto_api import SuuntoClient, raise_for_response, unwrap_payload
+from .suunto_route import validate_route_gpx
 from .targets import TargetAdapter
 from .utils import fit_signature_ok
 
@@ -91,6 +92,29 @@ class SuuntoTarget(TargetAdapter):
         except (OSError, requests.RequestException, RuntimeError, TypeError, ValueError) as exc:
             return UploadResult(status="failed", message=str(exc))
 
+    def import_route(self, file_path: Path, activities: str = "1") -> Any:
+        if file_path.suffix.casefold() != ".gpx":
+            raise ValueError("Suunto route import accepts GPX files only")
+        if not file_path.is_file() or file_path.stat().st_size == 0:
+            raise ValueError("Suunto route file is missing or empty")
+        if not _valid_activity_ids(activities):
+            raise ValueError("Suunto route activities must be comma-separated positive integers")
+        payload = file_path.read_bytes()
+        validate_route_gpx(payload)
+        response = self.client.api_request(
+            "POST",
+            "/v2/route/import",
+            params={"activities": activities},
+            headers={"Content-Type": "application/gpx+xml"},
+            data=payload,
+            timeout=120,
+        )
+        raise_for_response(response, "route import")
+        try:
+            return response.json()
+        except (TypeError, ValueError):
+            return {"status_code": response.status_code}
+
     def _poll_upload(self, upload_id: str) -> UploadResult:
         escaped_id = quote(upload_id, safe="")
         for attempt in range(_MAX_STATUS_POLLS):
@@ -154,3 +178,8 @@ def _upload_headers(value: object) -> dict[str, str]:
             raise RuntimeError("Suunto storage upload headers must not contain API credentials")
         headers[key] = item
     return headers
+
+
+def _valid_activity_ids(value: str) -> bool:
+    parts = [part.strip() for part in value.split(",")]
+    return bool(parts) and all(part.isdigit() and int(part) > 0 for part in parts)
