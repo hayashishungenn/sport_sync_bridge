@@ -96,7 +96,6 @@ class SuuntoClient:
                 "response_type": "code",
                 "client_id": client_id,
                 "redirect_uri": redirect_uri,
-                "scope": "workouts",
                 "state": state,
             }
         )
@@ -129,11 +128,18 @@ class SuuntoClient:
         return {"expires_in": payload.get("expires_in"), "scope": payload.get("scope")}
 
     def authenticate(self) -> None:
-        self.get_json("/v3/workouts", params={"limit": 1, "offset": 0})
+        self.get_workouts(params={"limit": 1, "offset": 0})
+
+    def get_workouts(self, *, params: dict[str, object] | None = None) -> Any:
+        try:
+            return self.get_json("/v3/workouts", params=params)
+        except SuuntoApiError as exc:
+            if exc.status_code not in {404, 405}:
+                raise
+        return self.get_json("/v2/workouts", params=params)
 
     def api_request(self, method: str, path: str, **kwargs: Any) -> requests.Response:
-        client_id, _, _, subscription_key, api_root, _ = self._credentials()
-        del client_id
+        _, _, _, subscription_key, api_root, _ = self._credentials()
         access_token = self._get_access_token()
         headers = dict(kwargs.pop("headers", {}))
         headers["Authorization"] = f"Bearer {access_token}"

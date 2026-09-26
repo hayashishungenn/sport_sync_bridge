@@ -255,7 +255,7 @@ python sync.py sync --source local --target nolio --format nolio=tcx
 
 ### Suunto Cloud API 活动来源和目标
 
-Suunto Cloud API 可以读取 Suunto 活动 FIT，也可以上传 FIT。官方 API 当前不收取使用费，但需要申请并获准加入 Suunto Developer API 合作计划，还要在 API Zone 创建自己的 OAuth 应用并订阅 API。项目不会复用 APK 内的 OAuth 客户端 ID 或任何凭据。按官方 OAuth 和请求要求，在 .env 中配置 SUUNTO_CLIENT_ID、SUUNTO_CLIENT_SECRET、SUUNTO_REDIRECT_URI 和 SUUNTO_SUBSCRIPTION_KEY；如使用不同区域端点，可设置 SUUNTO_API_ROOT 和 SUUNTO_OAUTH_ROOT。
+Suunto Cloud API 可以读取 Suunto 活动 FIT，也可以上传 FIT。官方目前不收 API 调用费，但只向面向公众提供服务的公司或组织开放，不提供个人用途访问。需要通过 Suunto Partner Program 审核、签署 API 协议，并在 API Zone 创建自己的 OAuth 应用和订阅 API。项目不会复用 APK 内的 OAuth 客户端 ID 或任何凭据。按官方 OAuth 和请求要求，在 .env 中配置 SUUNTO_CLIENT_ID、SUUNTO_CLIENT_SECRET、SUUNTO_REDIRECT_URI 和 SUUNTO_SUBSCRIPTION_KEY；如使用不同区域端点，可设置 SUUNTO_API_ROOT 和 SUUNTO_OAUTH_ROOT。
 
 运行 python sync.py suunto-auth-url 后，在浏览器授权并把回调中的 code 和 state 交给 python sync.py suunto-exchange --code ... --state ...。FIT 上传会先申请临时存储地址，再上传文件并轮询 Suunto 的处理状态。同步目标只接受 FIT。
 

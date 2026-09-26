@@ -104,6 +104,9 @@ class _ClientStub:
         self.json_calls.append((path, params))
         return self.json_values.pop(0)
 
+    def get_workouts(self, *, params=None):
+        return self.get_json("/v3/workouts", params=params)
+
     def api_request(self, method: str, path: str, **kwargs: object) -> _Response:
         self.api_calls.append((method, path, kwargs))
         return self.responses.pop(0)
@@ -115,7 +118,7 @@ class SuuntoClientTests(unittest.TestCase):
         self.config = _config()
         self.client = SuuntoClient(self.config, self.state)
 
-    def test_authorize_url_stores_state_and_requests_workout_scope(self) -> None:
+    def test_authorize_url_stores_state_without_adding_an_unsupported_scope(self) -> None:
         query = parse_qs(urlparse(self.client.build_authorize_url()).query)
 
         self.assertEqual(
@@ -124,7 +127,6 @@ class SuuntoClientTests(unittest.TestCase):
                 "response_type": ["code"],
                 "client_id": ["user-client-id"],
                 "redirect_uri": ["https://localhost/callback"],
-                "scope": ["workouts"],
                 "state": [self.state.get_value("suunto_oauth_state")],
             },
         )
@@ -139,13 +141,13 @@ class SuuntoClientTests(unittest.TestCase):
             "access_token": "private-access",
             "refresh_token": "private-refresh",
             "expires_in": 86400,
-            "scope": "workouts",
+            "scope": "workout",
         })])
         self.client.session = session
 
         result = self.client.exchange_code(" code ", "expected-state")
 
-        self.assertEqual(result, {"expires_in": 86400, "scope": "workouts"})
+        self.assertEqual(result, {"expires_in": 86400, "scope": "workout"})
         self.assertEqual(self.state.get_value("suunto_access_token"), "private-access")
         self.assertEqual(self.state.get_value("suunto_refresh_token"), "private-refresh")
         self.assertEqual(self.state.get_value("suunto_oauth_state"), "")
@@ -184,6 +186,29 @@ class SuuntoClientTests(unittest.TestCase):
         self.assertEqual((method, url), ("GET", "https://cloudapi.suunto.com/v3/workouts"))
         self.assertEqual(kwargs["headers"]["Authorization"], "Bearer private-access")
         self.assertEqual(kwargs["headers"]["Ocp-Apim-Subscription-Key"], "user-subscription-key")
+
+    def test_workout_list_falls_back_to_documented_v2_endpoint(self) -> None:
+        self.state.set_value("suunto_access_token", "private-access")
+        self.state.set_value("suunto_expires_at", str(time.time() + 3600))
+        session = _Session(
+            request_responses=[
+                _Response(status_code=404),
+                _Response({"payload": []}),
+            ]
+        )
+        self.client.session = session
+
+        self.assertEqual(
+            self.client.get_workouts(params={"limit": 1, "offset": 0}),
+            {"payload": []},
+        )
+        self.assertEqual(
+            [call[1] for call in session.request_calls],
+            [
+                "https://cloudapi.suunto.com/v3/workouts",
+                "https://cloudapi.suunto.com/v2/workouts",
+            ],
+        )
 
     def test_unauthorized_request_refreshes_once_and_retries(self) -> None:
         self.state.set_value("suunto_access_token", "old-access")

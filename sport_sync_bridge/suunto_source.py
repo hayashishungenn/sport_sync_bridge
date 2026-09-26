@@ -69,7 +69,7 @@ class SuuntoSource(SourceAdapter):
                 params["until"] = _utc_isoformat(until)
 
             rows, has_more = _workout_rows(
-                self.client.get_json("/v3/workouts", params=params)
+                self.client.get_workouts(params=params)
             )
             for index, item in enumerate(rows):
                 if not isinstance(item, Mapping):
