@@ -265,7 +265,7 @@ def convert_activity_file(
     elif target_format == "tcx":
         payload = _write_tcx(activity)
     else:
-        payload = _write_fit(activity)
+        payload = _write_fit(activity, allow_trackless_records=True)
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     _atomic_write_bytes(output_path, payload, validate_fit=target_format == "fit")
@@ -292,7 +292,7 @@ def read_activity_file(input_path: Path) -> ActivityFile:
 def _target_format_losses(activity: ActivityFile, target_format: str) -> list[str]:
     losses: list[str] = []
     missing_positions = sum(1 for point in activity.track_points if not _has_position(point))
-    if missing_positions:
+    if target_format == "gpx" and missing_positions:
         losses.append(f"Track samples without GPS coordinates omitted: {missing_positions}")
     if target_format in {"gpx", "tcx"}:
         empty_laps = sum(
@@ -910,9 +910,21 @@ def _write_gpx(activity: ActivityFile) -> bytes:
     return _xml_bytes(root)
 
 
+def write_tcx_activity(activity: ActivityFile, output_path: Path) -> Path:
+    output_path = output_path.resolve()
+    if output_path.suffix.lower() != ".tcx":
+        raise ValueError("TCX output file extension must be .tcx")
+    _validate_coordinates(activity, output_path)
+    if not any(_has_position(point) for point in activity.track_points):
+        raise ValueError("TCX output requires at least one GPS track point")
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    _atomic_write_bytes(output_path, _write_tcx(activity))
+    return output_path
+
+
 def _write_tcx(activity: ActivityFile) -> bytes:
-    if any(point.timestamp is None for point in activity.track_points if _has_position(point)):
-        raise ValueError("TCX output requires a timestamp for every GPS track point")
+    if any(point.timestamp is None for point in activity.track_points):
+        raise ValueError("TCX output requires a timestamp for every track point")
     start = activity.start_time or next(
         (point.timestamp for point in activity.track_points if point.timestamp), None
     )
@@ -940,8 +952,8 @@ def _write_tcx(activity: ActivityFile) -> bytes:
     ) == 1
 
     for lap in activity.laps:
-        points = [point for point in lap.track_points if _has_position(point)]
-        if not points:
+        points = lap.track_points
+        if not any(_has_position(point) for point in points):
             continue
         lap_start = lap.start_time or next((point.timestamp for point in points if point.timestamp), None)
         if lap_start is None:
@@ -957,7 +969,8 @@ def _write_tcx(activity: ActivityFile) -> bytes:
                 (point.timestamp for point in reversed(points) if point.timestamp), None
             )
             elapsed = max(0.0, (lap_end - lap_start).total_seconds()) if lap_end else 0.0
-        distance = lap.distance_m if lap.distance_m is not None else _lap_distance(points)
+        position_points = [point for point in points if _has_position(point)]
+        distance = lap.distance_m if lap.distance_m is not None else _lap_distance(position_points)
         _subtext(lap_element, TCX_NS, "TotalTimeSeconds", _format_number(elapsed))
         _subtext(lap_element, TCX_NS, "DistanceMeters", _format_number(distance))
         if lap.calories is not None:
@@ -1005,12 +1018,13 @@ def _write_tcx_heart_rate(parent: ET.Element, name: str, value: float | None) ->
 
 def _write_tcx_point(track: ET.Element, point: TrackPoint) -> None:
     if point.timestamp is None:
-        raise ValueError("TCX output requires a timestamp for every GPS track point")
+        raise ValueError("TCX output requires a timestamp for every track point")
     element = ET.SubElement(track, _qname(TCX_NS, "Trackpoint"))
     _subtext(element, TCX_NS, "Time", _format_datetime(point.timestamp))
-    position = ET.SubElement(element, _qname(TCX_NS, "Position"))
-    _subtext(position, TCX_NS, "LatitudeDegrees", _format_number(point.latitude))
-    _subtext(position, TCX_NS, "LongitudeDegrees", _format_number(point.longitude))
+    if _has_position(point):
+        position = ET.SubElement(element, _qname(TCX_NS, "Position"))
+        _subtext(position, TCX_NS, "LatitudeDegrees", _format_number(point.latitude))
+        _subtext(position, TCX_NS, "LongitudeDegrees", _format_number(point.longitude))
     if point.elevation_m is not None:
         _subtext(element, TCX_NS, "AltitudeMeters", _format_number(point.elevation_m))
     if point.distance_m is not None:
@@ -1057,14 +1071,16 @@ def _write_fit(activity: ActivityFile, *, allow_trackless_records: bool = False)
     if not points:
         raise ValueError("FIT output requires GPS track points")
     if any(point.timestamp is None for point in points):
-        raise ValueError("FIT output requires a timestamp for every GPS track point")
+        label = "every track sample" if allow_trackless_records else "every GPS track point"
+        raise ValueError(f"FIT output requires a timestamp for {label}")
 
     first_point_time = min(point.timestamp for point in points if point.timestamp)
     last_point_time = max(point.timestamp for point in points if point.timestamp)
     start = activity.start_time or first_point_time
     end = activity.end_time or last_point_time
     if start > first_point_time or end < last_point_time or end < start:
-        raise ValueError("Activity times must enclose all GPS track point timestamps")
+        label = "track record" if allow_trackless_records else "GPS track point"
+        raise ValueError(f"Activity times must enclose all {label} timestamps")
     builder = FitFileBuilder(auto_define=True)
 
     file_id = FileIdMessage()
@@ -1416,8 +1432,8 @@ def _lap_distance(points: Iterable[TrackPoint]) -> float:
         return max(distances) - min(distances) if len(distances) > 1 else distances[0]
     total = 0.0
     previous: TrackPoint | None = None
-    for point in track_points:
-        if previous is not None and _has_position(previous) and _has_position(point):
+    for point in (item for item in track_points if _has_position(item)):
+        if previous is not None:
             total += _haversine_m(previous.latitude, previous.longitude, point.latitude, point.longitude)
         previous = point
     return total

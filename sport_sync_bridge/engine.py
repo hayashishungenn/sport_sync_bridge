@@ -19,6 +19,8 @@ from .hammerhead_source import HammerheadSource
 from .intervals_icu import IntervalsIcuSource
 from .intervals_icu_target import IntervalsIcuTarget
 from .models import FileBundle, UploadResult
+from .mapmyfitness_api import MapMyFitnessClient
+from .mapmyfitness_source import MapMyFitnessSource
 from .mywhoosh_source import MyWhooshSource
 from .nolio_api import NolioClient
 from .nolio_source import NolioSource
@@ -60,6 +62,7 @@ class SyncEngine:
         self.polar_client = PolarClient(config, self.state_db)
         self.withings_client = WithingsClient(config, self.state_db)
         self.smashrun_source = SmashrunSource(config, self.state_db)
+        self.mapmyfitness_client = MapMyFitnessClient(config, self.state_db)
         self.ridewithgps_client = RideWithGPSClient(config, self.state_db)
         self.nolio_client = NolioClient(config, self.state_db)
         self.suunto_client = SuuntoClient(config, self.state_db)
@@ -344,7 +347,7 @@ class SyncEngine:
 
     def _prepare_target_file(
         self,
-        corrected_fit_path: Path,
+        activity_file_path: Path,
         activity,
         target_name: str,
         target_format: str,
@@ -356,7 +359,7 @@ class SyncEngine:
             / f"{safe_filename(activity.source_id)}.{target_format}"
         )
         result = convert_activity_file(
-            corrected_fit_path,
+            activity_file_path,
             output_path,
             target_format,
             activity_name=activity.name,
@@ -377,6 +380,7 @@ class SyncEngine:
             PolarSource(self.config, self.polar_client),
             GoogleHealthSource(self.config, self.google_health_client),
             WithingsSource(self.config, self.withings_client),
+            MapMyFitnessSource(self.config, self.mapmyfitness_client),
             RideWithGPSSource(self.config, self.ridewithgps_client),
             NolioSource(self.config, self.nolio_client),
             SuuntoSource(self.config, self.suunto_client),

@@ -85,6 +85,9 @@ class AppConfig:
     coros_mcp_url: str
     coros_mcp_timezone: str | None
     smashrun_access_token: str | None
+    mapmyfitness_client_id: str | None
+    mapmyfitness_client_secret: str | None
+    mapmyfitness_redirect_uri: str
     ridewithgps_client_id: str | None
     ridewithgps_client_secret: str | None
     ridewithgps_redirect_uri: str
@@ -200,6 +203,11 @@ class AppConfig:
             coros_mcp_url=os.getenv("COROS_MCP_URL", "https://mcp.coros.com/mcp").strip(),
             coros_mcp_timezone=env_or_none("COROS_TIMEZONE"),
             smashrun_access_token=env_or_none("SMASHRUN_ACCESS_TOKEN"),
+            mapmyfitness_client_id=env_or_none("MAPMYFITNESS_CLIENT_ID"),
+            mapmyfitness_client_secret=env_or_none("MAPMYFITNESS_CLIENT_SECRET"),
+            mapmyfitness_redirect_uri=os.getenv(
+                "MAPMYFITNESS_REDIRECT_URI", "http://localhost:12345/callback"
+            ).strip(),
             ridewithgps_client_id=env_or_none("RIDEWITHGPS_CLIENT_ID"),
             ridewithgps_client_secret=env_or_none("RIDEWITHGPS_CLIENT_SECRET"),
             ridewithgps_redirect_uri=os.getenv("RIDEWITHGPS_REDIRECT_URI", "http://localhost/").strip(),

@@ -11,6 +11,7 @@
 - `Fitbit`（Google Health API 活动来源）
 - `Withings`（Public API 活动来源）
 - `COROS`（官方 MCP 活动来源）
+- `MapMyFitness`（官方 v7.1 API 活动来源）
 - `Ride with GPS`（官方 API 活动来源）
 - `MyWhoosh`（使用未公开应用接口的活动来源）
 - 本地活动库（`FIT` / `GPX` / `TCX` / `ZIP` / 轨迹 `JSON` / `CSV`）
@@ -209,6 +210,12 @@ python sync.py hammerhead-delete-route --route-id 路线ID
 ```
 
 活动列表按 API 页码读取，活动 FIT 从公开活动文件端点下载。同步到 Hammerhead 时，FIT、GPX 或 TCX 会作为路线文件上传，不会创建 Hammerhead 活动。删除只适用于由本 API 客户端创建的路线，并要求输入完整路线 ID 确认。API 许可协议当前写明不收许可费，同时保留今后收费的权利；若之后开始收费，请勿启用此连接器。
+
+### MapMyFitness 活动来源
+
+MapMyFitness 通过官方 [v7.1 Workout API](https://developer.mapmyfitness.com/docs/v71_Workout/) 读取训练活动。需要在 MapMyFitness 开发者设置中申请自己的 API client，并将 client ID、client secret 和登记的回调地址分别填入 MAPMYFITNESS_CLIENT_ID、MAPMYFITNESS_CLIENT_SECRET 和 MAPMYFITNESS_REDIRECT_URI。不要复用 APK 中的密钥或接口凭据。
+
+配置后运行 mapmyfitness-auth-url 打开授权链接，再用 mapmyfitness-exchange --code CODE 保存授权结果。访问令牌、刷新令牌和用户 ID 仅保存在本地 .data/sync_state.db。来源会读取活动分页和时间序列，并先生成 TCX，再复用现有转换流程为上传目标生成文件。MapMyFitness 未提供轨迹时间序列的活动会作为无轨迹错误报告。授权使用 [MapMyFitness OAuth 2](https://developer.mapmyfitness.com/docs/v71_OAuth_2_Intro/)。
 
 ### Ride with GPS 活动来源和目标
 

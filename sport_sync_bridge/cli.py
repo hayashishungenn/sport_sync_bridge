@@ -199,6 +199,7 @@ def build_parser() -> argparse.ArgumentParser:
             "withings",
             "coros",
             "smashrun",
+            "mapmyfitness",
             "ridewithgps",
             "nolio",
             "suunto",
@@ -872,6 +873,15 @@ def build_parser() -> argparse.ArgumentParser:
     ridewithgps_exchange_parser.add_argument(
         "--code", required=True, help="OAuth code returned by Ride with GPS"
     )
+    subparsers.add_parser(
+        "mapmyfitness-auth-url", help="Print the MapMyFitness OAuth authorization URL"
+    )
+    mapmyfitness_exchange_parser = subparsers.add_parser(
+        "mapmyfitness-exchange", help="Exchange a MapMyFitness OAuth code and save tokens locally"
+    )
+    mapmyfitness_exchange_parser.add_argument(
+        "--code", required=True, help="OAuth code returned by MapMyFitness"
+    )
     subparsers.add_parser("nolio-auth-url", help="Print the Nolio OAuth authorization URL")
     nolio_exchange_parser = subparsers.add_parser(
         "nolio-exchange", help="Exchange a Nolio OAuth code and save tokens locally"
@@ -1235,6 +1245,17 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "ridewithgps-exchange":
             result = engine.ridewithgps_client.exchange_code(args.code)
             print("Ride with GPS access token validated and saved to SQLite.")
+            print(f"user_id={result.get('user_id')}")
+            print(f"scope={result.get('scope')}")
+            return 0
+
+        if args.command == "mapmyfitness-auth-url":
+            print(engine.mapmyfitness_client.build_authorize_url())
+            return 0
+
+        if args.command == "mapmyfitness-exchange":
+            result = engine.mapmyfitness_client.exchange_code(args.code)
+            print("MapMyFitness tokens validated and saved to local SQLite.")
             print(f"user_id={result.get('user_id')}")
             print(f"scope={result.get('scope')}")
             return 0
