@@ -43,6 +43,8 @@ from .wahoo_target import WahooTarget
 from .wahoo_source import WahooSource
 from .withings_source import WithingsClient, WithingsSource
 from .utils import ensure_directory, safe_filename, sha1_file, utcnow
+from .zwift_api import ZwiftClient
+from .zwift_source import ZwiftSource
 
 
 LOGGER = logging.getLogger(__name__)
@@ -63,6 +65,7 @@ class SyncEngine:
         self.withings_client = WithingsClient(config, self.state_db)
         self.smashrun_source = SmashrunSource(config, self.state_db)
         self.mapmyfitness_client = MapMyFitnessClient(config, self.state_db)
+        self.zwift_client = ZwiftClient(config, self.state_db)
         self.ridewithgps_client = RideWithGPSClient(config, self.state_db)
         self.nolio_client = NolioClient(config, self.state_db)
         self.suunto_client = SuuntoClient(config, self.state_db)
@@ -364,6 +367,9 @@ class SyncEngine:
             target_format,
             activity_name=activity.name,
             sport_type=activity.sport_type,
+            allow_trackless_fit_copy=(
+                activity_file_path.suffix.lower() == ".fit" and target_format.lower() == "fit"
+            ),
         )
         return result.output_path, result.losses
 
@@ -386,6 +392,7 @@ class SyncEngine:
             SuuntoSource(self.config, self.suunto_client),
             CyclingAnalyticsSource(self.config, self.cycling_analytics_client),
             MyWhooshSource(self.config, self.state_db),
+            ZwiftSource(self.config, self.zwift_client),
             LocalFileSource(self.config, self.state_db),
         )
         garmin_target = self.targets.get("garmin")

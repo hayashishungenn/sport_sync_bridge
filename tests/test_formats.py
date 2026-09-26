@@ -308,6 +308,23 @@ class FormatConversionTests(unittest.TestCase):
         self.assertAlmostEqual(converted.anaerobic_training_effect or 0, 1.8)
         self.assertEqual(converted.training_stress_score, 64.0)
 
+    def test_trackless_fit_copy_is_opt_in_and_preserves_bytes(self) -> None:
+        source_path = create_fit(self.root / "trackless.fit", with_track=False)
+        strict_output = self.root / "strict-trackless.fit"
+        with self.assertRaisesRegex(ValueError, "No GPS track points"):
+            convert_activity_file(source_path, strict_output, "fit")
+
+        output_path = self.root / "trackless-copy.fit"
+        result = convert_activity_file(
+            source_path,
+            output_path,
+            "fit",
+            allow_trackless_fit_copy=True,
+        )
+
+        self.assertEqual(result.output_path, output_path)
+        self.assertEqual(output_path.read_bytes(), source_path.read_bytes())
+
     def test_tcx_uses_activity_heart_rate_summary_for_one_lap(self) -> None:
         source_path = create_fit(
             self.root / "summary-only-hr.fit",

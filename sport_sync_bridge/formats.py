@@ -223,6 +223,7 @@ def convert_activity_file(
     *,
     activity_name: str | None = None,
     sport_type: str | None = None,
+    allow_trackless_fit_copy: bool = False,
 ) -> ConversionResult:
     input_path = input_path.resolve()
     output_path = output_path.resolve()
@@ -248,8 +249,11 @@ def convert_activity_file(
         activity.name = activity_name
     if sport_type:
         activity.sport_type = sport_type
+    trackless_fit_copy = (
+        allow_trackless_fit_copy and source_format == "fit" and target_format == "fit"
+    )
     _validate_coordinates(activity, input_path)
-    if not any(_has_position(point) for point in activity.track_points):
+    if not trackless_fit_copy and not any(_has_position(point) for point in activity.track_points):
         raise ValueError(f"No GPS track points found in {input_path}")
 
     if source_format == target_format:

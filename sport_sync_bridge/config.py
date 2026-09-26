@@ -105,6 +105,8 @@ class AppConfig:
     cycling_analytics_access_token: str | None
     mywhoosh_username: str | None
     mywhoosh_password: str | None
+    zwift_username: str | None
+    zwift_password: str | None
     ai_api_base_url: str | None
     ai_api_key: str | None
     ai_model: str | None
@@ -227,6 +229,8 @@ class AppConfig:
             cycling_analytics_access_token=env_or_none("CYCLING_ANALYTICS_ACCESS_TOKEN"),
             mywhoosh_username=env_or_none("MYWHOOSH_USERNAME"),
             mywhoosh_password=env_or_none("MYWHOOSH_PASSWORD"),
+            zwift_username=env_or_none("ZWIFT_USERNAME"),
+            zwift_password=env_or_none("ZWIFT_PASSWORD"),
             ai_api_base_url=env_or_none("AI_API_BASE_URL"),
             ai_api_key=env_or_none("AI_API_KEY"),
             ai_model=env_or_none("AI_MODEL"),

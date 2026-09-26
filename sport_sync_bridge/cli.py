@@ -205,6 +205,7 @@ def build_parser() -> argparse.ArgumentParser:
             "suunto",
             "cycling_analytics",
             "mywhoosh",
+            "zwift",
         ],
         help="Repeatable source",
     )
@@ -820,6 +821,7 @@ def build_parser() -> argparse.ArgumentParser:
             "suunto",
             "cycling_analytics",
             "mywhoosh",
+            "zwift",
         ],
         help="Repeatable source",
     )
@@ -882,6 +884,8 @@ def build_parser() -> argparse.ArgumentParser:
     mapmyfitness_exchange_parser.add_argument(
         "--code", required=True, help="OAuth code returned by MapMyFitness"
     )
+    subparsers.add_parser("zwift-auth", help="Authenticate Zwift and save tokens locally")
+    subparsers.add_parser("zwift-logout", help="Revoke the saved Zwift session and clear local tokens")
     subparsers.add_parser("nolio-auth-url", help="Print the Nolio OAuth authorization URL")
     nolio_exchange_parser = subparsers.add_parser(
         "nolio-exchange", help="Exchange a Nolio OAuth code and save tokens locally"
@@ -1258,6 +1262,17 @@ def main(argv: list[str] | None = None) -> int:
             print("MapMyFitness tokens validated and saved to local SQLite.")
             print(f"user_id={result.get('user_id')}")
             print(f"scope={result.get('scope')}")
+            return 0
+
+        if args.command == "zwift-auth":
+            player_id = engine.zwift_client.authenticate()
+            print("Zwift session validated and saved to local SQLite.")
+            print(f"player_id={player_id}")
+            return 0
+
+        if args.command == "zwift-logout":
+            engine.zwift_client.logout()
+            print("Zwift session cleared from local SQLite.")
             return 0
 
         if args.command == "nolio-auth-url":

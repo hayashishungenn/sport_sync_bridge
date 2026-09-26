@@ -14,6 +14,7 @@
 - `MapMyFitness`（官方 v7.1 API 活动来源）
 - `Ride with GPS`（官方 API 活动来源）
 - `MyWhoosh`（使用未公开应用接口的活动来源）
+- `Zwift`（使用 APK 还原的未公开应用接口读取活动）
 - 本地活动库（`FIT` / `GPX` / `TCX` / `ZIP` / 轨迹 `JSON` / `CSV`）
 
 当前实现的目标平台:
@@ -354,6 +355,17 @@ python sync.py workouts mywhoosh list
 python sync.py workouts mywhoosh upload <课程ID>
 python sync.py workouts mywhoosh delete <MyWhoosh课程ID>
 ```
+
+### Zwift 活动来源
+
+Zwift 适配器依据 APK 中还原的登录、个人资料、活动分页和 FIT 文件下载接口实现。接口没有公开稳定文档，服务端变更可能导致适配器失效。将自己的 Zwift 账号凭据放入 `.env`，并把 `zwift` 加入 `SYNC_SOURCES`：
+
+```dotenv
+ZWIFT_USERNAME=
+ZWIFT_PASSWORD=
+```
+
+运行 `python sync.py zwift-auth` 验证账号并把访问令牌、刷新令牌和玩家 ID 保存到本地 SQLite。账号密码只从环境读取。之后可用 `python sync.py check --source zwift` 检查连接，或用 `python sync.py sync --source zwift --target strava --dry-run` 查看待同步活动。`python sync.py zwift-logout` 会撤销保存的会话并清除本地令牌。
 
 ### 5. 首次同步
 
