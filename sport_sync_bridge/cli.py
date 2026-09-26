@@ -200,6 +200,7 @@ def build_parser() -> argparse.ArgumentParser:
             "coros",
             "smashrun",
             "ridewithgps",
+            "nolio",
             "cycling_analytics",
             "mywhoosh",
         ],
@@ -215,6 +216,7 @@ def build_parser() -> argparse.ArgumentParser:
             "hammerhead",
             "intervals_icu",
             "ridewithgps",
+            "nolio",
             "cycling_analytics",
         ],
         help="Repeatable target",
@@ -811,6 +813,7 @@ def build_parser() -> argparse.ArgumentParser:
             "coros",
             "smashrun",
             "ridewithgps",
+            "nolio",
             "cycling_analytics",
             "mywhoosh",
         ],
@@ -826,6 +829,7 @@ def build_parser() -> argparse.ArgumentParser:
             "hammerhead",
             "intervals_icu",
             "ridewithgps",
+            "nolio",
             "cycling_analytics",
         ],
         help="Repeatable target",
@@ -864,6 +868,12 @@ def build_parser() -> argparse.ArgumentParser:
     ridewithgps_exchange_parser.add_argument(
         "--code", required=True, help="OAuth code returned by Ride with GPS"
     )
+    subparsers.add_parser("nolio-auth-url", help="Print the Nolio OAuth authorization URL")
+    nolio_exchange_parser = subparsers.add_parser(
+        "nolio-exchange", help="Exchange a Nolio OAuth code and save tokens locally"
+    )
+    nolio_exchange_parser.add_argument("--code", required=True, help="OAuth code returned by Nolio")
+    nolio_exchange_parser.add_argument("--state", required=True, help="OAuth state returned to the redirect URI")
     ridewithgps_delete_parser = subparsers.add_parser(
         "ridewithgps-delete", help="Permanently delete a Ride with GPS trip"
     )
@@ -1201,6 +1211,17 @@ def main(argv: list[str] | None = None) -> int:
             print(f"scope={result.get('scope')}")
             return 0
 
+        if args.command == "nolio-auth-url":
+            print(engine.nolio_client.build_authorize_url())
+            return 0
+
+        if args.command == "nolio-exchange":
+            result = engine.nolio_client.exchange_code(args.code, args.state)
+            print("Nolio tokens saved to SQLite.")
+            print(f"expires_in={result.get('expires_in')}")
+            print(f"scope={result.get('scope')}")
+            return 0
+
         if args.command == "ridewithgps-delete":
             expected = args.trip_id.strip()
             confirmation = input(
@@ -1404,14 +1425,17 @@ def _parse_target_format(value: str) -> tuple[str, str]:
         "hammerhead",
         "intervals_icu",
         "cycling_analytics",
+        "nolio",
     }:
         raise argparse.ArgumentTypeError(
             "format must use TARGET=FORMAT with target garmin, strava, wahoo, hammerhead, "
-            "intervals_icu, or cycling_analytics"
+            "intervals_icu, cycling_analytics, or nolio"
         )
     if activity_format not in SUPPORTED_FORMATS:
         supported = ", ".join(sorted(SUPPORTED_FORMATS))
         raise argparse.ArgumentTypeError(f"format must be one of: {supported}")
+    if target == "nolio" and activity_format not in {"fit", "tcx"}:
+        raise argparse.ArgumentTypeError("Nolio uploads only support FIT and TCX")
     return target, activity_format
 
 

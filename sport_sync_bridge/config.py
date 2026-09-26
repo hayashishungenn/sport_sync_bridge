@@ -89,6 +89,10 @@ class AppConfig:
     ridewithgps_client_secret: str | None
     ridewithgps_redirect_uri: str
     ridewithgps_access_token: str | None
+    nolio_client_id: str | None
+    nolio_client_secret: str | None
+    nolio_redirect_uri: str
+    nolio_athlete_id: str | None
     cycling_analytics_access_token: str | None
     mywhoosh_username: str | None
     mywhoosh_password: str | None
@@ -194,6 +198,10 @@ class AppConfig:
             ridewithgps_client_secret=env_or_none("RIDEWITHGPS_CLIENT_SECRET"),
             ridewithgps_redirect_uri=os.getenv("RIDEWITHGPS_REDIRECT_URI", "http://localhost/").strip(),
             ridewithgps_access_token=env_or_none("RIDEWITHGPS_ACCESS_TOKEN"),
+            nolio_client_id=env_or_none("NOLIO_CLIENT_ID"),
+            nolio_client_secret=env_or_none("NOLIO_CLIENT_SECRET"),
+            nolio_redirect_uri=os.getenv("NOLIO_REDIRECT_URI", "http://localhost/").strip(),
+            nolio_athlete_id=env_or_none("NOLIO_ATHLETE_ID"),
             cycling_analytics_access_token=env_or_none("CYCLING_ANALYTICS_ACCESS_TOKEN"),
             mywhoosh_username=env_or_none("MYWHOOSH_USERNAME"),
             mywhoosh_password=env_or_none("MYWHOOSH_PASSWORD"),

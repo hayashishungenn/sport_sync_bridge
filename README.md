@@ -232,6 +232,27 @@ python sync.py sync --source local --target ridewithgps --format ridewithgps=fit
 
 `ridewithgps-delete --trip-id ID` 可删除当前账号自己的 Ride with GPS 活动。命令会要求再次输入完整 ID 确认。
 
+### Nolio 活动来源和目标
+
+Nolio 通过[官方 OAuth 2.0 API](https://github.com/NolioApp/NolioAPI-Documentation/wiki/OAuth-2)读取已完成训练，并按[官方文件上传接口](https://github.com/NolioApp/NolioAPI-Documentation/wiki/File-Upload)上传 FIT 或 TCX。请在 Nolio 开发者端注册自己的 API 应用，在 `.env` 配置 `NOLIO_CLIENT_ID`、`NOLIO_CLIENT_SECRET` 和与应用登记值完全一致的 `NOLIO_REDIRECT_URI`。不要使用 APK 内的客户端凭据。可选的 `NOLIO_ATHLETE_ID` 用于教练账号指定运动员；访问令牌和轮换后的刷新令牌保存在本地 SQLite。
+
+```dotenv
+NOLIO_CLIENT_ID=
+NOLIO_CLIENT_SECRET=
+NOLIO_REDIRECT_URI=http://localhost/
+NOLIO_ATHLETE_ID=
+```
+
+运行 `nolio-auth-url`，在浏览器完成授权后，把回调地址中的 `code` 和 `state` 交给 `nolio-exchange`。来源列表使用官方的 `from`、`to` 日期筛选，默认请求 30 项；可用 `sync --limit` 调整数量。下载时会重新读取训练详情获取限时文件地址。Nolio 来源接收 FIT 或 TCX，并在需要时转成内部同步使用的 FIT。上传接口只支持 FIT 和 TCX，HTTP 202 表示已排队等待处理，`--format nolio=gpx` 会被拒绝。
+
+```powershell
+python sync.py nolio-auth-url
+python sync.py nolio-exchange --code 回调中的code --state 回调中的state
+python sync.py check --source nolio --target nolio
+python sync.py sync --source nolio --target garmin --dry-run
+python sync.py sync --source local --target nolio --format nolio=tcx
+```
+
 ### Polar Flow 活动来源
 
 Polar 使用官方 [AccessLink API](https://www.polar.com/accesslink-api/) 读取活动。先用自己的 Polar Flow 账号在 AccessLink 管理页注册应用并接受 API 许可协议，再配置 `POLAR_CLIENT_ID`、`POLAR_CLIENT_SECRET` 和已登记的可选 `POLAR_REDIRECT_URI`。项目不包含 APK 中的凭据；OAuth 用户令牌保存在本地 SQLite。AccessLink 要求授权后先注册用户，`polar-exchange` 会自动完成注册，失败后可运行 `polar-register` 重试。

@@ -20,6 +20,9 @@ from .intervals_icu import IntervalsIcuSource
 from .intervals_icu_target import IntervalsIcuTarget
 from .models import FileBundle, UploadResult
 from .mywhoosh_source import MyWhooshSource
+from .nolio_api import NolioClient
+from .nolio_source import NolioSource
+from .nolio_target import NolioTarget
 from .polar_api import PolarClient
 from .polar_source import PolarSource
 from .ridewithgps_api import RideWithGPSClient
@@ -55,6 +58,7 @@ class SyncEngine:
         self.withings_client = WithingsClient(config, self.state_db)
         self.smashrun_source = SmashrunSource(config, self.state_db)
         self.ridewithgps_client = RideWithGPSClient(config, self.state_db)
+        self.nolio_client = NolioClient(config, self.state_db)
         self.targets = self._build_targets()
         self.sources = self._build_sources()
 
@@ -84,10 +88,12 @@ class SyncEngine:
                 "hammerhead",
                 "intervals_icu",
                 "cycling_analytics",
+                "nolio",
             }
             or not isinstance(value, str)
             or value.lower() not in SUPPORTED_FORMATS
             or (target == "wahoo" and value.lower() != "fit")
+            or (target == "nolio" and value.lower() not in {"fit", "tcx"})
         }
         if invalid_formats:
             details = ", ".join(f"{target}={value}" for target, value in sorted(invalid_formats.items()))
@@ -354,6 +360,7 @@ class SyncEngine:
             GoogleHealthSource(self.config, self.google_health_client),
             WithingsSource(self.config, self.withings_client),
             RideWithGPSSource(self.config, self.ridewithgps_client),
+            NolioSource(self.config, self.nolio_client),
             CyclingAnalyticsSource(self.config, self.cycling_analytics_client),
             MyWhooshSource(self.config, self.state_db),
             LocalFileSource(self.config, self.state_db),
@@ -397,6 +404,10 @@ class SyncEngine:
         ridewithgps = RideWithGPSTarget(self.ridewithgps_client)
         if ridewithgps.is_configured():
             targets[ridewithgps.name] = ridewithgps
+
+        nolio = NolioTarget(self.nolio_client)
+        if nolio.is_configured():
+            targets[nolio.name] = nolio
 
         cycling_analytics = CyclingAnalyticsTarget(self.cycling_analytics_client)
         if cycling_analytics.is_configured():

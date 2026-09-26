@@ -177,11 +177,48 @@ class SyncFormatTests(unittest.TestCase):
         self.assertEqual(engine.state_db.recorded[0]["target"], "cycling_analytics")
         self.assertEqual(engine.state_db.recorded[0]["status"], "success")
 
+    def test_nolio_receives_its_requested_tcx_from_the_sync_pipeline(self) -> None:
+        fit_path = create_fit(self.root / "download.fit")
+        activity = Activity("igpsport", "42", "Ride", "cycling")
+        engine = SyncEngine.__new__(SyncEngine)
+        engine.config = SimpleNamespace(
+            sources=["igpsport"], targets=["nolio"], lookback_days=0,
+            downloads_dir=self.root / "downloads", repaired_dir=self.root / "repaired",
+            converted_dir=self.root / "converted", coordinate_rules=(),
+            igpsport_coord_mode="none", igpsport_coord_strict=True,
+            onelap_coord_mode="none", onelap_coord_strict=True,
+        )
+        engine.state_db = _State()
+        engine.sources = {"igpsport": _Source(activity, fit_path)}
+        nolio = _Target()
+        engine.targets = {"nolio": nolio}
+
+        with self.assertLogs("sport_sync_bridge.engine", level="WARNING"):
+            count = engine.sync_once(target_formats={"nolio": "tcx"})
+
+        self.assertEqual(count, 1)
+        self.assertEqual(nolio.uploaded[0].suffix, ".tcx")
+        self.assertEqual(_read_tcx(nolio.uploaded[0]).sport_type, "cycling")
+        self.assertEqual(engine.state_db.recorded[0]["target"], "nolio")
+        self.assertEqual(engine.state_db.recorded[0]["status"], "success")
+
     def test_format_argument_mapping_and_validation(self) -> None:
         args = build_parser().parse_args(
-            ["sync", "--format", "garmin=fit", "--format", "strava=TCX", "--dry-run"]
+            [
+                "sync",
+                "--format",
+                "garmin=fit",
+                "--format",
+                "strava=TCX",
+                "--format",
+                "nolio=tcx",
+                "--dry-run",
+            ]
         )
-        self.assertEqual(_target_format_map(args.target_formats), {"garmin": "fit", "strava": "tcx"})
+        self.assertEqual(
+            _target_format_map(args.target_formats),
+            {"garmin": "fit", "strava": "tcx", "nolio": "tcx"},
+        )
         default_args = build_parser().parse_args(["sync"])
         self.assertEqual(_target_format_map(default_args.target_formats), {})
         with self.assertRaises(ValueError):
