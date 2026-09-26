@@ -10,6 +10,7 @@
 - `Polar Flow`（AccessLink API 活动来源）
 - `Fitbit`（Google Health API 活动来源）
 - `Withings`（Public API 活动来源）
+- `COROS`（官方 MCP 活动来源）
 - 本地活动库（`FIT` / `GPX` / `TCX` / `ZIP` / 轨迹 `JSON` / `CSV`）
 
 当前实现的目标平台:
@@ -247,6 +248,21 @@ python sync.py sync --source withings --target garmin --dry-run
 ```
 
 Withings 授权码有效期为 30 秒，授权后应立即运行 `withings-exchange`。访问令牌和刷新令牌存入本地 SQLite；刷新时会替换成 Withings 返回的新刷新令牌，详见[官方令牌说明](https://developer.withings.com/developer-guide/v3/integration-guide/public-health-data-api/get-access/access-and-refresh-tokens-no-recover/)。Withings 是只读活动来源，不支持向 Withings 上传第三方活动文件。项目不包含 APK 中的账号凭据。
+
+### COROS 活动来源（官方 MCP）
+
+COROS 官方 MCP 为个人开发者提供 OAuth 自助接入，无需 Partner API 申请。它本身免费，COROS 官方 MCP 暴露活动查询和 FIT 下载工具；FIT 文件下载共用每个账号每 24 小时 50 个文件的额度。本连接器只读取活动和 FIT 文件，不调用训练计划或 workout 写入工具。接口和工具名以后可能调整，运行时会读取服务器公布的工具 schema；用户授权令牌和动态 OAuth 客户端信息保存在本地 SQLite。详见 [COROS 官方 MCP 文档](https://github.com/coroslab/COROS-MCP) 和 [自助开发接入说明](https://support.coros.com/hc/en-us/articles/53181619102996-Build-on-COROS-MCP)。
+
+可在 `.env` 中设置 `COROS_MCP_URL` 和接口要求的 `COROS_TIMEZONE`。默认使用自动选择地区的 `https://mcp.coros.com/mcp`；如遇地区重定向问题，可改用 COROS 公布的地区地址。首次使用运行 `coros-auth`，在浏览器授权后把完整回调地址粘贴回终端，再将 `coros` 作为同步来源：
+
+```powershell
+python sync.py coros-auth
+python sync.py check --source coros --target garmin
+python sync.py sync --source coros --target garmin --dry-run
+python sync.py sync --source coros --target strava --limit 5
+```
+
+每次同步只在有待上传目标时下载对应 FIT。程序会本地限制 FIT 下载请求不超过每 24 小时 50 次；检查连接和列出活动不消耗 FIT 下载额度。COROS MCP 仅作为活动来源，项目不会把运动文件上传回 COROS。
 
 ### 5. 首次同步
 

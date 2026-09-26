@@ -82,6 +82,8 @@ class AppConfig:
     withings_client_id: str | None
     withings_client_secret: str | None
     withings_redirect_uri: str
+    coros_mcp_url: str
+    coros_mcp_timezone: str | None
     ai_api_base_url: str | None
     ai_api_key: str | None
     ai_model: str | None
@@ -177,6 +179,8 @@ class AppConfig:
             withings_client_id=env_or_none("WITHINGS_CLIENT_ID"),
             withings_client_secret=env_or_none("WITHINGS_CLIENT_SECRET"),
             withings_redirect_uri=os.getenv("WITHINGS_REDIRECT_URI", "http://localhost/").strip(),
+            coros_mcp_url=os.getenv("COROS_MCP_URL", "https://mcp.coros.com/mcp").strip(),
+            coros_mcp_timezone=env_or_none("COROS_TIMEZONE"),
             ai_api_base_url=env_or_none("AI_API_BASE_URL"),
             ai_api_key=env_or_none("AI_API_KEY"),
             ai_model=env_or_none("AI_MODEL"),

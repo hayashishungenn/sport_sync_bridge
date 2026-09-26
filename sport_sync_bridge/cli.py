@@ -194,6 +194,7 @@ def build_parser() -> argparse.ArgumentParser:
             "wahoo",
             "fitbit",
             "withings",
+            "coros",
         ],
         help="Repeatable source",
     )
@@ -777,6 +778,7 @@ def build_parser() -> argparse.ArgumentParser:
             "wahoo",
             "fitbit",
             "withings",
+            "coros",
         ],
         help="Repeatable source",
     )
@@ -833,6 +835,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     withings_exchange_parser.add_argument(
         "--state", required=True, help="OAuth state from the registered redirect URL"
+    )
+
+    subparsers.add_parser(
+        "coros-auth",
+        help="Authorize this CLI with COROS MCP and store the OAuth session locally",
     )
 
     concept2_auth_url_parser = subparsers.add_parser(
@@ -1134,6 +1141,11 @@ def main(argv: list[str] | None = None) -> int:
             print("Withings tokens saved to local SQLite.")
             print(f"expires_at={result.get('expires_at')}")
             print(f"scope={result.get('scope')}")
+            return 0
+
+        if args.command == "coros-auth":
+            engine.get_coros_source().authenticate()
+            print("COROS MCP authorization is saved in local SQLite.")
             return 0
 
         if args.command == "concept2-auth-url":

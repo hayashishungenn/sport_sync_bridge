@@ -8,6 +8,7 @@ from typing import cast
 
 from .config import AppConfig
 from .concept2_source import Concept2Source
+from .coros_source import CorosMcpSource
 from .fit_tools import normalize_fit_coordinates
 from .formats import SUPPORTED_FORMATS, convert_activity_file
 from .garmin_source import GarminSource
@@ -233,6 +234,12 @@ class SyncEngine:
             raise RuntimeError("Concept2 source is not configured")
         return cast(Concept2Source, source)
 
+    def get_coros_source(self) -> CorosMcpSource:
+        source = self.sources.get("coros")
+        if source is None:
+            raise RuntimeError("COROS source is not configured")
+        return cast(CorosMcpSource, source)
+
     def get_hammerhead_source(self) -> HammerheadSource:
         source = self.sources.get("hammerhead")
         if source is None:
@@ -318,6 +325,7 @@ class SyncEngine:
             OneLapSource(self.config),
             IntervalsIcuSource(self.config),
             Concept2Source(self.config, self.state_db),
+            CorosMcpSource(self.config, self.state_db),
             HammerheadSource(self.config, self.hammerhead_client),
             PolarSource(self.config, self.polar_client),
             GoogleHealthSource(self.config, self.google_health_client),
