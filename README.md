@@ -625,6 +625,19 @@ python sync.py sync --dry-run
 python sync.py sync --loop --interval 900
 ```
 
+## Cycling Analytics
+
+`cycling_analytics` 可作为活动来源和上传目标。将个人 API token 放入本机 `.env` 的 `CYCLING_ANALYTICS_ACCESS_TOKEN`；可在 Cycling Analytics API Console 创建带完整权限的个人 token。不要把实际 token 写入仓库文件。来源会读取活动列表和原始活动文件；下载到的 FIT 保持原样，GPX/TCX 会转成 FIT 后进入统一同步流程。目标支持上传 FIT、GPX、TCX，并等待服务端处理状态。
+
+```powershell
+python sync.py check --source cycling_analytics --target cycling_analytics
+python sync.py sync --source cycling_analytics --target strava
+python sync.py sync --source igpsport --target cycling_analytics --format cycling_analytics=tcx
+python sync.py cycling-analytics-delete --ride-id <活动ID>
+```
+
+删除命令会要求再次输入活动 ID。API 令牌、权限和端点说明见 [Cycling Analytics API 文档](https://www.cyclinganalytics.com/developer/api) 与 [认证文档](https://www.cyclinganalytics.com/developer/api/authentication)。
+
 ## OneLap 登录说明
 
 `OneLap` 的登录接口已经被公开项目确认带有签名校验。当前实现优先顺序如下:

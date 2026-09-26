@@ -89,6 +89,7 @@ class AppConfig:
     ridewithgps_client_secret: str | None
     ridewithgps_redirect_uri: str
     ridewithgps_access_token: str | None
+    cycling_analytics_access_token: str | None
     mywhoosh_username: str | None
     mywhoosh_password: str | None
     ai_api_base_url: str | None
@@ -193,6 +194,7 @@ class AppConfig:
             ridewithgps_client_secret=env_or_none("RIDEWITHGPS_CLIENT_SECRET"),
             ridewithgps_redirect_uri=os.getenv("RIDEWITHGPS_REDIRECT_URI", "http://localhost/").strip(),
             ridewithgps_access_token=env_or_none("RIDEWITHGPS_ACCESS_TOKEN"),
+            cycling_analytics_access_token=env_or_none("CYCLING_ANALYTICS_ACCESS_TOKEN"),
             mywhoosh_username=env_or_none("MYWHOOSH_USERNAME"),
             mywhoosh_password=env_or_none("MYWHOOSH_PASSWORD"),
             ai_api_base_url=env_or_none("AI_API_BASE_URL"),

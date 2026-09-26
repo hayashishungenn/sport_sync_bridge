@@ -200,6 +200,7 @@ def build_parser() -> argparse.ArgumentParser:
             "coros",
             "smashrun",
             "ridewithgps",
+            "cycling_analytics",
             "mywhoosh",
         ],
         help="Repeatable source",
@@ -207,7 +208,15 @@ def build_parser() -> argparse.ArgumentParser:
     sync_parser.add_argument(
         "--target",
         action="append",
-        choices=["garmin", "strava", "wahoo", "hammerhead", "intervals_icu", "ridewithgps"],
+        choices=[
+            "garmin",
+            "strava",
+            "wahoo",
+            "hammerhead",
+            "intervals_icu",
+            "ridewithgps",
+            "cycling_analytics",
+        ],
         help="Repeatable target",
     )
     sync_parser.add_argument("--from", dest="date_from", help="Start date, e.g. 2026-01-01")
@@ -802,6 +811,7 @@ def build_parser() -> argparse.ArgumentParser:
             "coros",
             "smashrun",
             "ridewithgps",
+            "cycling_analytics",
             "mywhoosh",
         ],
         help="Repeatable source",
@@ -809,7 +819,15 @@ def build_parser() -> argparse.ArgumentParser:
     check_parser.add_argument(
         "--target",
         action="append",
-        choices=["garmin", "strava", "wahoo", "hammerhead", "intervals_icu", "ridewithgps"],
+        choices=[
+            "garmin",
+            "strava",
+            "wahoo",
+            "hammerhead",
+            "intervals_icu",
+            "ridewithgps",
+            "cycling_analytics",
+        ],
         help="Repeatable target",
     )
 
@@ -850,6 +868,14 @@ def build_parser() -> argparse.ArgumentParser:
         "ridewithgps-delete", help="Permanently delete a Ride with GPS trip"
     )
     ridewithgps_delete_parser.add_argument("--trip-id", required=True, help="Ride with GPS trip ID")
+
+    cycling_analytics_delete_parser = subparsers.add_parser(
+        "cycling-analytics-delete", help="Permanently delete a Cycling Analytics ride"
+    )
+    cycling_analytics_delete_parser.add_argument("--ride-id", required=True, help="Cycling Analytics ride ID")
+    cycling_analytics_delete_parser.add_argument(
+        "--yes", action="store_true", help="Skip the typed-ID confirmation prompt"
+    )
 
     google_health_auth_url_parser = subparsers.add_parser(
         "google-health-auth-url", help="Print the Fitbit Google Health OAuth authorization URL"
@@ -1187,6 +1213,19 @@ def main(argv: list[str] | None = None) -> int:
             print(f"deleted=ridewithgps:{expected}")
             return 0
 
+        if args.command == "cycling-analytics-delete":
+            expected = args.ride_id.strip()
+            if not args.yes:
+                confirmation = input(
+                    f"Permanently delete Cycling Analytics ride {expected}? Type the ID to confirm: "
+                )
+                if confirmation.strip() != expected:
+                    print("Cycling Analytics ride deletion cancelled.")
+                    return 1
+            engine.get_cycling_analytics_target().delete_ride(expected)
+            print(f"deleted=cycling_analytics:{expected}")
+            return 0
+
         if args.command == "google-health-auth-url":
             print(engine.google_health_client.build_authorize_url())
             return 0
@@ -1358,9 +1397,17 @@ def _parse_target_format(value: str) -> tuple[str, str]:
     target, separator, activity_format = value.partition("=")
     target = target.strip().lower()
     activity_format = activity_format.strip().lower()
-    if not separator or target not in {"garmin", "strava", "wahoo", "hammerhead", "intervals_icu"}:
+    if not separator or target not in {
+        "garmin",
+        "strava",
+        "wahoo",
+        "hammerhead",
+        "intervals_icu",
+        "cycling_analytics",
+    }:
         raise argparse.ArgumentTypeError(
-            "format must use TARGET=FORMAT with target garmin, strava, wahoo, hammerhead, or intervals_icu"
+            "format must use TARGET=FORMAT with target garmin, strava, wahoo, hammerhead, "
+            "intervals_icu, or cycling_analytics"
         )
     if activity_format not in SUPPORTED_FORMATS:
         supported = ", ".join(sorted(SUPPORTED_FORMATS))

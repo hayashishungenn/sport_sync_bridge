@@ -9,6 +9,7 @@ from typing import cast
 from .config import AppConfig
 from .concept2_source import Concept2Source
 from .coros_source import CorosMcpSource
+from .cycling_analytics import CyclingAnalyticsClient, CyclingAnalyticsSource, CyclingAnalyticsTarget
 from .fit_tools import normalize_fit_coordinates
 from .formats import SUPPORTED_FORMATS, convert_activity_file
 from .garmin_source import GarminSource
@@ -49,6 +50,7 @@ class SyncEngine:
         self.state_db = StateDB(config.db_path)
         self.hammerhead_client = HammerheadClient(config, self.state_db)
         self.google_health_client = GoogleHealthClient(config, self.state_db)
+        self.cycling_analytics_client = CyclingAnalyticsClient(config)
         self.polar_client = PolarClient(config, self.state_db)
         self.withings_client = WithingsClient(config, self.state_db)
         self.smashrun_source = SmashrunSource(config, self.state_db)
@@ -75,7 +77,14 @@ class SyncEngine:
         invalid_formats = {
             target: value
             for target, value in target_formats.items()
-            if target not in {"garmin", "strava", "wahoo", "hammerhead", "intervals_icu"}
+            if target not in {
+                "garmin",
+                "strava",
+                "wahoo",
+                "hammerhead",
+                "intervals_icu",
+                "cycling_analytics",
+            }
             or not isinstance(value, str)
             or value.lower() not in SUPPORTED_FORMATS
             or (target == "wahoo" and value.lower() != "fit")
@@ -259,6 +268,12 @@ class SyncEngine:
             raise RuntimeError("Hammerhead target is not configured")
         return cast(HammerheadTarget, target)
 
+    def get_cycling_analytics_target(self) -> CyclingAnalyticsTarget:
+        target = self.targets.get("cycling_analytics")
+        if target is None:
+            raise RuntimeError("Cycling Analytics target is not configured")
+        return cast(CyclingAnalyticsTarget, target)
+
     def _prepare_files(self, source: SourceAdapter, activity) -> FileBundle:
         row = self.state_db.get_activity_row(activity.source, activity.source_id)
         original_path = None
@@ -339,6 +354,7 @@ class SyncEngine:
             GoogleHealthSource(self.config, self.google_health_client),
             WithingsSource(self.config, self.withings_client),
             RideWithGPSSource(self.config, self.ridewithgps_client),
+            CyclingAnalyticsSource(self.config, self.cycling_analytics_client),
             MyWhooshSource(self.config, self.state_db),
             LocalFileSource(self.config, self.state_db),
         )
@@ -381,6 +397,10 @@ class SyncEngine:
         ridewithgps = RideWithGPSTarget(self.ridewithgps_client)
         if ridewithgps.is_configured():
             targets[ridewithgps.name] = ridewithgps
+
+        cycling_analytics = CyclingAnalyticsTarget(self.cycling_analytics_client)
+        if cycling_analytics.is_configured():
+            targets[cycling_analytics.name] = cycling_analytics
 
         return targets
 

@@ -152,6 +152,31 @@ class SyncFormatTests(unittest.TestCase):
         self.assertEqual(strava.uploaded[0].suffix, ".fit")
         self.assertNotEqual(garmin.uploaded[0], strava.uploaded[0])
 
+    def test_cycling_analytics_receives_its_requested_target_format(self) -> None:
+        fit_path = create_fit(self.root / "download.fit")
+        activity = Activity("igpsport", "42", "Ride", "cycling")
+        engine = SyncEngine.__new__(SyncEngine)
+        engine.config = SimpleNamespace(
+            sources=["igpsport"], targets=["cycling_analytics"], lookback_days=0,
+            downloads_dir=self.root / "downloads", repaired_dir=self.root / "repaired",
+            converted_dir=self.root / "converted", coordinate_rules=(),
+            igpsport_coord_mode="none", igpsport_coord_strict=True,
+            onelap_coord_mode="none", onelap_coord_strict=True,
+        )
+        engine.state_db = _State()
+        engine.sources = {"igpsport": _Source(activity, fit_path)}
+        cycling_analytics = _Target()
+        engine.targets = {"cycling_analytics": cycling_analytics}
+
+        with self.assertLogs("sport_sync_bridge.engine", level="WARNING"):
+            count = engine.sync_once(target_formats={"cycling_analytics": "tcx"})
+
+        self.assertEqual(count, 1)
+        self.assertEqual(cycling_analytics.uploaded[0].suffix, ".tcx")
+        self.assertEqual(_read_tcx(cycling_analytics.uploaded[0]).sport_type, "cycling")
+        self.assertEqual(engine.state_db.recorded[0]["target"], "cycling_analytics")
+        self.assertEqual(engine.state_db.recorded[0]["status"], "success")
+
     def test_format_argument_mapping_and_validation(self) -> None:
         args = build_parser().parse_args(
             ["sync", "--format", "garmin=fit", "--format", "strava=TCX", "--dry-run"]
