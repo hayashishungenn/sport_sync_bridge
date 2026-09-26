@@ -198,6 +198,7 @@ def build_parser() -> argparse.ArgumentParser:
             "coros",
             "smashrun",
             "ridewithgps",
+            "mywhoosh",
         ],
         help="Repeatable source",
     )
@@ -784,6 +785,7 @@ def build_parser() -> argparse.ArgumentParser:
             "coros",
             "smashrun",
             "ridewithgps",
+            "mywhoosh",
         ],
         help="Repeatable source",
     )

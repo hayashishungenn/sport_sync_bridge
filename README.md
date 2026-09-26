@@ -12,6 +12,7 @@
 - `Withings`（Public API 活动来源）
 - `COROS`（官方 MCP 活动来源）
 - `Ride with GPS`（官方 API 活动来源）
+- `MyWhoosh`（使用未公开应用接口的活动来源）
 - 本地活动库（`FIT` / `GPX` / `TCX` / `ZIP` / 轨迹 `JSON` / `CSV`）
 
 当前实现的目标平台:
@@ -287,6 +288,17 @@ python sync.py sync --source coros --target strava --limit 5
 ```
 
 每次同步只在有待上传目标时下载对应 FIT。程序会本地限制 FIT 下载请求不超过每 24 小时 50 次；检查连接和列出活动不消耗 FIT 下载额度。COROS MCP 仅作为活动来源，项目不会把运动文件上传回 COROS。
+
+### MyWhoosh 活动来源
+
+MyWhoosh 连接依据 APK 中的登录、活动列表和 FIT 下载接口重新实现。MyWhoosh 没有为这些接口提供公开稳定的 API 文档，因此服务端调整可能导致连接失效。仅在 `.env` 中填写自己的 `MYWHOOSH_USERNAME` 和 `MYWHOOSH_PASSWORD`，并将 `mywhoosh` 加入 `SYNC_SOURCES`；账号密码不会写入 SQLite，登录令牌和本机生成的设备 ID 保存在本地状态库。
+
+```powershell
+python sync.py check --source mywhoosh --target garmin
+python sync.py sync --source mywhoosh --target strava --dry-run
+```
+
+MyWhoosh 在本项目中只作为活动来源。活动 FIT 下载后会验证文件签名，再交给现有同步流程处理。
 
 ### 5. 首次同步
 

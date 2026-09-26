@@ -18,6 +18,7 @@ from .hammerhead_source import HammerheadSource
 from .intervals_icu import IntervalsIcuSource
 from .intervals_icu_target import IntervalsIcuTarget
 from .models import FileBundle, UploadResult
+from .mywhoosh_source import MyWhooshSource
 from .polar_api import PolarClient
 from .polar_source import PolarSource
 from .ridewithgps_api import RideWithGPSClient
@@ -338,6 +339,7 @@ class SyncEngine:
             GoogleHealthSource(self.config, self.google_health_client),
             WithingsSource(self.config, self.withings_client),
             RideWithGPSSource(self.config, self.ridewithgps_client),
+            MyWhooshSource(self.config, self.state_db),
             LocalFileSource(self.config, self.state_db),
         )
         garmin_target = self.targets.get("garmin")
